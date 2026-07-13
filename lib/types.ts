@@ -1,0 +1,155 @@
+// Shared view-model types used across pages and the data layer.
+
+export type CommissionState =
+  | "pending"
+  | "approved"
+  | "reversed"
+  | "paid"
+  | "rejected";
+export type AffiliateState = "pending" | "approved" | "rejected" | "suspended";
+export type PayoutState = "draft" | "processing" | "success" | "failed";
+
+export interface Program {
+  id: string;
+  name: string;
+  commissionType: "percent" | "flat";
+  commissionValue: number;
+  cookieWindowDays: number;
+  holdDays: number;
+  payoutMinimum: number;
+  newCustomerOnly: boolean;
+  isDefault: boolean;
+  affiliateCount: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  memberCount: number;
+}
+
+export interface Affiliate {
+  id: string;
+  name: string;
+  email: string;
+  refCode: string;
+  code: string; // discount code
+  status: AffiliateState;
+  paypalEmail: string | null;
+  companyName: string | null;
+  programId: string;
+  programName: string;
+  groupId: string | null;
+  groupName: string | null;
+  socialLinks: Record<string, string>;
+  clicks: number;
+  orders: number;
+  conversionRate: number; // %
+  epc: number; // earnings per click
+  pendingEarnings: number;
+  approvedEarnings: number;
+  paidEarnings: number;
+  totalEarned: number;
+  joinedAt: string;
+  avatarUrl?: string;
+}
+
+export interface Order {
+  id: string;
+  shopifyOrderId: string;
+  orderNumber: string;
+  customerEmail: string;
+  subtotal: number;
+  total: number;
+  currency: string;
+  discountCodesUsed: string[];
+  isNewCustomer: boolean;
+  financialStatus: string;
+  affiliateName: string | null;
+  createdAt: string;
+}
+
+export interface Commission {
+  id: string;
+  orderNumber: string;
+  affiliateId: string;
+  affiliateName: string;
+  affiliateCode: string;
+  amount: number;
+  currency: string;
+  attributedBy: "coupon" | "link";
+  status: CommissionState;
+  orderTotal: number;
+  approvableAt: string | null;
+  createdAt: string;
+}
+
+export interface PayoutItem {
+  affiliateName: string;
+  affiliateEmail: string;
+  amount: number;
+  transactionStatus: string;
+}
+
+export interface Payout {
+  id: string;
+  senderBatchId: string;
+  paypalBatchId: string | null;
+  status: PayoutState;
+  totalAmount: number;
+  affiliateCount: number;
+  createdAt: string;
+  items: PayoutItem[];
+}
+
+export interface Message {
+  id: string;
+  subject: string;
+  body: string;
+  channel: "email" | "sms";
+  audienceLabel: string;
+  recipients: number;
+  openRate: number | null;
+  scheduledFor: string | null;
+  sentAt: string | null;
+}
+
+export interface Promotion {
+  id: string;
+  name: string;
+  bonusType: "percent" | "flat";
+  bonusValue: number;
+  startsAt: string;
+  endsAt: string;
+  groupName: string;
+  status: "scheduled" | "live" | "ended";
+}
+
+export interface Asset {
+  id: string;
+  title: string;
+  kind: "banner" | "image" | "copy" | "video";
+  dimensions: string;
+  gradient: string;
+}
+
+export interface TimePoint {
+  date: string;
+  earnings: number;
+  orders: number;
+  clicks: number;
+}
+
+export interface AdminKpis {
+  affiliateRevenue: number;
+  affiliateRevenueDelta: number;
+  activeAffiliates: number;
+  activeAffiliatesDelta: number;
+  pendingCommissions: number;
+  pendingCommissionsCount: number;
+  refundRate: number;
+  refundRateDelta: number;
+  payableNow: number;
+  awaitingApproval: number;
+}
