@@ -4,7 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users, affiliates } from "@/db/schema";
+import { users, affiliates, programs } from "@/db/schema";
 import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -28,7 +28,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+        let user = await db.query.users.findFirst({ where: eq(users.email, email) });
+
+        // Bootstrap the admin account on first login from env credentials,
+        // so a fresh deploy needs no manual seed step.
+        if (
+          !user &&
+          process.env.ADMIN_EMAIL &&
+          process.env.ADMIN_PASSWORD &&
+          email === process.env.ADMIN_EMAIL.toLowerCase() &&
+          password === process.env.ADMIN_PASSWORD
+        ) {
+          const passwordHash = await bcrypt.hash(password, 10);
+          const [created] = await db
+            .insert(users)
+            .values({ email, name: "Syruvia Admin", passwordHash, role: "admin" })
+            .returning();
+          user = created;
+
+          // Ensure a default program exists so approvals & attribution work.
+          const hasDefault = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+          if (!hasDefault) {
+            await db.insert(programs).values({
+              name: "Syruvia Core",
+              commissionType: "percent",
+              commissionValue: "15",
+              cookieWindowDays: 30,
+              holdDays: 30,
+              payoutMinimum: "25",
+              isDefault: true,
+            });
+          }
+        }
+
         if (!user?.passwordHash) return null;
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
