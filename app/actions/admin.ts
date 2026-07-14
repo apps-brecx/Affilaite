@@ -742,6 +742,30 @@ export async function setSetting(key: string, value: string): Promise<ActionResu
   return { ok: true, message: "Setting saved." };
 }
 
+/** Save the full rewards & rules config for a campaign. */
+export async function updateCampaignConfig(id: string, config: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  if (!config || typeof config !== "object") return { ok: false, message: "Invalid config." };
+  await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
+  revalidatePath(`/admin/campaigns/${id}`);
+  return { ok: true, message: "Rewards & rules saved." };
+}
+
+/** Save brand/theme settings (stored as JSON under the "brand" key). */
+export async function saveBrand(brand: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const value = JSON.stringify(brand ?? {});
+  await db
+    .insert(appSettings)
+    .values({ key: "brand", value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+  revalidatePath("/admin/settings");
+  revalidatePath("/login");
+  return { ok: true, message: "Brand saved." };
+}
+
 export async function setCampaignStatus(id: string, status: "active" | "paused" | "ended"): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };

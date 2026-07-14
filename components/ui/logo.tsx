@@ -6,22 +6,30 @@ export function Logo({
   className,
   mark = true,
   wordmark = true,
+  text,
 }: {
   href?: string;
   className?: string;
   mark?: boolean;
   wordmark?: boolean;
+  text?: string;
 }) {
   return (
     <Link href={href} className={cn("group inline-flex items-center gap-2.5", className)}>
       {mark && (
         <span className="relative inline-flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-subtle ring-gilded">
-          <span className="font-display text-[15px] font-semibold leading-none">S</span>
+          <span className="font-display text-[15px] font-semibold leading-none">{(text ?? "S").charAt(0).toUpperCase()}</span>
         </span>
       )}
       {wordmark && (
         <span className="font-display text-lg font-semibold tracking-tight text-foreground">
-          Syruvia<span className="text-gradient-gold">Aite</span>
+          {text ? (
+            text
+          ) : (
+            <>
+              Syruvia<span className="text-gradient-gold">Aite</span>
+            </>
+          )}
         </span>
       )}
     </Link>

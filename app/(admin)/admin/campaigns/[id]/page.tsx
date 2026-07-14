@@ -4,6 +4,8 @@ import { ArrowLeft, Users, Gift } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CampaignManager } from "@/components/admin/campaign-manager";
+import { CampaignRewards } from "@/components/admin/campaign-rewards";
+import { CampaignHealth } from "@/components/admin/campaign-health";
 import { getCampaign, getCampaignMemberIds, listAffiliates } from "@/lib/queries";
 import { APP_URL } from "@/lib/links";
 
@@ -32,6 +34,15 @@ export default async function CampaignManagePage({ params }: { params: Promise<{
       </PageHeader>
 
       <CampaignManager campaign={campaign} members={members} candidates={candidates} appUrl={APP_URL} />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <CampaignRewards campaign={campaign} />
+        </div>
+        <div className="lg:col-span-1">
+          <CampaignHealth campaign={campaign} memberCount={members.length} />
+        </div>
+      </div>
     </div>
   );
 }

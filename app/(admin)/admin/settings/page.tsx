@@ -4,12 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InviteTemplates } from "@/components/admin/invite-templates";
 import { DefaultDestination } from "@/components/admin/default-destination";
-import { dataSource, listInviteTemplates, getDefaultDestination } from "@/lib/queries";
+import { BrandSettingsCard } from "@/components/admin/brand-settings";
+import { dataSource, listInviteTemplates, getDefaultDestination, getBrand } from "@/lib/queries";
 
 export const metadata = { title: "Settings" };
 
 export default async function AdminSettingsPage() {
-  const [templates, defaultDestination] = await Promise.all([listInviteTemplates(), getDefaultDestination()]);
+  const [templates, defaultDestination, brand] = await Promise.all([
+    listInviteTemplates(),
+    getDefaultDestination(),
+    getBrand(),
+  ]);
   const env = (k: string) => Boolean(process.env[k]);
 
   const services = [
@@ -69,6 +74,8 @@ export default async function AdminSettingsPage() {
           </Card>
         ))}
       </div>
+
+      <BrandSettingsCard brand={brand} />
 
       <DefaultDestination value={defaultDestination} />
 

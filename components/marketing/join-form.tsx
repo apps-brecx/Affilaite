@@ -10,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { joinCampaign } from "@/app/actions/affiliate";
 
-export function JoinForm({ slug, instantAccess }: { slug: string; instantAccess: boolean }) {
+export function JoinForm({
+  slug,
+  instantAccess,
+  approvedMessage,
+}: {
+  slug: string;
+  instantAccess: boolean;
+  approvedMessage?: string;
+}) {
   const [done, setDone] = useState<null | { instant: boolean }>(null);
   const [pending, start] = useTransition();
   const toast = useToast();
@@ -46,7 +54,7 @@ export function JoinForm({ slug, instantAccess }: { slug: string; instantAccess:
           </h2>
           <p className="mx-auto mt-2 max-w-sm text-muted-foreground">
             {done.instant
-              ? "Your partner account is ready. Sign in to grab your code and referral link."
+              ? approvedMessage || "Your partner account is ready. Sign in to grab your code and referral link."
               : "Thanks for applying. We'll review your details and email you once you're approved."}
           </p>
           {done.instant && (

@@ -37,6 +37,7 @@ import type {
   CommissionState,
   Campaign,
 } from "./types";
+import { mergeConfig, mergeBrand, type BrandSettings } from "./campaign-config";
 
 export const dataSource = isDbConfigured ? "live" : "unconfigured";
 const num = (v: unknown) => (v == null ? 0 : Number(v));
@@ -201,6 +202,7 @@ function mapCampaign(c: any, count: number): Campaign {
     rewardValue: num(c.rewardValue),
     friendRewardType: c.friendRewardType ?? "percent",
     friendRewardValue: num(c.friendRewardValue),
+    config: mergeConfig(c.config),
     memberCount: count,
   };
 }
@@ -249,6 +251,15 @@ export async function getSetting(key: string, fallback = ""): Promise<string> {
 
 export async function getDefaultDestination(): Promise<string> {
   return getSetting("default_destination_url", DEFAULT_DESTINATION_FALLBACK);
+}
+
+export async function getBrand(): Promise<BrandSettings> {
+  const raw = await getSetting("brand", "");
+  try {
+    return mergeBrand(raw ? JSON.parse(raw) : null);
+  } catch {
+    return mergeBrand(null);
+  }
 }
 
 /** Campaign IDs an affiliate belongs to. */

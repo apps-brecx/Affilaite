@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { JoinForm } from "@/components/marketing/join-form";
-import { getCampaignBySlug } from "@/lib/queries";
+import { BrandScope } from "@/components/marketing/brand-scope";
+import { getCampaignBySlug, getBrand } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +18,20 @@ function reward(v: number, t: string) {
 
 export default async function JoinCampaignPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const campaign = await getCampaignBySlug(slug);
+  const [campaign, brand] = await Promise.all([getCampaignBySlug(slug), getBrand()]);
   if (!campaign) notFound();
 
   const inviteOnly = campaign.access === "invite";
   const paused = campaign.status !== "active";
+  const headline = brand.signupHeadline || campaign.name;
+  const subtext = brand.signupSubtext || campaign.description;
 
   return (
+    <BrandScope brand={brand}>
     <div className="relative min-h-screen">
       <div className="aurora pointer-events-none absolute inset-0 h-96" />
       <header className="relative mx-auto flex max-w-5xl items-center justify-between px-4 py-6 sm:px-6">
-        <Logo href="/" />
+        <Logo href="/" text={brand.logoText} />
         <ThemeToggle />
       </header>
 
@@ -39,11 +43,9 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
             {campaign.type === "referral" ? "Referral program" : "Affiliate program"}
           </Badge>
           <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            {campaign.name}
+            {headline}
           </h1>
-          {campaign.description && (
-            <p className="mt-4 max-w-md text-lg text-muted-foreground">{campaign.description}</p>
-          )}
+          {subtext && <p className="mt-4 max-w-md text-lg text-muted-foreground">{subtext}</p>}
 
           <div className="mt-8 space-y-3">
             <div className="flex items-center gap-3">
@@ -101,10 +103,11 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
               </CardContent>
             </Card>
           ) : (
-            <JoinForm slug={campaign.slug!} instantAccess={campaign.access === "instant"} />
+            <JoinForm slug={campaign.slug!} instantAccess={campaign.access === "instant"} approvedMessage={brand.approvedMessage} />
           )}
         </div>
       </div>
     </div>
+    </BrandScope>
   );
 }

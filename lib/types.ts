@@ -50,6 +50,7 @@ export interface Campaign {
   rewardValue: number;
   friendRewardType: "percent" | "flat";
   friendRewardValue: number;
+  config: import("./campaign-config").CampaignConfig;
   memberCount: number;
 }
 

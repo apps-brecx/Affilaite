@@ -4,11 +4,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { LoginForm } from "@/components/auth/login-form";
+import { BrandScope } from "@/components/marketing/brand-scope";
+import { getBrand } from "@/lib/queries";
 
 export const metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const brand = await getBrand();
   return (
+    <BrandScope brand={brand}>
     <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12">
       <div className="aurora pointer-events-none absolute inset-0" />
       <div className="dot-grid pointer-events-none absolute inset-0 opacity-30" />
@@ -18,9 +23,9 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Logo href="/" className="mb-6" />
+          <Logo href="/" className="mb-6" text={brand.logoText} />
           <h1 className="font-display text-2xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to the Syruvia partner portal.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Sign in to the {brand.logoText} partner portal.</p>
         </div>
 
         <Card>
@@ -39,5 +44,6 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+    </BrandScope>
   );
 }

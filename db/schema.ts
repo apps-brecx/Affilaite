@@ -225,6 +225,7 @@ export const campaigns = pgTable("campaigns", {
   endsAt: timestamp("ends_at"),
   description: text("description"),
   codePrefix: text("code_prefix"),
+  config: jsonb("config"),                           // rich rewards & rules (see lib/campaign-config)
   // Advocate/affiliate reward (commission for affiliate campaigns; "give" for referral)
   rewardType: commissionType("reward_type").default("percent"),
   rewardValue: numeric("reward_value", { precision: 8, scale: 2 }),
