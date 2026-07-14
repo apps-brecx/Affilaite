@@ -1,103 +1,38 @@
-import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Database, KeyRound } from "lucide-react";
+import Link from "next/link";
+import { Layers, Info } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InviteTemplates } from "@/components/admin/invite-templates";
 import { DefaultDestination } from "@/components/admin/default-destination";
-import { BrandSettingsCard } from "@/components/admin/brand-settings";
-import { dataSource, listInviteTemplates, getDefaultDestination, getBrand } from "@/lib/queries";
+import { dataSource, getDefaultDestination } from "@/lib/queries";
 
-export const metadata = { title: "Settings" };
+export const metadata = { title: "Settings · General" };
 
-export default async function AdminSettingsPage() {
-  const [templates, defaultDestination, brand] = await Promise.all([
-    listInviteTemplates(),
-    getDefaultDestination(),
-    getBrand(),
-  ]);
-  const env = (k: string) => Boolean(process.env[k]);
-
-  const services = [
-    {
-      icon: Database,
-      label: "Database (Neon)",
-      detail: env("DATABASE_URL") ? "Connected" : "Set DATABASE_URL to go live",
-      ok: env("DATABASE_URL"),
-    },
-    {
-      icon: ShoppingBag,
-      label: "Shopify",
-      detail: env("SHOPIFY_ADMIN_TOKEN") ? process.env.SHOPIFY_STORE_DOMAIN ?? "Connected" : "Add store token to track orders",
-      ok: env("SHOPIFY_ADMIN_TOKEN"),
-    },
-    {
-      icon: Wallet,
-      label: "PayPal Payouts",
-      detail: env("PAYPAL_CLIENT_ID")
-        ? process.env.PAYPAL_BASE?.includes("sandbox")
-          ? "Sandbox"
-          : "Live"
-        : "Add PayPal keys to pay affiliates",
-      ok: env("PAYPAL_CLIENT_ID"),
-    },
-    {
-      icon: Mail,
-      label: "Email (Resend)",
-      detail: env("RESEND_API_KEY") ? process.env.EMAIL_FROM ?? "Connected" : "Add Resend key to send broadcasts",
-      ok: env("RESEND_API_KEY"),
-    },
-  ];
-
+export default async function GeneralSettingsPage() {
+  const defaultDestination = await getDefaultDestination();
   return (
     <div className="space-y-8">
-      <PageHeader title="Settings" description="Connection health for your integrations. Configure these via environment variables.">
+      <PageHeader title="General" description="Program-wide defaults and links.">
         <Badge variant={dataSource === "live" ? "success" : "warning"}>
           {dataSource === "live" ? "Live database" : "Database not connected"}
         </Badge>
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {services.map((s) => (
-          <Card key={s.label} className="flex items-center gap-4 p-5">
-            <span className={`flex size-11 items-center justify-center rounded-lg ${s.ok ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-              <s.icon className="size-5" />
-            </span>
-            <div className="flex-1">
-              <p className="font-medium">{s.label}</p>
-              <p className="text-sm text-muted-foreground">{s.detail}</p>
-            </div>
-            {s.ok ? (
-              <Badge variant="success"><CheckCircle2 className="size-3" /> Connected</Badge>
-            ) : (
-              <Badge variant="warning"><AlertCircle className="size-3" /> Not set</Badge>
-            )}
-          </Card>
-        ))}
-      </div>
-
-      <BrandSettingsCard brand={brand} />
-
       <DefaultDestination value={defaultDestination} />
-
-      <InviteTemplates templates={templates} />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <KeyRound className="size-4 text-primary" /> Configuration
+            <Layers className="size-4 text-primary" /> Program defaults
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <CardContent className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" />
           <p>
-            All secrets are managed as environment variables on your host (never stored in the app).
-            See <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.example</code> for the full list, and{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">docs/SHOPIFY_SETUP.md</code> to connect your store.
+            Commission rate, cookie window, hold period and payout minimum are managed per program under{" "}
+            <Link href="/admin/programs" className="font-medium text-primary hover:underline">Programs</Link>. Per-campaign
+            rewards live on each campaign's <strong>Rewards &amp; rules</strong> tab.
           </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>Register Shopify webhooks with <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">npm run shopify:webhooks</code></li>
-            <li>Program defaults (commission, cookie window, hold days) are managed under <strong className="text-foreground">Programs</strong>.</li>
-            <li>Commissions mature from pending → approved automatically after the hold period via the daily cron.</li>
-          </ul>
         </CardContent>
       </Card>
     </div>

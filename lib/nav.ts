@@ -21,6 +21,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: IconName;
+  children?: { label: string; href: string }[];
 }
 
 export interface NavSection {
@@ -72,6 +73,20 @@ export const adminNav: NavSection[] = [
   },
   {
     title: "System",
-    items: [{ label: "Settings", href: "/admin/settings", icon: "settings" }],
+    items: [
+      {
+        label: "Settings",
+        href: "/admin/settings",
+        icon: "settings",
+        children: [
+          { label: "General", href: "/admin/settings" },
+          { label: "Integrations", href: "/admin/settings/integrations" },
+          { label: "Payments", href: "/admin/settings/payments" },
+          { label: "Brand & theme", href: "/admin/settings/brand" },
+          { label: "Invite templates", href: "/admin/settings/invites" },
+          { label: "Account", href: "/admin/settings/account" },
+        ],
+      },
+    ],
   },
 ];

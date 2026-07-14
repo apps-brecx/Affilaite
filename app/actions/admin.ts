@@ -765,6 +765,42 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
   return { ok: true, message: "Rewards & rules saved." };
 }
 
+/** Update the signed-in admin's name / email. */
+export async function updateAdminAccount(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const userId = (session?.user as any)?.id;
+  if (!userId) return { ok: false, message: "Not signed in." };
+  const parsed = z.object({ name: z.string().min(2), email: z.string().email() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const email = parsed.data.email.toLowerCase();
+  const clash = await db.query.users.findFirst({ where: eq(users.email, email) });
+  if (clash && clash.id !== userId) return { ok: false, message: "That email is already in use." };
+  await db.update(users).set({ name: parsed.data.name, email }).where(eq(users.id, userId));
+  revalidatePath("/admin/settings/account");
+  return { ok: true, message: "Account updated." };
+}
+
+/** Change the signed-in admin's password. */
+export async function changeAdminPassword(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const userId = (session?.user as any)?.id;
+  if (!userId) return { ok: false, message: "Not signed in." };
+  const parsed = z
+    .object({ current: z.string().min(1), next: z.string().min(6, "New password must be at least 6 characters") })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user?.passwordHash) return { ok: false, message: "No password on file." };
+  const ok = await bcrypt.compare(parsed.data.current, user.passwordHash);
+  if (!ok) return { ok: false, message: "Current password is incorrect." };
+  await db.update(users).set({ passwordHash: await bcrypt.hash(parsed.data.next, 10) }).where(eq(users.id, userId));
+  return { ok: true, message: "Password changed." };
+}
+
 /** Save brand/theme settings (stored as JSON under the "brand" key). */
 export async function saveBrand(brand: unknown): Promise<ActionResult> {
   await assertAdmin();

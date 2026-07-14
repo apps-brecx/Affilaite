@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu,
   X,
-  ChevronsUpDown,
+  ChevronDown,
   LifeBuoy,
   LayoutDashboard,
   Link2,
@@ -50,8 +50,83 @@ const ICONS: Record<IconName, LucideIcon> = {
   campaigns: Rocket,
 };
 
-function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
+function NavRow({ item, onNavigate }: { item: NavSection["items"][number]; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const Icon = ICONS[item.icon];
+  const hasChildren = !!item.children?.length;
+  const withinParent = hasChildren && pathname.startsWith(item.href);
+  const [open, setOpen] = useState(withinParent);
+  useEffect(() => {
+    if (withinParent) setOpen(true);
+  }, [withinParent]);
+
+  const active =
+    pathname === item.href ||
+    (item.href !== "/admin" && item.href !== "/dashboard" && !hasChildren && pathname.startsWith(item.href));
+
+  if (hasChildren) {
+    return (
+      <div>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            "group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            withinParent ? "text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          )}
+        >
+          <Icon className={cn("size-4", withinParent ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+          {item.label}
+          <ChevronDown className={cn("ml-auto size-4 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="mt-1 flex flex-col gap-0.5 pl-4">
+            {item.children!.map((child) => {
+              const childActive = pathname === child.href;
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "relative rounded-md py-1.5 pl-5 pr-3 text-sm transition-colors before:absolute before:left-1.5 before:top-1/2 before:size-1.5 before:-translate-y-1/2 before:rounded-full",
+                    childActive
+                      ? "bg-secondary font-medium text-foreground before:bg-primary"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground before:bg-muted-foreground/30",
+                  )}
+                >
+                  {child.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      className={cn(
+        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+      )}
+    >
+      {active && (
+        <motion.span
+          layoutId="nav-active"
+          className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+        />
+      )}
+      <Icon className={cn("size-4 transition-colors", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+      {item.label}
+    </Link>
+  );
+}
+
+function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-6">
       {sections.map((section, i) => (
@@ -61,40 +136,9 @@ function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate
               {section.title}
             </p>
           )}
-          {section.items.map((item) => {
-            const Icon = ICONS[item.icon];
-            const active =
-              pathname === item.href ||
-              (item.href !== "/admin" && item.href !== "/dashboard" && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={cn(
-                  "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="nav-active"
-                    className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                  />
-                )}
-                <Icon
-                  className={cn(
-                    "size-4 transition-colors",
-                    active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
-                  )}
-                />
-                {item.label}
-              </Link>
-            );
-          })}
+          {section.items.map((item) => (
+            <NavRow key={item.href} item={item} onNavigate={onNavigate} />
+          ))}
         </div>
       ))}
     </nav>
