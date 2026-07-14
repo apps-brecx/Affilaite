@@ -12,10 +12,8 @@ async function main() {
     console.error("APP_URL is required (e.g. https://your-app.onrender.com).");
     process.exit(1);
   }
-  if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ADMIN_TOKEN) {
-    console.error("SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN are required.");
-    process.exit(1);
-  }
+  // Shopify credentials may come from env or from the Settings → Integrations UI
+  // (stored in the DB). registerWebhooks throws a clear error if not connected.
 
   const callbackUrl = `${appUrl.replace(/\/$/, "")}/api/webhooks/shopify`;
   console.log("Registering Shopify webhooks →", callbackUrl);

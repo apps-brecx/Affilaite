@@ -1,11 +1,11 @@
 // lib/paypal.ts — OAuth token + Payouts client (idempotent batches).
-const BASE = process.env.PAYPAL_BASE ?? "https://api-m.sandbox.paypal.com";
+// Reads credentials from the effective integration config (UI or env).
+import { paypalConfig } from "./integrations";
 
 export async function paypalToken(): Promise<string> {
-  const auth = Buffer.from(
-    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
-  ).toString("base64");
-  const res = await fetch(`${BASE}/v1/oauth2/token`, {
+  const { clientId, clientSecret, base } = await paypalConfig();
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await fetch(`${base}/v1/oauth2/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${auth}`,
@@ -26,6 +26,7 @@ export interface PayoutRecipient {
 
 /** Create a PayPal payout batch. `senderBatchId` guarantees idempotency. */
 export async function createPayoutBatch(senderBatchId: string, recipients: PayoutRecipient[]) {
+  const { base } = await paypalConfig();
   const token = await paypalToken();
   const body = {
     sender_batch_header: {
@@ -42,7 +43,7 @@ export async function createPayoutBatch(senderBatchId: string, recipients: Payou
     })),
   };
 
-  const res = await fetch(`${BASE}/v1/payments/payouts`, {
+  const res = await fetch(`${base}/v1/payments/payouts`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -56,8 +57,9 @@ export async function createPayoutBatch(senderBatchId: string, recipients: Payou
 }
 
 export async function getPayoutBatch(payoutBatchId: string) {
+  const { base } = await paypalConfig();
   const token = await paypalToken();
-  const res = await fetch(`${BASE}/v1/payments/payouts/${payoutBatchId}`, {
+  const res = await fetch(`${base}/v1/payments/payouts/${payoutBatchId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.json();

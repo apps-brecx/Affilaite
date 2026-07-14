@@ -27,6 +27,7 @@ import { createDiscountForAffiliate } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
 import { defaultConfig } from "@/lib/campaign-config";
+import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -63,7 +64,7 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
     const code = `${aff.refCode}${percent}`.toUpperCase();
 
     let shopifyDiscountId: string | null = null;
-    if (process.env.SHOPIFY_ADMIN_TOKEN) {
+    if (await shopifyReady()) {
       try {
         shopifyDiscountId = await createDiscountForAffiliate(code, percent);
       } catch (e) {
@@ -265,7 +266,7 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
     sentAt: new Date(),
   });
 
-  if (process.env.RESEND_API_KEY) {
+  if (await emailReady()) {
     await sendEmails(
       recipients.filter((r) => r.email).map((r) => ({ email: r.email!, name: r.name ?? undefined })),
       subject,
@@ -289,7 +290,7 @@ export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise
     const exists = await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, code) });
     if (exists) continue;
     let shopifyDiscountId: string | null = null;
-    if (process.env.SHOPIFY_ADMIN_TOKEN) {
+    if (await shopifyReady()) {
       try {
         shopifyDiscountId = await createDiscountForAffiliate(code, percent);
       } catch (e) {
@@ -352,7 +353,7 @@ export async function runPayout(): Promise<ActionResult> {
   }
 
   let status: "processing" | "success" = "processing";
-  if (process.env.PAYPAL_CLIENT_ID) {
+  if (await paypalReady()) {
     try {
       const items = await db.query.payoutItems.findMany({ where: eq(payoutItems.payoutId, batch.id) });
       const recipients = payable.map((r) => {
@@ -455,7 +456,7 @@ async function createAndInvite(
   // Issue the discount code (create in Shopify only if it's a freshly generated one;
   // imported codes are assumed to already exist in the store).
   let shopifyDiscountId: string | null = null;
-  if (!existingCode && process.env.SHOPIFY_ADMIN_TOKEN) {
+  if (!existingCode && (await shopifyReady())) {
     try {
       shopifyDiscountId = await createDiscountForAffiliate(code, percent);
     } catch (e) {
@@ -472,7 +473,7 @@ async function createAndInvite(
   const tpl = templateId
     ? await db!.query.inviteTemplates.findFirst({ where: eq(inviteTemplates.id, templateId) })
     : await defaultTemplate();
-  if (tpl && process.env.RESEND_API_KEY) {
+  if (tpl && (await emailReady())) {
     const vars = { name: name || "there", code, loginUrl: `${APP_URL}/login`, link: `${APP_URL}/api/track?ref=${refCode}`, tempPassword };
     try {
       await sendEmail(email, renderTemplate(tpl.subject, vars), wrapEmail(renderTemplate(tpl.body, vars)));
@@ -559,7 +560,7 @@ export async function sendPortalInvite(
     await db.update(users).set({ passwordHash: await bcrypt.hash(tempPassword, 10) }).where(eq(users.id, user.id));
     processed++;
 
-    if (tpl && process.env.RESEND_API_KEY) {
+    if (tpl && (await emailReady())) {
       const vars = {
         name: user.name ?? "there",
         code: codeRow?.code ?? aff.refCode,
@@ -763,6 +764,58 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
   await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
   revalidatePath(`/admin/campaigns/${id}`);
   return { ok: true, message: "Rewards & rules saved." };
+}
+
+// ---------- Integrations (connect from the UI) ----------
+
+async function writeSetting(key: string, value: string) {
+  await db!
+    .insert(appSettings)
+    .values({ key, value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+}
+// Only overwrite a secret when a new value is supplied — blank keeps the existing one.
+async function writeSecret(key: string, value: string) {
+  if (!value || value.trim() === "") return;
+  await writeSetting(key, encryptSecret(value.trim()));
+}
+
+const INTEGRATION_KEYS: Record<string, string[]> = {
+  shopify: ["int_shopify_domain", "int_shopify_version", "int_shopify_token", "int_shopify_secret"],
+  paypal: ["int_paypal_base", "int_paypal_client_id", "int_paypal_client_secret"],
+  email: ["int_email_from", "int_resend_key"],
+};
+
+export async function saveIntegration(service: string, fields: Record<string, string>): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  if (service === "shopify") {
+    if (fields.domain !== undefined) await writeSetting("int_shopify_domain", fields.domain.trim());
+    if (fields.version !== undefined) await writeSetting("int_shopify_version", fields.version.trim() || "2025-07");
+    await writeSecret("int_shopify_token", fields.token ?? "");
+    await writeSecret("int_shopify_secret", fields.apiSecret ?? "");
+  } else if (service === "paypal") {
+    if (fields.base !== undefined) await writeSetting("int_paypal_base", fields.base.trim());
+    await writeSecret("int_paypal_client_id", fields.clientId ?? "");
+    await writeSecret("int_paypal_client_secret", fields.clientSecret ?? "");
+  } else if (service === "email") {
+    if (fields.from !== undefined) await writeSetting("int_email_from", fields.from.trim());
+    await writeSecret("int_resend_key", fields.apiKey ?? "");
+  } else {
+    return { ok: false, message: "Unknown integration." };
+  }
+  revalidatePath("/admin/settings/integrations");
+  return { ok: true, message: `${service.charAt(0).toUpperCase() + service.slice(1)} connection saved.` };
+}
+
+export async function disconnectIntegration(service: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const keys = INTEGRATION_KEYS[service];
+  if (!keys) return { ok: false, message: "Unknown integration." };
+  await db.delete(appSettings).where(inArray(appSettings.key, keys));
+  revalidatePath("/admin/settings/integrations");
+  return { ok: true, message: `${service.charAt(0).toUpperCase() + service.slice(1)} disconnected.` };
 }
 
 /** Update the signed-in admin's name / email. */

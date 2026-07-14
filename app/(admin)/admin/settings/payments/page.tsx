@@ -4,16 +4,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PaymentsSettings } from "@/components/admin/payments-settings";
 import { getSetting } from "@/lib/queries";
+import { paypalConfig } from "@/lib/integrations";
 
 export const metadata = { title: "Settings · Payments" };
 
 export default async function PaymentsSettingsPage() {
-  const [minimum, mode] = await Promise.all([
+  const [minimum, mode, pp] = await Promise.all([
     getSetting("default_payout_minimum", "25"),
     getSetting("default_payout_mode", "manual"),
+    paypalConfig(),
   ]);
-  const paypal = Boolean(process.env.PAYPAL_CLIENT_ID);
-  const sandbox = process.env.PAYPAL_BASE?.includes("sandbox");
+  const paypal = Boolean(pp.clientId && pp.clientSecret);
+  const sandbox = pp.base.includes("sandbox");
 
   return (
     <div className="space-y-8">

@@ -1,14 +1,12 @@
 // lib/shopify.ts — Admin GraphQL client + webhook HMAC verification.
+// Reads credentials from the effective integration config (UI or env).
 import crypto from "crypto";
+import { shopifyConfig } from "./integrations";
 
-const SHOP = process.env.SHOPIFY_STORE_DOMAIN ?? "";
-const VER = process.env.SHOPIFY_API_VERSION ?? "2025-07";
-const TOKEN = process.env.SHOPIFY_ADMIN_TOKEN ?? "";
-
-export function verifyShopifyHmac(rawBody: string, hmacHeader: string): boolean {
-  const secret = process.env.SHOPIFY_API_SECRET;
-  if (!secret || !hmacHeader) return false;
-  const digest = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
+export async function verifyShopifyHmac(rawBody: string, hmacHeader: string): Promise<boolean> {
+  const { apiSecret } = await shopifyConfig();
+  if (!apiSecret || !hmacHeader) return false;
+  const digest = crypto.createHmac("sha256", apiSecret).update(rawBody, "utf8").digest("base64");
   try {
     return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader));
   } catch {
@@ -17,11 +15,13 @@ export function verifyShopifyHmac(rawBody: string, hmacHeader: string): boolean 
 }
 
 export async function shopifyGraphQL<T = any>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`https://${SHOP}/admin/api/${VER}/graphql.json`, {
+  const { domain, token, version } = await shopifyConfig();
+  if (!domain || !token) throw new Error("Shopify is not connected");
+  const res = await fetch(`https://${domain}/admin/api/${version}/graphql.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": TOKEN,
+      "X-Shopify-Access-Token": token,
     },
     body: JSON.stringify({ query, variables }),
   });
@@ -41,9 +41,7 @@ export async function registerWebhooks(callbackUrl: string) {
     }`;
   const results = [];
   for (const topic of topics) {
-    results.push(
-      await shopifyGraphQL(mutation, { topic, sub: { callbackUrl, format: "JSON" } }),
-    );
+    results.push(await shopifyGraphQL(mutation, { topic, sub: { callbackUrl, format: "JSON" } }));
   }
   return results;
 }

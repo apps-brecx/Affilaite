@@ -1,15 +1,16 @@
 // lib/email.ts — Resend wrapper for transactional + broadcast email.
+// Reads credentials from the effective integration config (UI or env).
 import { Resend } from "resend";
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const FROM = process.env.EMAIL_FROM ?? "Affilaite <affiliates@yourbrand.com>";
+import { emailConfig } from "./integrations";
 
 export async function sendEmail(to: string, subject: string, html: string) {
-  if (!resend) {
-    console.warn("[email] RESEND_API_KEY not set — skipping send to", to);
+  const { apiKey, from } = await emailConfig();
+  if (!apiKey) {
+    console.warn("[email] Resend not connected — skipping send to", to);
     return { skipped: true };
   }
-  return resend.emails.send({ from: FROM, to, subject, html });
+  const resend = new Resend(apiKey);
+  return resend.emails.send({ from, to, subject, html });
 }
 
 /** Personalize a body with an affiliate's variables. */

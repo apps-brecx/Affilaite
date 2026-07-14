@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PayoutRunner } from "@/components/admin/payout-runner";
 import { getPayableBatch, listPayouts, getAdminKpis } from "@/lib/queries";
+import { paypalReady } from "@/lib/integrations";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Payouts" };
@@ -12,7 +13,7 @@ export const metadata = { title: "Payouts" };
 export default async function AdminPayoutsPage() {
   const [rows, payouts, kpis] = await Promise.all([getPayableBatch(), listPayouts(), getAdminKpis()]);
   const lifetimePaid = payouts.reduce((s, p) => s + p.totalAmount, 0);
-  const paypalLive = Boolean(process.env.PAYPAL_CLIENT_ID);
+  const paypalLive = await paypalReady();
 
   return (
     <div className="space-y-8">

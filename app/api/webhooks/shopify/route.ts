@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const hmac = req.headers.get("x-shopify-hmac-sha256") ?? "";
   const topic = req.headers.get("x-shopify-topic") ?? "";
 
-  if (!verifyShopifyHmac(raw, hmac)) {
+  if (!(await verifyShopifyHmac(raw, hmac))) {
     return new Response("Invalid HMAC", { status: 401 });
   }
 
