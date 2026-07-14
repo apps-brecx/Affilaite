@@ -22,6 +22,12 @@ import {
   Ticket,
   BadgePercent,
   Rocket,
+  SlidersHorizontal,
+  Blocks,
+  CreditCard,
+  Palette,
+  Mail,
+  UserCircle,
   type LucideIcon,
 } from "lucide-react";
 import { LogOut } from "lucide-react";
@@ -48,6 +54,12 @@ const ICONS: Record<IconName, LucideIcon> = {
   promotions: BadgePercent,
   messages: Megaphone,
   campaigns: Rocket,
+  general: SlidersHorizontal,
+  integrations: Blocks,
+  payments: CreditCard,
+  brand: Palette,
+  invites: Mail,
+  account: UserCircle,
 };
 
 function NavRow({ item, onNavigate }: { item: NavSection["items"][number]; onNavigate?: () => void }) {
@@ -82,18 +94,20 @@ function NavRow({ item, onNavigate }: { item: NavSection["items"][number]; onNav
           <div className="mt-1 flex flex-col gap-0.5 pl-4">
             {item.children!.map((child) => {
               const childActive = pathname === child.href;
+              const ChildIcon = ICONS[child.icon];
               return (
                 <Link
                   key={child.href}
                   href={child.href}
                   onClick={onNavigate}
                   className={cn(
-                    "relative rounded-md py-1.5 pl-5 pr-3 text-sm transition-colors before:absolute before:left-1.5 before:top-1/2 before:size-1.5 before:-translate-y-1/2 before:rounded-full",
+                    "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
                     childActive
-                      ? "bg-secondary font-medium text-foreground before:bg-primary"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground before:bg-muted-foreground/30",
+                      ? "bg-secondary font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   )}
                 >
+                  <ChildIcon className={cn("size-4", childActive ? "text-primary" : "text-muted-foreground")} />
                   {child.label}
                 </Link>
               );

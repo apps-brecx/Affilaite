@@ -15,13 +15,19 @@ export type IconName =
   | "codes"
   | "promotions"
   | "messages"
-  | "campaigns";
+  | "campaigns"
+  | "general"
+  | "integrations"
+  | "payments"
+  | "brand"
+  | "invites"
+  | "account";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: IconName;
-  children?: { label: string; href: string }[];
+  children?: { label: string; href: string; icon: IconName }[];
 }
 
 export interface NavSection {
@@ -79,12 +85,12 @@ export const adminNav: NavSection[] = [
         href: "/admin/settings",
         icon: "settings",
         children: [
-          { label: "General", href: "/admin/settings" },
-          { label: "Integrations", href: "/admin/settings/integrations" },
-          { label: "Payments", href: "/admin/settings/payments" },
-          { label: "Brand & theme", href: "/admin/settings/brand" },
-          { label: "Invite templates", href: "/admin/settings/invites" },
-          { label: "Account", href: "/admin/settings/account" },
+          { label: "General", href: "/admin/settings", icon: "general" },
+          { label: "Integrations", href: "/admin/settings/integrations", icon: "integrations" },
+          { label: "Payments", href: "/admin/settings/payments", icon: "payments" },
+          { label: "Brand & theme", href: "/admin/settings/brand", icon: "brand" },
+          { label: "Invite templates", href: "/admin/settings/invites", icon: "invites" },
+          { label: "Account", href: "/admin/settings/account", icon: "account" },
         ],
       },
     ],
