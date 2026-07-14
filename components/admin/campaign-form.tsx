@@ -43,7 +43,10 @@ export function CampaignForm({ appUrl, defaultDestination }: { appUrl: string; d
         friendRewardValue: String(fd.get("friendRewardValue") ?? "0"),
       });
       toast(res.message, res.ok ? "success" : "error");
-      if (res.ok) {
+      if (res.ok && res.id) {
+        // Land on the new campaign's overview so you can finish setting it up.
+        router.push(`/admin/campaigns/${res.id}`);
+      } else if (res.ok) {
         form.reset();
         setAccess("approval");
         router.refresh();

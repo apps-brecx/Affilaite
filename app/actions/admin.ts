@@ -26,6 +26,7 @@ import { auth } from "@/lib/auth";
 import { createDiscountForAffiliate } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
+import { defaultConfig } from "@/lib/campaign-config";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -665,7 +666,7 @@ const campaignSchema = z.object({
   friendRewardValue: z.coerce.number().nonnegative().default(0),
 });
 
-export async function createCampaign(input: unknown): Promise<ActionResult> {
+export async function createCampaign(input: unknown): Promise<ActionResult & { id?: string }> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = campaignSchema.safeParse(input);
@@ -677,24 +678,36 @@ export async function createCampaign(input: unknown): Promise<ActionResult> {
     (await db.query.appSettings.findFirst({ where: eq(appSettings.key, "default_destination_url") }))?.value ??
     "https://syruvia.com";
 
-  await db.insert(campaigns).values({
-    name: d.name,
-    type: d.type,
-    access: d.access,
-    slug,
-    shortCode: d.shortCode ? d.shortCode.toUpperCase() : null,
-    codePrefix: d.shortCode ? d.shortCode.toUpperCase() : d.codePrefix ? d.codePrefix.toUpperCase() : null,
-    destinationUrl: d.destinationUrl?.trim() || defaultDest,
-    startsAt: d.startsAt ? new Date(d.startsAt) : new Date(),
-    endsAt: d.endsAt ? new Date(d.endsAt) : null,
-    description: d.description || null,
-    rewardType: d.rewardType,
-    rewardValue: d.rewardValue.toString(),
-    friendRewardType: d.friendRewardType,
-    friendRewardValue: d.friendRewardValue.toString(),
-  });
+  // Seed the rich config from the quick-create fields.
+  const config = defaultConfig();
+  config.reward.kind = d.type === "referral" ? "coupon" : "coupon";
+  config.reward.valueType = d.rewardType === "flat" ? "fixed" : "percent";
+  config.reward.value = d.rewardValue;
+  config.friend.valueType = d.friendRewardType === "flat" ? "fixed" : "percent";
+  config.friend.value = d.friendRewardValue;
+
+  const [row] = await db
+    .insert(campaigns)
+    .values({
+      name: d.name,
+      type: d.type,
+      access: d.access,
+      slug,
+      shortCode: d.shortCode ? d.shortCode.toUpperCase() : null,
+      codePrefix: d.shortCode ? d.shortCode.toUpperCase() : d.codePrefix ? d.codePrefix.toUpperCase() : null,
+      destinationUrl: d.destinationUrl?.trim() || defaultDest,
+      startsAt: d.startsAt ? new Date(d.startsAt) : new Date(),
+      endsAt: d.endsAt ? new Date(d.endsAt) : null,
+      description: d.description || null,
+      config: config as any,
+      rewardType: d.rewardType,
+      rewardValue: d.rewardValue.toString(),
+      friendRewardType: d.friendRewardType,
+      friendRewardValue: d.friendRewardValue.toString(),
+    })
+    .returning({ id: campaigns.id });
   revalidatePath("/admin/campaigns");
-  return { ok: true, message: `${d.type === "referral" ? "Referral" : "Affiliate"} campaign created.` };
+  return { ok: true, message: `${d.type === "referral" ? "Referral" : "Affiliate"} campaign created.`, id: row.id };
 }
 
 export async function updateCampaign(id: string, input: unknown): Promise<ActionResult> {
