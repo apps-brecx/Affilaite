@@ -417,7 +417,12 @@ interface InviteOutcome {
   error?: string;
 }
 
-async function createAndInvite(name: string, email: string, templateId?: string): Promise<InviteOutcome> {
+async function createAndInvite(
+  name: string,
+  email: string,
+  templateId?: string,
+  existingCode?: string,
+): Promise<InviteOutcome> {
   email = email.toLowerCase().trim();
   const existing = await db!.query.users.findFirst({ where: eq(users.email, email) });
   if (existing) return { email, ok: false, emailed: false, error: "Already exists" };
@@ -430,17 +435,23 @@ async function createAndInvite(name: string, email: string, templateId?: string)
     .returning();
 
   const program = await db!.query.programs.findFirst({ where: eq(programs.isDefault, true) });
-  const refCode = await uniqueRefCode(slugCode(name || email));
+
+  // Preserve an imported code (e.g. from ReferralCandy) so existing links keep working.
+  const cleanCode = existingCode ? existingCode.toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
+  const refBase = cleanCode || slugCode(name || email);
+  const refCode = await uniqueRefCode(refBase);
+  const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
+  const code = cleanCode || `${refCode}${percent}`.toUpperCase();
+
   const [aff] = await db!
     .insert(affiliates)
     .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, programId: program?.id ?? null })
     .returning();
 
-  // Issue a discount code.
-  const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-  const code = `${refCode}${percent}`.toUpperCase();
+  // Issue the discount code (create in Shopify only if it's a freshly generated one;
+  // imported codes are assumed to already exist in the store).
   let shopifyDiscountId: string | null = null;
-  if (process.env.SHOPIFY_ADMIN_TOKEN) {
+  if (!existingCode && process.env.SHOPIFY_ADMIN_TOKEN) {
     try {
       shopifyDiscountId = await createDiscountForAffiliate(code, percent);
     } catch (e) {
@@ -473,9 +484,11 @@ async function createAndInvite(name: string, email: string, templateId?: string)
 export async function inviteAffiliate(input: unknown): Promise<ActionResult & { tempPassword?: string; emailed?: boolean }> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
-  const parsed = z.object({ name: z.string().optional(), email: z.string().email(), templateId: z.string().optional() }).safeParse(input);
+  const parsed = z
+    .object({ name: z.string().optional(), email: z.string().email(), code: z.string().optional(), templateId: z.string().optional() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a valid email." };
-  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId);
+  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code);
   revalAdmin();
   if (!res.ok) return { ok: false, message: `${res.email}: ${res.error}` };
   return {
@@ -489,7 +502,7 @@ export async function inviteAffiliate(input: unknown): Promise<ActionResult & { 
 }
 
 export async function bulkInviteAffiliates(
-  rows: { name?: string; email: string }[],
+  rows: { name?: string; email: string; code?: string }[],
   templateId?: string,
 ): Promise<ActionResult & { created: number; emailed: number; skipped: number }> {
   await assertAdmin();
@@ -499,7 +512,7 @@ export async function bulkInviteAffiliates(
     emailed = 0,
     skipped = 0;
   for (const r of clean) {
-    const res = await createAndInvite(r.name ?? "", r.email, templateId);
+    const res = await createAndInvite(r.name ?? "", r.email, templateId, r.code);
     if (res.ok) {
       created++;
       if (res.emailed) emailed++;
@@ -511,7 +524,62 @@ export async function bulkInviteAffiliates(
     created,
     emailed,
     skipped,
-    message: `Invited ${created} affiliate(s)${emailed ? `, ${emailed} emailed` : ""}${skipped ? `, ${skipped} skipped (duplicates/invalid)` : ""}.`,
+    message: `Imported ${created} affiliate(s)${emailed ? `, ${emailed} emailed` : ""}${skipped ? `, ${skipped} skipped (already exist / invalid)` : ""}.`,
+  };
+}
+
+/** Send (or re-send) a portal invite to affiliates that already exist —
+ *  resets a temp password and emails their login + code + link. */
+export async function sendPortalInvite(
+  affiliateIds: string[],
+  templateId?: string,
+): Promise<ActionResult & { emailed: number }> {
+  await assertAdmin();
+  if (!db || affiliateIds.length === 0) return { ok: false, message: "No affiliates selected.", emailed: 0 };
+
+  const tpl = templateId
+    ? await db.query.inviteTemplates.findFirst({ where: eq(inviteTemplates.id, templateId) })
+    : await defaultTemplate();
+
+  let emailed = 0;
+  let processed = 0;
+  for (const id of affiliateIds) {
+    const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, id) });
+    if (!aff) continue;
+    const user = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
+    if (!user) continue;
+    const codeRow = await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, id) });
+
+    // Reset a temp password so they can log in from the invite.
+    const tempPassword = crypto.randomBytes(6).toString("base64url");
+    await db.update(users).set({ passwordHash: await bcrypt.hash(tempPassword, 10) }).where(eq(users.id, user.id));
+    processed++;
+
+    if (tpl && process.env.RESEND_API_KEY) {
+      const vars = {
+        name: user.name ?? "there",
+        code: codeRow?.code ?? aff.refCode,
+        loginUrl: `${APP_URL}/login`,
+        link: `${APP_URL}/api/track?ref=${aff.refCode}`,
+        tempPassword,
+      };
+      try {
+        await sendEmail(user.email, renderTemplate(tpl.subject, vars), wrapEmail(renderTemplate(tpl.body, vars)));
+        emailed++;
+      } catch (e) {
+        console.error("[sendPortalInvite]", user.email, e);
+      }
+    }
+  }
+
+  revalAdmin();
+  return {
+    ok: processed > 0,
+    emailed,
+    message:
+      emailed > 0
+        ? `Invite sent to ${emailed} affiliate(s).`
+        : `Reset access for ${processed} affiliate(s). Connect Resend (RESEND_API_KEY) to email invites automatically.`,
   };
 }
 

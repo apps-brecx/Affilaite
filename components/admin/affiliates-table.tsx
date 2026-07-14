@@ -3,14 +3,14 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Check, X, Ban, Loader2 } from "lucide-react";
+import { Search, Check, X, Ban, Loader2, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { setAffiliateStatus } from "@/app/actions/admin";
+import { setAffiliateStatus, sendPortalInvite } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
 import type { Affiliate, AffiliateState } from "@/lib/types";
 
@@ -48,6 +48,25 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
       toast(`${ids.length} affiliate(s) approved.`);
       setSelected(new Set());
       router.refresh();
+    });
+  };
+
+  const bulkInvite = () => {
+    const ids = [...selected];
+    start(async () => {
+      const res = await sendPortalInvite(ids);
+      toast(res.message, res.ok ? "success" : "error");
+      setSelected(new Set());
+      router.refresh();
+    });
+  };
+
+  const inviteOne = (id: string) => {
+    setBusyId(id);
+    start(async () => {
+      const res = await sendPortalInvite([id]);
+      toast(res.message, res.ok ? "success" : "error");
+      setBusyId(null);
     });
   };
 
@@ -103,6 +122,9 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
+            </Button>
+            <Button size="sm" variant="outline" onClick={bulkInvite} disabled={pending}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />} Send invite
             </Button>
             <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90" onClick={bulkApprove} disabled={pending}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve selected
@@ -168,9 +190,14 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                         </Button>
                       </>
                     ) : a.status === "approved" ? (
-                      <Button size="icon-sm" variant="ghost" title="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
-                        <Ban className="size-4" />
-                      </Button>
+                      <>
+                        <Button size="icon-sm" variant="ghost" title="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
+                          <Mail className="size-4" />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" title="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
+                          <Ban className="size-4" />
+                        </Button>
+                      </>
                     ) : (
                       <Button size="icon-sm" variant="ghost" title="Approve" className="text-success hover:bg-success-soft" onClick={() => act(a.id, "approved")}>
                         <Check className="size-4" />

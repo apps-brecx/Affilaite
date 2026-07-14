@@ -14,18 +14,41 @@ import type { InviteTemplate } from "@/lib/queries";
 
 type Tab = "single" | "bulk" | "import";
 
-// Parse "Name,email" / "email" lines or CSV text into {name,email} rows.
-function parseRows(text: string): { name?: string; email: string }[] {
-  const out: { name?: string; email: string }[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (/^name\s*,\s*email/i.test(line)) continue; // header
+type Row = { name?: string; email: string; code?: string };
+const isEmail = (s?: string) => !!s && /.+@.+\..+/.test(s);
+
+// Parse pasted text or CSV into {name,email,code} rows. Header-aware so a
+// ReferralCandy export (name,email,coupon/code) keeps each affiliate's code.
+function parseRows(text: string): Row[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+
+  let cols: string[] | null = null;
+  if (lines[0].toLowerCase().includes("email")) {
+    cols = lines[0].split(/[,;\t]/).map((s) => s.trim().toLowerCase());
+    lines.shift();
+  }
+
+  const out: Row[] = [];
+  for (const line of lines) {
     const parts = line.split(/[,;\t]/).map((s) => s.trim());
-    const emailPart = parts.find((p) => /.+@.+\..+/.test(p));
-    if (!emailPart) continue;
-    const namePart = parts.find((p) => p !== emailPart && p.length > 0);
-    out.push({ name: namePart, email: emailPart });
+    let name: string | undefined, email: string | undefined, code: string | undefined;
+    if (cols) {
+      const at = (n: string) => {
+        const i = cols!.indexOf(n);
+        return i >= 0 ? parts[i] : undefined;
+      };
+      name = at("name") || at("full name");
+      email = at("email") || at("email address");
+      code = at("code") || at("coupon") || at("coupon code") || at("discount code");
+    } else {
+      email = parts.find((p) => isEmail(p));
+      const rest = parts.filter((p) => p !== email && p.length > 0);
+      name = rest[0];
+      code = rest[1];
+    }
+    if (!isEmail(email)) continue;
+    out.push({ name: name || undefined, email: email!, code: code || undefined });
   }
   return out;
 }
@@ -66,7 +89,10 @@ export function AffiliatesToolbar({
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob(["name,email\nJane Doe,jane@example.com\nJohn Smith,john@example.com\n"], { type: "text/csv" });
+    const blob = new Blob(
+      ["name,email,code\nJane Doe,jane@example.com,JANE20\nJohn Smith,john@example.com,JOHN20\n"],
+      { type: "text/csv" },
+    );
     const url = URL.createObjectURL(blob);
     const el = document.createElement("a");
     el.href = url;
@@ -90,6 +116,7 @@ export function AffiliatesToolbar({
       const res = await inviteAffiliate({
         name: String(fd.get("name") ?? ""),
         email: String(fd.get("email") ?? ""),
+        code: String(fd.get("code") ?? "") || undefined,
         templateId: templateId || undefined,
       });
       toast(res.message, res.ok ? "success" : "error");
@@ -180,6 +207,10 @@ export function AffiliatesToolbar({
                 <Input name="email" type="email" required placeholder="jane@email.com" />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Existing code <span className="text-muted-foreground">(optional)</span></Label>
+              <Input name="code" placeholder="Keep their current code, e.g. JANE20" />
+            </div>
             <TemplateSelect />
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invite
@@ -210,12 +241,17 @@ export function AffiliatesToolbar({
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-hairline bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-sm">
-                <FileText className="size-4 text-muted-foreground" /> CSV with columns <code className="font-mono text-xs">name,email</code>
+                <FileText className="size-4 text-muted-foreground" /> CSV columns{" "}
+                <code className="font-mono text-xs">name,email,code</code>
               </div>
               <Button variant="ghost" size="sm" onClick={downloadTemplate}>
                 <Download className="size-4" /> Template
               </Button>
             </div>
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Migrating from ReferralCandy? Include each affiliate's existing <strong>code</strong> so their
+              live links keep working. They'll be imported as approved and emailed a portal invite.
+            </p>
             <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
             <Button variant="outline" className="w-full" onClick={() => fileRef.current?.click()}>
               <Upload className="size-4" /> Choose CSV file
