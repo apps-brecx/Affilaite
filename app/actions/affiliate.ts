@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { users, affiliates, programs } from "@/db/schema";
+import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -74,6 +74,70 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
   revalidatePath("/admin/affiliates");
   revalidatePath("/admin");
   return { ok: true, message: "Application received", affiliateId: aff.id };
+}
+
+const joinSchema = z.object({
+  slug: z.string(),
+  name: z.string().min(2, "Please enter your name"),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+/** Public campaign signup. Behavior depends on the campaign's access type. */
+export async function joinCampaign(input: unknown): Promise<ActionResult & { instant?: boolean }> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = joinSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const data = parsed.data;
+
+  const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.slug, data.slug) });
+  if (!campaign) return { ok: false, message: "Campaign not found." };
+  if (campaign.access === "invite") return { ok: false, message: "This campaign is invite-only." };
+  if (campaign.status !== "active") return { ok: false, message: "This campaign isn't accepting signups right now." };
+
+  const email = data.email.toLowerCase();
+  const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
+  if (existing) return { ok: false, message: "An account with this email already exists — try signing in." };
+
+  const instant = campaign.access === "instant";
+  const passwordHash = await bcrypt.hash(data.password, 10);
+  const [user] = await db.insert(users).values({ email, name: data.name, passwordHash, role: "affiliate" }).returning();
+
+  const program = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+  const base = `${campaign.shortCode ?? ""}${slugCode(data.name)}`.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const refCode = await uniqueRefCode(base || slugCode(data.name));
+
+  const [aff] = await db
+    .insert(affiliates)
+    .values({
+      userId: user.id,
+      status: instant ? "approved" : "pending",
+      refCode,
+      programId: program?.id ?? null,
+    })
+    .returning();
+
+  await db.insert(affiliateCampaigns).values({ affiliateId: aff.id, campaignId: campaign.id });
+
+  // Instant access → issue a code immediately.
+  if (instant) {
+    const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
+    const code = `${refCode}${percent}`.toUpperCase();
+    await db
+      .insert(discountCodes)
+      .values({ affiliateId: aff.id, code, percentage: percent.toString(), active: true })
+      .onConflictDoNothing();
+  }
+
+  revalidatePath("/admin/affiliates");
+  revalidatePath(`/admin/campaigns/${campaign.id}`);
+  return {
+    ok: true,
+    instant,
+    message: instant
+      ? "You're in! Sign in to grab your code and link."
+      : "Application received — we'll review it and email you once you're approved.",
+  };
 }
 
 export async function updatePaypalEmail(email: string): Promise<ActionResult> {

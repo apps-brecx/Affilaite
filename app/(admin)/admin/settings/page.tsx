@@ -3,12 +3,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InviteTemplates } from "@/components/admin/invite-templates";
-import { dataSource, listInviteTemplates } from "@/lib/queries";
+import { DefaultDestination } from "@/components/admin/default-destination";
+import { dataSource, listInviteTemplates, getDefaultDestination } from "@/lib/queries";
 
 export const metadata = { title: "Settings" };
 
 export default async function AdminSettingsPage() {
-  const templates = await listInviteTemplates();
+  const [templates, defaultDestination] = await Promise.all([listInviteTemplates(), getDefaultDestination()]);
   const env = (k: string) => Boolean(process.env[k]);
 
   const services = [
@@ -68,6 +69,8 @@ export default async function AdminSettingsPage() {
           </Card>
         ))}
       </div>
+
+      <DefaultDestination value={defaultDestination} />
 
       <InviteTemplates templates={templates} />
 

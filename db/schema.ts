@@ -35,6 +35,7 @@ export const payoutStatus = pgEnum("payout_status", [
 export const commissionType = pgEnum("commission_type", ["percent", "flat"]);
 export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
 export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
+export const campaignAccess = pgEnum("campaign_access", ["instant", "approval", "invite"]);
 
 // --- Users (admin + affiliates share auth, differ by role) ---
 export const users = pgTable("users", {
@@ -216,6 +217,12 @@ export const campaigns = pgTable("campaigns", {
   name: text("name").notNull(),
   type: campaignType("type").notNull().default("affiliate"),
   status: campaignStatus("status").notNull().default("active"),
+  access: campaignAccess("access").notNull().default("approval"),
+  slug: text("slug").unique(),                       // campaign URL: /join/<slug>
+  shortCode: text("short_code"),                     // prefix for generated codes
+  destinationUrl: text("destination_url"),           // where referral links land
+  startsAt: timestamp("starts_at"),
+  endsAt: timestamp("ends_at"),
   description: text("description"),
   codePrefix: text("code_prefix"),
   // Advocate/affiliate reward (commission for affiliate campaigns; "give" for referral)
@@ -225,6 +232,13 @@ export const campaigns = pgTable("campaigns", {
   friendRewardType: commissionType("friend_reward_type").default("percent"),
   friendRewardValue: numeric("friend_reward_value", { precision: 8, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// --- Global app settings (key/value) ---
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const affiliateCampaigns = pgTable(

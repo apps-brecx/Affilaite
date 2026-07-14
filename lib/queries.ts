@@ -20,6 +20,7 @@ import {
   inviteTemplates,
   campaigns,
   affiliateCampaigns,
+  appSettings,
 } from "@/db/schema";
 import type {
   Affiliate,
@@ -188,6 +189,12 @@ function mapCampaign(c: any, count: number): Campaign {
     name: c.name,
     type: c.type,
     status: c.status,
+    access: c.access ?? "approval",
+    slug: c.slug ?? null,
+    shortCode: c.shortCode ?? null,
+    destinationUrl: c.destinationUrl ?? null,
+    startsAt: c.startsAt ? new Date(c.startsAt).toISOString() : null,
+    endsAt: c.endsAt ? new Date(c.endsAt).toISOString() : null,
     description: c.description ?? "",
     codePrefix: c.codePrefix ?? null,
     rewardType: c.rewardType ?? "percent",
@@ -220,6 +227,28 @@ export async function getCampaign(id: string): Promise<Campaign | undefined> {
   if (!c) return undefined;
   const counts = await campaignCounts();
   return mapCampaign(c, counts.get(id) ?? 0);
+}
+
+export async function getCampaignBySlug(slug: string): Promise<Campaign | undefined> {
+  if (!db) return undefined;
+  const c = await db.query.campaigns.findFirst({ where: eq(campaigns.slug, slug) });
+  if (!c) return undefined;
+  const counts = await campaignCounts();
+  return mapCampaign(c, counts.get(c.id) ?? 0);
+}
+
+// ---------- App settings ----------
+
+export const DEFAULT_DESTINATION_FALLBACK = "https://syruvia.com";
+
+export async function getSetting(key: string, fallback = ""): Promise<string> {
+  if (!db) return fallback;
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
+  return row?.value ?? fallback;
+}
+
+export async function getDefaultDestination(): Promise<string> {
+  return getSetting("default_destination_url", DEFAULT_DESTINATION_FALLBACK);
 }
 
 /** Campaign IDs an affiliate belongs to. */

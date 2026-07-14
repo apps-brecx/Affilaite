@@ -31,12 +31,19 @@ export interface Group {
 
 export type CampaignType = "affiliate" | "referral";
 export type CampaignStatus = "active" | "paused" | "ended";
+export type CampaignAccess = "instant" | "approval" | "invite";
 
 export interface Campaign {
   id: string;
   name: string;
   type: CampaignType;
   status: CampaignStatus;
+  access: CampaignAccess;
+  slug: string | null;
+  shortCode: string | null;
+  destinationUrl: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
   description: string;
   codePrefix: string | null;
   rewardType: "percent" | "flat";

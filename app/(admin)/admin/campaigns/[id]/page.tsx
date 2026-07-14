@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CampaignManager } from "@/components/admin/campaign-manager";
 import { getCampaign, getCampaignMemberIds, listAffiliates } from "@/lib/queries";
+import { APP_URL } from "@/lib/links";
 
 export default async function CampaignManagePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,7 +31,7 @@ export default async function CampaignManagePage({ params }: { params: Promise<{
         <StatusPill status={campaign.status} />
       </PageHeader>
 
-      <CampaignManager campaign={campaign} members={members} candidates={candidates} />
+      <CampaignManager campaign={campaign} members={members} candidates={candidates} appUrl={APP_URL} />
     </div>
   );
 }

@@ -2,15 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Rocket, Loader2, Users, Gift } from "lucide-react";
+import { Rocket, Loader2, Users, Gift, Zap, ShieldCheck, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { createCampaign } from "@/app/actions/admin";
 
-export function CampaignForm() {
+const ACCESS = [
+  { id: "instant", label: "Instant access", icon: Zap, hint: "Sign up → approved + code right away" },
+  { id: "approval", label: "Requires approval", icon: ShieldCheck, hint: "You approve each applicant" },
+  { id: "invite", label: "Invite only", icon: Lock, hint: "You add or invite people manually" },
+] as const;
+
+export function CampaignForm({ appUrl, defaultDestination }: { appUrl: string; defaultDestination: string }) {
   const [type, setType] = useState<"affiliate" | "referral">("affiliate");
+  const [access, setAccess] = useState<"instant" | "approval" | "invite">("approval");
   const [pending, start] = useTransition();
   const router = useRouter();
   const toast = useToast();
@@ -23,8 +30,13 @@ export function CampaignForm() {
       const res = await createCampaign({
         name: String(fd.get("name") ?? ""),
         type,
+        access,
+        slug: String(fd.get("slug") ?? ""),
+        shortCode: String(fd.get("shortCode") ?? ""),
+        destinationUrl: String(fd.get("destinationUrl") ?? ""),
+        startsAt: String(fd.get("startsAt") ?? ""),
+        endsAt: String(fd.get("endsAt") ?? ""),
         description: String(fd.get("description") ?? ""),
-        codePrefix: String(fd.get("codePrefix") ?? ""),
         rewardType: String(fd.get("rewardType") ?? "percent"),
         rewardValue: String(fd.get("rewardValue") ?? "0"),
         friendRewardType: String(fd.get("friendRewardType") ?? "percent"),
@@ -33,6 +45,7 @@ export function CampaignForm() {
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         form.reset();
+        setAccess("approval");
         router.refresh();
       }
     });
@@ -46,31 +59,71 @@ export function CampaignForm() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} className="space-y-4">
-          {/* Type toggle */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { id: "affiliate", label: "Affiliate", icon: Users, hint: "Influencers earn commission" },
-              { id: "referral", label: "Referral", icon: Gift, hint: "Customers refer friends" },
-            ].map((t) => (
-              <button
-                type="button"
-                key={t.id}
-                onClick={() => setType(t.id as "affiliate" | "referral")}
-                className={`rounded-lg border p-3 text-left transition-colors ${
-                  type === t.id ? "border-primary/40 bg-primary/[0.04]" : "border-hairline hover:bg-accent"
-                }`}
-              >
-                <t.icon className={`mb-1 size-4 ${type === t.id ? "text-primary" : "text-muted-foreground"}`} />
-                <p className="text-sm font-medium">{t.label}</p>
-                <p className="text-[11px] text-muted-foreground">{t.hint}</p>
-              </button>
-            ))}
+        <form onSubmit={submit} className="space-y-5">
+          {/* Type */}
+          <div>
+            <Label className="mb-1.5 block">Type</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "affiliate", label: "Affiliate", icon: Users, hint: "Creators earn commission" },
+                { id: "referral", label: "Referral", icon: Gift, hint: "Customers refer friends" },
+              ].map((t) => (
+                <button
+                  type="button"
+                  key={t.id}
+                  onClick={() => setType(t.id as "affiliate" | "referral")}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    type === t.id ? "border-primary/40 bg-primary/[0.04]" : "border-hairline hover:bg-accent"
+                  }`}
+                >
+                  <t.icon className={`mb-1 size-4 ${type === t.id ? "text-primary" : "text-muted-foreground"}`} />
+                  <p className="text-sm font-medium">{t.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{t.hint}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Access */}
+          <div>
+            <Label className="mb-1.5 block">Access</Label>
+            <div className="space-y-2">
+              {ACCESS.map((a) => (
+                <button
+                  type="button"
+                  key={a.id}
+                  onClick={() => setAccess(a.id)}
+                  className={`flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                    access === a.id ? "border-primary/40 bg-primary/[0.04]" : "border-hairline hover:bg-accent"
+                  }`}
+                >
+                  <span className={`flex size-8 items-center justify-center rounded-md ${access === a.id ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                    <a.icon className="size-4" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium">{a.label}</span>
+                    <span className="block text-[11px] text-muted-foreground">{a.hint}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label>Campaign name</Label>
             <Input name="name" required placeholder={type === "referral" ? "Give $10, Get $10" : "Summer Creators"} />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Campaign URL</Label>
+              <Input name="slug" placeholder="summer-creators" />
+              <p className="truncate text-[11px] text-muted-foreground">{appUrl}/join/…</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Short code</Label>
+              <Input name="shortCode" placeholder="SUMMER" />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -98,8 +151,20 @@ export function CampaignForm() {
           )}
 
           <div className="space-y-1.5">
-            <Label>Code prefix <span className="text-muted-foreground">(optional)</span></Label>
-            <Input name="codePrefix" placeholder="SUMMER" />
+            <Label>Link destination</Label>
+            <Input name="destinationUrl" defaultValue={defaultDestination} />
+            <p className="text-[11px] text-muted-foreground">Where referral links land. Default set in Settings.</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Start date</Label>
+              <Input name="startsAt" type="date" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Expiry <span className="text-muted-foreground">(optional)</span></Label>
+              <Input name="endsAt" type="date" />
+            </div>
           </div>
 
           <div className="space-y-1.5">

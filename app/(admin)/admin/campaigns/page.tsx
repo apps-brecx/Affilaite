@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CampaignForm } from "@/components/admin/campaign-form";
-import { listCampaigns } from "@/lib/queries";
+import { listCampaigns, getDefaultDestination } from "@/lib/queries";
+import { APP_URL } from "@/lib/links";
 import type { Campaign } from "@/lib/types";
 
 export const metadata = { title: "Campaigns" };
@@ -28,9 +29,12 @@ function CampaignCard({ c }: { c: Campaign }) {
             {c.type === "referral" ? <Gift className="size-5" /> : <Users className="size-5" />}
           </span>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium">{c.name}</p>
               <StatusPill status={c.status} />
+              <Badge variant="muted" className="capitalize">
+                {c.access === "instant" ? "Instant access" : c.access === "invite" ? "Invite only" : "Approval"}
+              </Badge>
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {c.type === "referral"
@@ -52,7 +56,7 @@ function CampaignCard({ c }: { c: Campaign }) {
 }
 
 export default async function CampaignsPage() {
-  const campaigns = await listCampaigns();
+  const [campaigns, defaultDestination] = await Promise.all([listCampaigns(), getDefaultDestination()]);
   const affiliate = campaigns.filter((c) => c.type === "affiliate");
   const referral = campaigns.filter((c) => c.type === "referral");
 
@@ -94,7 +98,7 @@ export default async function CampaignsPage() {
           </section>
         </div>
 
-        <CampaignForm />
+        <CampaignForm appUrl={APP_URL} defaultDestination={defaultDestination} />
       </div>
     </div>
   );

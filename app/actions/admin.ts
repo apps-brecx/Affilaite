@@ -20,6 +20,7 @@ import {
   inviteTemplates,
   campaigns,
   affiliateCampaigns,
+  appSettings,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { createDiscountForAffiliate } from "@/lib/discounts";
@@ -629,9 +630,33 @@ export async function setDefaultInviteTemplate(id: string): Promise<ActionResult
 
 // ---------- Campaigns ----------
 
+function slugify(s: string) {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+async function uniqueSlug(base: string, excludeId?: string) {
+  let slug = base || "campaign";
+  let n = 1;
+  while (true) {
+    const existing = await db!.query.campaigns.findFirst({ where: eq(campaigns.slug, slug) });
+    if (!existing || existing.id === excludeId) return slug;
+    slug = `${base}-${n++}`;
+  }
+}
+
 const campaignSchema = z.object({
   name: z.string().min(2),
   type: z.enum(["affiliate", "referral"]),
+  access: z.enum(["instant", "approval", "invite"]).default("approval"),
+  slug: z.string().optional(),
+  shortCode: z.string().optional(),
+  destinationUrl: z.string().optional(),
+  startsAt: z.string().optional(),
+  endsAt: z.string().optional(),
   description: z.string().optional(),
   codePrefix: z.string().optional(),
   rewardType: z.enum(["percent", "flat"]).default("percent"),
@@ -646,11 +671,23 @@ export async function createCampaign(input: unknown): Promise<ActionResult> {
   const parsed = campaignSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
   const d = parsed.data;
+
+  const slug = await uniqueSlug(slugify(d.slug || d.name));
+  const defaultDest =
+    (await db.query.appSettings.findFirst({ where: eq(appSettings.key, "default_destination_url") }))?.value ??
+    "https://syruvia.com";
+
   await db.insert(campaigns).values({
     name: d.name,
     type: d.type,
+    access: d.access,
+    slug,
+    shortCode: d.shortCode ? d.shortCode.toUpperCase() : null,
+    codePrefix: d.shortCode ? d.shortCode.toUpperCase() : d.codePrefix ? d.codePrefix.toUpperCase() : null,
+    destinationUrl: d.destinationUrl?.trim() || defaultDest,
+    startsAt: d.startsAt ? new Date(d.startsAt) : new Date(),
+    endsAt: d.endsAt ? new Date(d.endsAt) : null,
     description: d.description || null,
-    codePrefix: d.codePrefix ? d.codePrefix.toUpperCase() : null,
     rewardType: d.rewardType,
     rewardValue: d.rewardValue.toString(),
     friendRewardType: d.friendRewardType,
@@ -666,12 +703,23 @@ export async function updateCampaign(id: string, input: unknown): Promise<Action
   const parsed = campaignSchema.partial().safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid input." };
   const d = parsed.data;
+
+  let slug: string | undefined;
+  if (d.slug !== undefined) slug = await uniqueSlug(slugify(d.slug || d.name || "campaign"), id);
+
   await db
     .update(campaigns)
     .set({
       ...(d.name !== undefined ? { name: d.name } : {}),
+      ...(d.access !== undefined ? { access: d.access } : {}),
+      ...(slug !== undefined ? { slug } : {}),
+      ...(d.shortCode !== undefined
+        ? { shortCode: d.shortCode ? d.shortCode.toUpperCase() : null, codePrefix: d.shortCode ? d.shortCode.toUpperCase() : null }
+        : {}),
+      ...(d.destinationUrl !== undefined ? { destinationUrl: d.destinationUrl?.trim() || null } : {}),
+      ...(d.startsAt !== undefined ? { startsAt: d.startsAt ? new Date(d.startsAt) : null } : {}),
+      ...(d.endsAt !== undefined ? { endsAt: d.endsAt ? new Date(d.endsAt) : null } : {}),
       ...(d.description !== undefined ? { description: d.description || null } : {}),
-      ...(d.codePrefix !== undefined ? { codePrefix: d.codePrefix ? d.codePrefix.toUpperCase() : null } : {}),
       ...(d.rewardType !== undefined ? { rewardType: d.rewardType } : {}),
       ...(d.rewardValue !== undefined ? { rewardValue: d.rewardValue.toString() } : {}),
       ...(d.friendRewardType !== undefined ? { friendRewardType: d.friendRewardType } : {}),
@@ -681,6 +729,17 @@ export async function updateCampaign(id: string, input: unknown): Promise<Action
   revalidatePath(`/admin/campaigns/${id}`);
   revalidatePath("/admin/campaigns");
   return { ok: true, message: "Campaign updated." };
+}
+
+export async function setSetting(key: string, value: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db
+    .insert(appSettings)
+    .values({ key, value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Setting saved." };
 }
 
 export async function setCampaignStatus(id: string, status: "active" | "paused" | "ended"): Promise<ActionResult> {
