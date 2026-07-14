@@ -9,8 +9,17 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EarningsArea } from "@/components/charts/charts";
 import { AffiliateActions, ReassignProgram } from "@/components/admin/affiliate-actions";
-import { getAffiliate, getAffiliateCommissions, getAffiliateEarnings, listPrograms } from "@/lib/queries";
+import { AffiliateCampaigns, EditCode } from "@/components/admin/affiliate-membership";
+import {
+  getAffiliate,
+  getAffiliateCommissions,
+  getAffiliateEarnings,
+  listPrograms,
+  listCampaigns,
+  getAffiliateCampaignIds,
+} from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { Rocket } from "lucide-react";
 
 export default async function AffiliateDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +28,8 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
   const commissions = await getAffiliateCommissions(a.id);
   const series = await getAffiliateEarnings(30, a.id);
   const programs = await listPrograms();
+  const campaigns = await listCampaigns();
+  const campaignIds = await getAffiliateCampaignIds(a.id);
 
   return (
     <div className="space-y-8">
@@ -40,7 +51,9 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5"><Mail className="size-3.5" />{a.email}</span>
                 {a.companyName && <span className="inline-flex items-center gap-1.5"><Building2 className="size-3.5" />{a.companyName}</span>}
-                <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs">{a.code}</span>
+              </div>
+              <div className="mt-3">
+                <EditCode affiliateId={a.id} code={a.code} />
               </div>
             </div>
           </div>
@@ -54,6 +67,18 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
         <StatCard label="Paid lifetime" value={a.paidEarnings} accent="primary" />
         <StatCard label="Earnings / click" value={a.epc} accent="gold" />
       </div>
+
+      {/* Campaigns */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Rocket className="size-4 text-primary" /> Campaigns
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AffiliateCampaigns affiliateId={a.id} campaigns={campaigns} memberIds={campaignIds} />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

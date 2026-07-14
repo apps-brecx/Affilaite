@@ -33,6 +33,8 @@ export const payoutStatus = pgEnum("payout_status", [
   "failed",
 ]);
 export const commissionType = pgEnum("commission_type", ["percent", "flat"]);
+export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
+export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
 
 // --- Users (admin + affiliates share auth, differ by role) ---
 export const users = pgTable("users", {
@@ -207,6 +209,34 @@ export const assets = pgTable("assets", {
   dimensions: text("dimensions"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// --- Campaigns (affiliate + referral, ReferralCandy-style) ---
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  type: campaignType("type").notNull().default("affiliate"),
+  status: campaignStatus("status").notNull().default("active"),
+  description: text("description"),
+  codePrefix: text("code_prefix"),
+  // Advocate/affiliate reward (commission for affiliate campaigns; "give" for referral)
+  rewardType: commissionType("reward_type").default("percent"),
+  rewardValue: numeric("reward_value", { precision: 8, scale: 2 }),
+  // Friend reward — referral campaigns only ("get")
+  friendRewardType: commissionType("friend_reward_type").default("percent"),
+  friendRewardValue: numeric("friend_reward_value", { precision: 8, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const affiliateCampaigns = pgTable(
+  "affiliate_campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    campaignId: uuid("campaign_id").notNull().references(() => campaigns.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ pairIdx: index("aff_camp_idx").on(t.affiliateId, t.campaignId) }),
+);
 
 // --- Invite email templates (admin-designed) ---
 export const inviteTemplates = pgTable("invite_templates", {

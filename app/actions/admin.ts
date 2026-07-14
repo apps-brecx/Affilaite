@@ -18,6 +18,8 @@ import {
   payoutItems,
   messages,
   inviteTemplates,
+  campaigns,
+  affiliateCampaigns,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { createDiscountForAffiliate } from "@/lib/discounts";
@@ -623,4 +625,127 @@ export async function setDefaultInviteTemplate(id: string): Promise<ActionResult
   await db.update(inviteTemplates).set({ isDefault: true }).where(eq(inviteTemplates.id, id));
   revalidatePath("/admin/settings");
   return { ok: true, message: "Default template set." };
+}
+
+// ---------- Campaigns ----------
+
+const campaignSchema = z.object({
+  name: z.string().min(2),
+  type: z.enum(["affiliate", "referral"]),
+  description: z.string().optional(),
+  codePrefix: z.string().optional(),
+  rewardType: z.enum(["percent", "flat"]).default("percent"),
+  rewardValue: z.coerce.number().nonnegative().default(0),
+  friendRewardType: z.enum(["percent", "flat"]).default("percent"),
+  friendRewardValue: z.coerce.number().nonnegative().default(0),
+});
+
+export async function createCampaign(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = campaignSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+  await db.insert(campaigns).values({
+    name: d.name,
+    type: d.type,
+    description: d.description || null,
+    codePrefix: d.codePrefix ? d.codePrefix.toUpperCase() : null,
+    rewardType: d.rewardType,
+    rewardValue: d.rewardValue.toString(),
+    friendRewardType: d.friendRewardType,
+    friendRewardValue: d.friendRewardValue.toString(),
+  });
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: `${d.type === "referral" ? "Referral" : "Affiliate"} campaign created.` };
+}
+
+export async function updateCampaign(id: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = campaignSchema.partial().safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid input." };
+  const d = parsed.data;
+  await db
+    .update(campaigns)
+    .set({
+      ...(d.name !== undefined ? { name: d.name } : {}),
+      ...(d.description !== undefined ? { description: d.description || null } : {}),
+      ...(d.codePrefix !== undefined ? { codePrefix: d.codePrefix ? d.codePrefix.toUpperCase() : null } : {}),
+      ...(d.rewardType !== undefined ? { rewardType: d.rewardType } : {}),
+      ...(d.rewardValue !== undefined ? { rewardValue: d.rewardValue.toString() } : {}),
+      ...(d.friendRewardType !== undefined ? { friendRewardType: d.friendRewardType } : {}),
+      ...(d.friendRewardValue !== undefined ? { friendRewardValue: d.friendRewardValue.toString() } : {}),
+    })
+    .where(eq(campaigns.id, id));
+  revalidatePath(`/admin/campaigns/${id}`);
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: "Campaign updated." };
+}
+
+export async function setCampaignStatus(id: string, status: "active" | "paused" | "ended"): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
+  revalidatePath(`/admin/campaigns/${id}`);
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: `Campaign ${status}.` };
+}
+
+export async function deleteCampaign(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.delete(affiliateCampaigns).where(eq(affiliateCampaigns.campaignId, id));
+  await db.delete(campaigns).where(eq(campaigns.id, id));
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: "Campaign deleted." };
+}
+
+export async function assignAffiliateToCampaign(affiliateId: string, campaignId: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const existing = await db.query.affiliateCampaigns.findFirst({
+    where: and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)),
+  });
+  if (!existing) await db.insert(affiliateCampaigns).values({ affiliateId, campaignId });
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  revalidatePath(`/admin/affiliates/${affiliateId}`);
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: "Added to campaign." };
+}
+
+export async function removeAffiliateFromCampaign(affiliateId: string, campaignId: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db
+    .delete(affiliateCampaigns)
+    .where(and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)));
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  revalidatePath(`/admin/affiliates/${affiliateId}`);
+  revalidatePath("/admin/campaigns");
+  return { ok: true, message: "Removed from campaign." };
+}
+
+// ---------- Edit an affiliate's discount code ----------
+
+export async function updateAffiliateCode(affiliateId: string, rawCode: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const code = rawCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 3) return { ok: false, message: "Code must be at least 3 characters." };
+
+  // Ensure uniqueness across all codes.
+  const clash = await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, code) });
+  if (clash && clash.affiliateId !== affiliateId) return { ok: false, message: "That code is already taken." };
+
+  const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, affiliateId) });
+  if (existing) {
+    await db.update(discountCodes).set({ code }).where(eq(discountCodes.id, existing.id));
+  } else {
+    await db.insert(discountCodes).values({ affiliateId, code, active: true });
+  }
+  // Keep the ref code aligned so links match the coupon.
+  await db.update(affiliates).set({ refCode: code }).where(eq(affiliates.id, affiliateId)).catch(() => {});
+  revalidatePath(`/admin/affiliates/${affiliateId}`);
+  return { ok: true, message: `Code updated to ${code}.` };
 }

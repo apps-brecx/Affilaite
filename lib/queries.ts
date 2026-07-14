@@ -18,6 +18,8 @@ import {
   promotions,
   assets,
   inviteTemplates,
+  campaigns,
+  affiliateCampaigns,
 } from "@/db/schema";
 import type {
   Affiliate,
@@ -32,6 +34,7 @@ import type {
   TimePoint,
   AdminKpis,
   CommissionState,
+  Campaign,
 } from "./types";
 
 export const dataSource = isDbConfigured ? "live" : "unconfigured";
@@ -175,6 +178,68 @@ export async function getDefaultProgram(): Promise<Program | undefined> {
 
 export async function getGroup(id: string): Promise<Group | undefined> {
   return (await listGroups()).find((g) => g.id === id);
+}
+
+// ---------- Campaigns ----------
+
+function mapCampaign(c: any, count: number): Campaign {
+  return {
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    status: c.status,
+    description: c.description ?? "",
+    codePrefix: c.codePrefix ?? null,
+    rewardType: c.rewardType ?? "percent",
+    rewardValue: num(c.rewardValue),
+    friendRewardType: c.friendRewardType ?? "percent",
+    friendRewardValue: num(c.friendRewardValue),
+    memberCount: count,
+  };
+}
+
+async function campaignCounts() {
+  if (!db) return new Map<string, number>();
+  const rows = await db
+    .select({ campaignId: affiliateCampaigns.campaignId, cnt: sql<number>`count(*)` })
+    .from(affiliateCampaigns)
+    .groupBy(affiliateCampaigns.campaignId);
+  return new Map(rows.map((r) => [r.campaignId, Number(r.cnt)]));
+}
+
+export async function listCampaigns(): Promise<Campaign[]> {
+  if (!db) return [];
+  const rows = await db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
+  const counts = await campaignCounts();
+  return rows.map((c) => mapCampaign(c, counts.get(c.id) ?? 0));
+}
+
+export async function getCampaign(id: string): Promise<Campaign | undefined> {
+  if (!db) return undefined;
+  const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!c) return undefined;
+  const counts = await campaignCounts();
+  return mapCampaign(c, counts.get(id) ?? 0);
+}
+
+/** Campaign IDs an affiliate belongs to. */
+export async function getAffiliateCampaignIds(affiliateId: string): Promise<string[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({ campaignId: affiliateCampaigns.campaignId })
+    .from(affiliateCampaigns)
+    .where(eq(affiliateCampaigns.affiliateId, affiliateId));
+  return rows.map((r) => r.campaignId);
+}
+
+/** Affiliate IDs that belong to a campaign. */
+export async function getCampaignMemberIds(campaignId: string): Promise<string[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({ affiliateId: affiliateCampaigns.affiliateId })
+    .from(affiliateCampaigns)
+    .where(eq(affiliateCampaigns.campaignId, campaignId));
+  return rows.map((r) => r.affiliateId);
 }
 
 export interface InviteTemplate {

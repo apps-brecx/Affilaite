@@ -21,6 +21,7 @@ import {
   Receipt,
   Ticket,
   BadgePercent,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 import { LogOut } from "lucide-react";
@@ -46,6 +47,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   codes: Ticket,
   promotions: BadgePercent,
   messages: Megaphone,
+  campaigns: Rocket,
 };
 
 function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {

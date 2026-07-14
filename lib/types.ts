@@ -29,6 +29,23 @@ export interface Group {
   memberCount: number;
 }
 
+export type CampaignType = "affiliate" | "referral";
+export type CampaignStatus = "active" | "paused" | "ended";
+
+export interface Campaign {
+  id: string;
+  name: string;
+  type: CampaignType;
+  status: CampaignStatus;
+  description: string;
+  codePrefix: string | null;
+  rewardType: "percent" | "flat";
+  rewardValue: number;
+  friendRewardType: "percent" | "flat";
+  friendRewardValue: number;
+  memberCount: number;
+}
+
 export interface Affiliate {
   id: string;
   name: string;

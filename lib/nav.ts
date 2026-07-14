@@ -14,7 +14,8 @@ export type IconName =
   | "programs"
   | "codes"
   | "promotions"
-  | "messages";
+  | "messages"
+  | "campaigns";
 
 export interface NavItem {
   label: string;
@@ -64,6 +65,7 @@ export const adminNav: NavSection[] = [
   {
     title: "Growth",
     items: [
+      { label: "Campaigns", href: "/admin/campaigns", icon: "campaigns" },
       { label: "Discount Codes", href: "/admin/codes", icon: "codes" },
       { label: "Promotions", href: "/admin/promotions", icon: "promotions" },
     ],

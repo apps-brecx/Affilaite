@@ -22,6 +22,9 @@ const MAP: Record<string, { label: string; variant: BadgeProps["variant"]; dot: 
   live: { label: "Live", variant: "success", dot: "bg-success" },
   scheduled: { label: "Scheduled", variant: "warning", dot: "bg-warning" },
   ended: { label: "Ended", variant: "muted", dot: "bg-muted-foreground" },
+  // campaigns
+  active: { label: "Active", variant: "success", dot: "bg-success" },
+  paused: { label: "Paused", variant: "warning", dot: "bg-warning" },
 };
 
 export function StatusPill({ status, className }: { status: AnyStatus; className?: string }) {
