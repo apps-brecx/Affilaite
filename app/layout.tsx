@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Fraunces, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const inter = Inter({
@@ -24,11 +25,11 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Affilaite — Affiliate & Referral Platform",
-    template: "%s · Affilaite",
+    default: "SyruviaAite — Syruvia Partner Program",
+    template: "%s · SyruviaAite",
   },
   description:
-    "The affiliate & referral platform for modern Shopify brands. Coupon-first attribution, native PayPal payouts, and a portal your partners will love.",
+    "Syruvia's affiliate & referral platform. Coupon-first attribution, native PayPal payouts, and a partner portal built for Syruvia's creators.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -36,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${jetbrains.variable}`}>
       <body className="min-h-screen font-sans">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, RotateCcw, Download } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Check, RotateCcw, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { approveCommissions, reverseCommissions } from "@/app/actions/admin";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -21,6 +24,20 @@ const FILTERS: { label: string; value: CommissionState | "all" }[] = [
 export function CommissionsTable({ commissions }: { commissions: Commission[] }) {
   const [filter, setFilter] = useState<CommissionState | "all">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
+
+  const run = (fn: (ids: string[]) => Promise<{ ok: boolean; message: string }>) => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    start(async () => {
+      const res = await fn(ids);
+      toast(res.message, res.ok ? "success" : "error");
+      setSelected(new Set());
+      router.refresh();
+    });
+  };
 
   const rows = useMemo(
     () => (filter === "all" ? commissions : commissions.filter((c) => c.status === filter)),
@@ -35,6 +52,22 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
     });
 
   const total = rows.reduce((s, c) => s + c.amount, 0);
+
+  const exportCsv = () => {
+    const header = ["Affiliate", "Order", "Source", "Date", "Order total", "Commission", "Status"];
+    const lines = rows.map((c) =>
+      [c.affiliateName, c.orderNumber, c.attributedBy, new Date(c.createdAt).toISOString().slice(0, 10), c.orderTotal, c.amount, c.status]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "commissions.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
@@ -56,7 +89,7 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
           <span className="text-muted-foreground">
             {rows.length} · <span className="tnum font-medium text-foreground">{formatCurrency(total)}</span>
           </span>
-          <Button variant="secondary" size="sm">
+          <Button variant="secondary" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
             <Download className="size-4" /> CSV
           </Button>
         </div>
@@ -66,10 +99,12 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
         <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
           <span className="font-medium">{selected.size} selected</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
-            <Button size="sm" variant="outline"><RotateCcw className="size-4" /> Reverse</Button>
-            <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90">
-              <Check className="size-4" /> Approve
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={pending}>Clear</Button>
+            <Button size="sm" variant="outline" onClick={() => run(reverseCommissions)} disabled={pending}>
+              <RotateCcw className="size-4" /> Reverse
+            </Button>
+            <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => run(approveCommissions)} disabled={pending}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve
             </Button>
           </div>
         </div>
@@ -120,6 +155,11 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
             ))}
           </TableBody>
         </Table>
+        {rows.length === 0 && (
+          <p className="py-12 text-center text-sm text-muted-foreground">
+            No commissions yet. They appear automatically when an attributed order comes in from Shopify.
+          </p>
+        )}
       </div>
     </div>
   );

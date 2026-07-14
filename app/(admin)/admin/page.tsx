@@ -1,14 +1,13 @@
 import Link from "next/link";
-import { DollarSign, Users, Clock, RefreshCcw, ArrowRight, Check, X } from "lucide-react";
+import { DollarSign, Users, Clock, RefreshCcw, ArrowRight, Inbox, ShoppingBag } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EarningsArea, RankBars } from "@/components/charts/charts";
+import { ApprovalQueue } from "@/components/admin/approval-queue";
 import {
   getAdminKpis,
   getRevenueSeries,
@@ -76,7 +75,11 @@ export default async function AdminHome() {
             <p className="text-sm text-muted-foreground">By lifetime earnings</p>
           </CardHeader>
           <CardContent>
-            <RankBars items={top.map((a) => ({ name: a.name.split(" ")[0], value: a.totalEarned }))} />
+            {top.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No affiliate earnings yet.</p>
+            ) : (
+              <RankBars items={top.map((a) => ({ name: a.name.split(" ")[0], value: a.totalEarned }))} />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -88,32 +91,8 @@ export default async function AdminHome() {
             <CardTitle>Approval queue</CardTitle>
             <Badge variant="warning">{pending.length} waiting</Badge>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {pending.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">All caught up 🎉</p>
-            )}
-            {pending.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 rounded-lg border border-hairline p-3">
-                <Avatar name={a.name} size={38} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{a.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {a.companyName ?? a.email} · applied {relativeTime(a.joinedAt)}
-                  </p>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button size="icon-sm" variant="ghost" className="text-danger hover:bg-danger-soft">
-                    <X className="size-4" />
-                  </Button>
-                  <Button size="icon-sm" className="bg-success text-success-foreground hover:bg-success/90">
-                    <Check className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/admin/affiliates">Manage all affiliates</Link>
-            </Button>
+          <CardContent>
+            <ApprovalQueue pending={pending} />
           </CardContent>
         </Card>
 
@@ -125,7 +104,13 @@ export default async function AdminHome() {
               <Link href="/admin/commissions">View ledger</Link>
             </Button>
           </CardHeader>
-          <CardContent className="px-0 pb-2">
+          <CardContent className={orders.length ? "px-0 pb-2" : ""}>
+            {orders.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                <ShoppingBag className="size-6" />
+                No attributed orders yet. They'll appear here as sales come in from Shopify.
+              </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -153,6 +138,7 @@ export default async function AdminHome() {
                 ))}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
       </div>

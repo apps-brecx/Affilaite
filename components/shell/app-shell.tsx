@@ -23,6 +23,8 @@ import {
   BadgePercent,
   type LucideIcon,
 } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -105,7 +107,13 @@ function UserCard({ name, email, role }: { name: string; email: string; role: st
         <p className="truncate text-sm font-medium text-foreground">{name}</p>
         <p className="truncate text-xs text-muted-foreground">{role}</p>
       </div>
-      <ChevronsUpDown className="size-4 text-muted-foreground" />
+      <button
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        aria-label="Sign out"
+        className="text-muted-foreground transition-colors hover:text-danger"
+      >
+        <LogOut className="size-4" />
+      </button>
     </div>
   );
 }
@@ -205,14 +213,16 @@ export function AppShell({
       <div className="lg:pl-64">
         {/* Desktop top bar */}
         <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-3 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
-          <Link
-            href={variant === "admin" ? "/dashboard" : "/admin"}
-            className="rounded-md border border-hairline px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {variant === "admin" ? "View affiliate portal →" : "Switch to admin →"}
-          </Link>
+          <span className="mr-auto text-sm text-muted-foreground">
+            {variant === "admin" ? "Syruvia · Admin" : "Syruvia · Partner Portal"}
+          </span>
           <ThemeToggle />
-          <Avatar name={user.name} size={34} />
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <LogOut className="size-3.5" /> Sign out
+          </button>
         </header>
 
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

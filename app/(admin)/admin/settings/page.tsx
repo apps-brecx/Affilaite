@@ -1,137 +1,91 @@
-import { ShoppingBag, Wallet, Mail, CheckCircle2, KeyRound, Globe } from "lucide-react";
+import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Database, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { dataSource } from "@/lib/queries";
 
 export const metadata = { title: "Settings" };
 
 export default function AdminSettingsPage() {
+  const env = (k: string) => Boolean(process.env[k]);
+
+  const services = [
+    {
+      icon: Database,
+      label: "Database (Neon)",
+      detail: env("DATABASE_URL") ? "Connected" : "Set DATABASE_URL to go live",
+      ok: env("DATABASE_URL"),
+    },
+    {
+      icon: ShoppingBag,
+      label: "Shopify",
+      detail: env("SHOPIFY_ADMIN_TOKEN") ? process.env.SHOPIFY_STORE_DOMAIN ?? "Connected" : "Add store token to track orders",
+      ok: env("SHOPIFY_ADMIN_TOKEN"),
+    },
+    {
+      icon: Wallet,
+      label: "PayPal Payouts",
+      detail: env("PAYPAL_CLIENT_ID")
+        ? process.env.PAYPAL_BASE?.includes("sandbox")
+          ? "Sandbox"
+          : "Live"
+        : "Add PayPal keys to pay affiliates",
+      ok: env("PAYPAL_CLIENT_ID"),
+    },
+    {
+      icon: Mail,
+      label: "Email (Resend)",
+      detail: env("RESEND_API_KEY") ? process.env.EMAIL_FROM ?? "Connected" : "Add Resend key to send broadcasts",
+      ok: env("RESEND_API_KEY"),
+    },
+  ];
+
   return (
     <div className="space-y-8">
-      <PageHeader title="Settings" description="Connect your store, payment rails, and email — then check everything is healthy.">
+      <PageHeader title="Settings" description="Connection health for your integrations. Configure these via environment variables.">
         <Badge variant={dataSource === "live" ? "success" : "warning"}>
-          {dataSource === "live" ? "Live database" : "Demo data"}
+          {dataSource === "live" ? "Live database" : "Database not connected"}
         </Badge>
       </PageHeader>
 
-      {/* Connection health */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Health icon={ShoppingBag} label="Shopify" detail="orders + refunds webhooks" ok />
-        <Health icon={Wallet} label="PayPal Payouts" detail="sandbox environment" ok />
-        <Health icon={Mail} label="Resend email" detail="affiliates@yourbrand.com" ok />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ConfigCard
-          icon={ShoppingBag}
-          title="Shopify"
-          fields={[
-            { label: "Store domain", value: "your-store.myshopify.com", icon: Globe },
-            { label: "Admin API token", value: "shpat_••••••••••••••••", icon: KeyRound, secret: true },
-            { label: "API secret (HMAC)", value: "••••••••••••••••", icon: KeyRound, secret: true },
-            { label: "API version", value: "2025-07" },
-          ]}
-        />
-        <ConfigCard
-          icon={Wallet}
-          title="PayPal"
-          fields={[
-            { label: "Client ID", value: "AeXf••••••••••", icon: KeyRound, secret: true },
-            { label: "Client secret", value: "EL9k••••••••••", icon: KeyRound, secret: true },
-            { label: "Environment", value: "api-m.sandbox.paypal.com" },
-          ]}
-        />
-        <ConfigCard
-          icon={Mail}
-          title="Email (Resend)"
-          fields={[
-            { label: "API key", value: "re_••••••••••••", icon: KeyRound, secret: true },
-            { label: "From address", value: "affiliates@yourbrand.com" },
-          ]}
-        />
-        <ConfigCard
-          icon={KeyRound}
-          title="Program defaults"
-          fields={[
-            { label: "Default hold period (days)", value: "30" },
-            { label: "Default cookie window (days)", value: "30" },
-            { label: "Payout minimum", value: "$25.00" },
-          ]}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Health({
-  icon: Icon,
-  label,
-  detail,
-  ok,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  detail: string;
-  ok?: boolean;
-}) {
-  return (
-    <Card className="flex items-center gap-3 p-4">
-      <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Icon className="size-5" />
-      </span>
-      <div className="flex-1">
-        <p className="font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{detail}</p>
-      </div>
-      {ok && (
-        <Badge variant="success">
-          <CheckCircle2 className="size-3" /> Connected
-        </Badge>
-      )}
-    </Card>
-  );
-}
-
-function ConfigCard({
-  icon: Icon,
-  title,
-  fields,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  fields: { label: string; value: string; icon?: React.ComponentType<{ className?: string }>; secret?: boolean }[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4 text-primary" /> {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {fields.map((f) => (
-          <div key={f.label} className="space-y-1.5">
-            <Label>{f.label}</Label>
-            <div className="relative">
-              {f.icon && (
-                <f.icon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              )}
-              <Input
-                type={f.secret ? "password" : "text"}
-                defaultValue={f.value}
-                className={f.icon ? "pl-9 font-mono text-sm" : ""}
-              />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {services.map((s) => (
+          <Card key={s.label} className="flex items-center gap-4 p-5">
+            <span className={`flex size-11 items-center justify-center rounded-lg ${s.ok ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+              <s.icon className="size-5" />
+            </span>
+            <div className="flex-1">
+              <p className="font-medium">{s.label}</p>
+              <p className="text-sm text-muted-foreground">{s.detail}</p>
             </div>
-          </div>
+            {s.ok ? (
+              <Badge variant="success"><CheckCircle2 className="size-3" /> Connected</Badge>
+            ) : (
+              <Badge variant="warning"><AlertCircle className="size-3" /> Not set</Badge>
+            )}
+          </Card>
         ))}
-        <div className="flex gap-2 pt-1">
-          <Button variant="outline" size="sm">Test connection</Button>
-          <Button size="sm">Save</Button>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="size-4 text-primary" /> Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            All secrets are managed as environment variables on your host (never stored in the app).
+            See <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">.env.example</code> for the full list, and{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">docs/SHOPIFY_SETUP.md</code> to connect your store.
+          </p>
+          <ul className="ml-4 list-disc space-y-1">
+            <li>Register Shopify webhooks with <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">npm run shopify:webhooks</code></li>
+            <li>Program defaults (commission, cookie window, hold days) are managed under <strong className="text-foreground">Programs</strong>.</li>
+            <li>Commissions mature from pending → approved automatically after the hold period via the daily cron.</li>
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

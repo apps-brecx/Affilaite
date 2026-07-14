@@ -1,4 +1,5 @@
-import { PageHeader } from "@/components/ui/page-header";
+import { Ticket } from "lucide-react";
+import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { DiscountGenerator } from "@/components/admin/discount-generator";
 import { listAffiliates } from "@/lib/queries";
@@ -15,11 +16,19 @@ export default async function CodesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Bulk discount generator"
-        description="Create a unique, trackable Shopify discount code for every affiliate in one pass."
+        description="Create a unique, trackable Shopify discount code for every approved affiliate in one pass."
       >
-        <Badge variant="gold">⭐ Signature feature</Badge>
+        <Badge variant="gold">Shopify</Badge>
       </PageHeader>
-      <DiscountGenerator targets={targets} />
+      {targets.length === 0 ? (
+        <EmptyState
+          icon={Ticket}
+          title="No approved affiliates yet"
+          description="Approve affiliates first — each one gets a code automatically. Use this tool to bulk-generate a new campaign code for everyone at once."
+        />
+      ) : (
+        <DiscountGenerator targets={targets} />
+      )}
     </div>
   );
 }

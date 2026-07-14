@@ -39,6 +39,7 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  passwordHash: text("password_hash"),
   role: roleEnum("role").notNull().default("affiliate"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -77,6 +78,9 @@ export const affiliates = pgTable(
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),
+    channel: text("channel"),
+    audienceSize: text("audience_size"),
+    applyNote: text("apply_note"),
     socialLinks: jsonb("social_links").$type<Record<string, string>>(),
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),

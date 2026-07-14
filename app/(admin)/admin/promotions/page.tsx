@@ -1,10 +1,8 @@
-import { BadgePercent, Plus, Calendar, Zap } from "lucide-react";
+import { BadgePercent, Calendar } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
+import { PromotionForm } from "@/components/admin/promotion-form";
 import { listPromotions } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 
@@ -21,6 +19,11 @@ export default async function PromotionsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          {promos.length === 0 && (
+            <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
+              No promotions yet. Launch one to reward a burst of activity.
+            </p>
+          )}
           {promos.map((p) => (
             <Card key={p.id} className={p.status === "live" ? "border-success/30 ring-1 ring-success/10" : ""}>
               <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -49,44 +52,7 @@ export default async function PromotionsPage() {
           ))}
         </div>
 
-        <Card className="h-fit border-dashed">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted-foreground">
-              <Plus className="size-4" /> New promotion
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input placeholder="e.g. Black Friday Boost" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Bonus %</Label>
-                <Input type="number" placeholder="5" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Audience</Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle">
-                  <option>All affiliates</option>
-                  <option>VIP Creators</option>
-                  <option>Social &amp; Video</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Starts</Label>
-                <Input type="date" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Ends</Label>
-                <Input type="date" />
-              </div>
-            </div>
-            <Button className="w-full"><Zap className="size-4" /> Launch promotion</Button>
-          </CardContent>
-        </Card>
+        <PromotionForm />
       </div>
     </div>
   );

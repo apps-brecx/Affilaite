@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Search, Check, MoreHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Check, X, Ban, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/components/ui/toast";
+import { setAffiliateStatus } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
 import type { Affiliate, AffiliateState } from "@/lib/types";
 
@@ -23,6 +26,30 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<AffiliateState | "all">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pending, start] = useTransition();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const router = useRouter();
+  const toast = useToast();
+
+  const act = (id: string, status: AffiliateState) => {
+    setBusyId(id);
+    start(async () => {
+      const res = await setAffiliateStatus(id, status);
+      toast(res.message, res.ok ? "success" : "error");
+      setBusyId(null);
+      router.refresh();
+    });
+  };
+
+  const bulkApprove = () => {
+    const ids = [...selected];
+    start(async () => {
+      for (const id of ids) await setAffiliateStatus(id, "approved");
+      toast(`${ids.length} affiliate(s) approved.`);
+      setSelected(new Set());
+      router.refresh();
+    });
+  };
 
   const rows = useMemo(() => {
     return affiliates.filter((a) => {
@@ -77,8 +104,8 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
             </Button>
-            <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90">
-              <Check className="size-4" /> Approve selected
+            <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90" onClick={bulkApprove} disabled={pending}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve selected
             </Button>
           </div>
         </div>
@@ -128,9 +155,28 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                   <StatusPill status={a.status} />
                 </TableCell>
                 <TableCell className="pr-4">
-                  <Button size="icon-sm" variant="ghost">
-                    <MoreHorizontal className="size-4" />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    {busyId === a.id ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : a.status === "pending" ? (
+                      <>
+                        <Button size="icon-sm" variant="ghost" title="Reject" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "rejected")}>
+                          <X className="size-4" />
+                        </Button>
+                        <Button size="icon-sm" title="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => act(a.id, "approved")}>
+                          <Check className="size-4" />
+                        </Button>
+                      </>
+                    ) : a.status === "approved" ? (
+                      <Button size="icon-sm" variant="ghost" title="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
+                        <Ban className="size-4" />
+                      </Button>
+                    ) : (
+                      <Button size="icon-sm" variant="ghost" title="Approve" className="text-success hover:bg-success-soft" onClick={() => act(a.id, "approved")}>
+                        <Check className="size-4" />
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

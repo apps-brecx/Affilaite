@@ -4,13 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
-import { getCurrentAffiliate } from "@/lib/queries";
+import { requireAffiliate } from "@/lib/session";
 import { buildReferralLink, qrDataUrl } from "@/lib/links";
 
 export const metadata = { title: "Links & Codes" };
 
 export default async function LinksPage() {
-  const me = await getCurrentAffiliate();
+  const me = await requireAffiliate();
   const link = buildReferralLink(me.refCode);
   const qr = await qrDataUrl(link);
 
@@ -37,7 +37,7 @@ export default async function LinksPage() {
             <div>
               <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Ticket className="size-4 text-gold" /> Your discount code
-                <Badge variant="gold" className="ml-1">15% off for customers</Badge>
+                <Badge variant="gold" className="ml-1">Customer discount</Badge>
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-gold/[0.06] p-2 pl-5 ring-gilded">
                 <span className="flex-1 font-display text-3xl font-semibold tracking-wide text-foreground sm:text-4xl">

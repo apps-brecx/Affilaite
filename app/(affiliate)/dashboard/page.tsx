@@ -9,19 +9,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EarningsArea } from "@/components/charts/charts";
 import { CountUp } from "@/components/ui/count-up";
 import {
-  getCurrentAffiliate,
   getAffiliateSummary,
   getAffiliateEarnings,
   getAffiliateCommissions,
 } from "@/lib/queries";
+import { requireAffiliate } from "@/lib/session";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const me = await getCurrentAffiliate();
+  const me = await requireAffiliate();
   const summary = await getAffiliateSummary(me);
-  const series = await getAffiliateEarnings(30);
+  const series = await getAffiliateEarnings(30, me.id);
   const commissions = await getAffiliateCommissions(me.id);
   const monthTotal = series.reduce((s, p) => s + p.earnings, 0);
 
@@ -58,15 +58,9 @@ export default async function DashboardPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Scheduled</p>
-              <p className="text-sm font-medium">{formatDate(summary.nextPayoutDate)}</p>
-            </div>
-            <Button variant="gold" asChild>
-              <Link href="/payouts">Payout settings</Link>
-            </Button>
-          </div>
+          <Button variant="gold" asChild>
+            <Link href="/payouts">Payout settings</Link>
+          </Button>
         </CardContent>
       </Card>
 
@@ -74,8 +68,8 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Pending" value={summary.pending} icon={Clock} accent="warning" hint="clearing hold period" />
         <StatCard label="Approved" value={summary.approved} icon={CheckCircle2} accent="success" hint="ready to pay" />
-        <StatCard label="Paid lifetime" value={summary.paidLifetime} icon={Wallet} accent="primary" delta={12.4} />
-        <StatCard label="This month" value={summary.thisMonth} icon={TrendingUp} accent="gold" delta={18.2} />
+        <StatCard label="Paid lifetime" value={summary.paidLifetime} icon={Wallet} accent="primary" hint="sent to PayPal" />
+        <StatCard label="This month" value={summary.thisMonth} icon={TrendingUp} accent="gold" hint="pending + approved" />
       </div>
 
       {/* Chart + recent */}
@@ -88,7 +82,7 @@ export default async function DashboardPage() {
             </div>
             <div className="text-right">
               <p className="font-display text-xl font-semibold">{formatCurrency(monthTotal)}</p>
-              <p className="text-xs text-success">▲ 18.2% vs prior</p>
+              <p className="text-xs text-muted-foreground">this period</p>
             </div>
           </CardHeader>
           <CardContent>
@@ -123,7 +117,13 @@ export default async function DashboardPage() {
             <Link href="/performance">View all</Link>
           </Button>
         </CardHeader>
-        <CardContent className="px-0 pb-2">
+        <CardContent className={commissions.length ? "px-0 pb-2" : ""}>
+          {commissions.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+              <Sparkles className="size-6 text-gold" />
+              No commissions yet. Share your code and link — your first sale will show up here.
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -150,6 +150,7 @@ export default async function DashboardPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>

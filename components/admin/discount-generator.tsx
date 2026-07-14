@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Ticket, Sparkles, Loader2, CheckCircle2, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
+import { bulkCreateDiscounts } from "@/app/actions/admin";
 import { cn } from "@/lib/utils";
 
 interface Target {
@@ -22,6 +25,9 @@ export function DiscountGenerator({ targets }: { targets: Target[] }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
   const [created, setCreated] = useState<string[]>([]);
+  const [, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
 
   const preview = useMemo(
     () =>
@@ -36,18 +42,25 @@ export function DiscountGenerator({ targets }: { targets: Target[] }) {
     setPhase("running");
     setProgress(0);
     setCreated([]);
+    // Optimistic per-code progress animation while the server action runs.
     let i = 0;
     const step = () => {
+      if (i >= preview.length) return;
       i++;
       setProgress(Math.round((i / preview.length) * 100));
       setCreated((prev) => [...prev, preview[i - 1].code]);
-      if (i < preview.length) {
-        setTimeout(step, 90);
-      } else {
-        setPhase("done");
-      }
+      if (i < preview.length) setTimeout(step, 70);
     };
-    setTimeout(step, 200);
+    setTimeout(step, 150);
+
+    start(async () => {
+      const res = await bulkCreateDiscounts(percent, prefix);
+      setProgress(100);
+      setCreated(preview.map((p) => p.code));
+      setPhase("done");
+      toast(res.message, res.ok ? "success" : "error");
+      router.refresh();
+    });
   };
 
   return (

@@ -1,9 +1,8 @@
-import { Wallet, Users, CircleDollarSign, ChevronRight } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { Wallet, Users, CircleDollarSign } from "lucide-react";
+import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
-import { Badge } from "@/components/ui/badge";
 import { PayoutRunner } from "@/components/admin/payout-runner";
 import { getPayableBatch, listPayouts, getAdminKpis } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -13,6 +12,7 @@ export const metadata = { title: "Payouts" };
 export default async function AdminPayoutsPage() {
   const [rows, payouts, kpis] = await Promise.all([getPayableBatch(), listPayouts(), getAdminKpis()]);
   const lifetimePaid = payouts.reduce((s, p) => s + p.totalAmount, 0);
+  const paypalLive = Boolean(process.env.PAYPAL_CLIENT_ID);
 
   return (
     <div className="space-y-8">
@@ -27,13 +27,24 @@ export default async function AdminPayoutsPage() {
         <StatCard label="Paid all-time" value={lifetimePaid} icon={CircleDollarSign} accent="success" />
       </div>
 
-      <PayoutRunner rows={rows} />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Wallet}
+          title="Nothing payable right now"
+          description="Affiliates appear here once they have approved commissions over their program minimum and a PayPal email on file."
+        />
+      ) : (
+        <PayoutRunner rows={rows} live={paypalLive} />
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle>Batch history</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {payouts.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">No payout batches yet.</p>
+          )}
           {payouts.map((p) => (
             <div
               key={p.id}
@@ -46,8 +57,8 @@ export default async function AdminPayoutsPage() {
                 <div>
                   <p className="font-medium">{p.senderBatchId}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(p.createdAt)} · {p.affiliateCount} affiliates ·{" "}
-                    <span className="font-mono">{p.paypalBatchId}</span>
+                    {formatDate(p.createdAt)} · {p.affiliateCount} affiliate{p.affiliateCount === 1 ? "" : "s"}
+                    {p.paypalBatchId ? <> · <span className="font-mono">{p.paypalBatchId}</span></> : ""}
                   </p>
                 </div>
               </div>
