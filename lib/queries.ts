@@ -17,6 +17,7 @@ import {
   messages,
   promotions,
   assets,
+  inviteTemplates,
 } from "@/db/schema";
 import type {
   Affiliate,
@@ -174,6 +175,26 @@ export async function getDefaultProgram(): Promise<Program | undefined> {
 
 export async function getGroup(id: string): Promise<Group | undefined> {
   return (await listGroups()).find((g) => g.id === id);
+}
+
+export interface InviteTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  isDefault: boolean;
+}
+
+export async function listInviteTemplates(): Promise<InviteTemplate[]> {
+  if (!db) return [];
+  const rows = await db.select().from(inviteTemplates).orderBy(desc(inviteTemplates.isDefault), inviteTemplates.name);
+  return rows.map((t) => ({
+    id: t.id,
+    name: t.name,
+    subject: t.subject,
+    body: t.body,
+    isDefault: Boolean(t.isDefault),
+  }));
 }
 
 export async function listGroups(): Promise<Group[]> {

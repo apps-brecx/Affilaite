@@ -2,11 +2,13 @@ import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Database, KeyRoun
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { dataSource } from "@/lib/queries";
+import { InviteTemplates } from "@/components/admin/invite-templates";
+import { dataSource, listInviteTemplates } from "@/lib/queries";
 
 export const metadata = { title: "Settings" };
 
-export default function AdminSettingsPage() {
+export default async function AdminSettingsPage() {
+  const templates = await listInviteTemplates();
   const env = (k: string) => Boolean(process.env[k]);
 
   const services = [
@@ -66,6 +68,8 @@ export default function AdminSettingsPage() {
           </Card>
         ))}
       </div>
+
+      <InviteTemplates templates={templates} />
 
       <Card>
         <CardHeader>

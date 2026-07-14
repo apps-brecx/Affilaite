@@ -208,6 +208,16 @@ export const assets = pgTable("assets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// --- Invite email templates (admin-designed) ---
+export const inviteTemplates = pgTable("invite_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // --- Raw webhook log (audit + replay) ---
 export const webhookEvents = pgTable(
   "webhook_events",

@@ -12,16 +12,37 @@ export async function sendEmail(to: string, subject: string, html: string) {
   return resend.emails.send({ from: FROM, to, subject, html });
 }
 
-/** Personalize a broadcast body with an affiliate's variables. */
+/** Personalize a body with an affiliate's variables. */
 export function renderTemplate(
   body: string,
-  vars: { name?: string; code?: string; earnings?: string; link?: string },
+  vars: {
+    name?: string;
+    code?: string;
+    earnings?: string;
+    link?: string;
+    loginUrl?: string;
+    tempPassword?: string;
+  },
 ) {
   return body
     .replaceAll("{{name}}", vars.name ?? "there")
     .replaceAll("{{code}}", vars.code ?? "")
     .replaceAll("{{earnings}}", vars.earnings ?? "$0.00")
-    .replaceAll("{{link}}", vars.link ?? "");
+    .replaceAll("{{link}}", vars.link ?? "")
+    .replaceAll("{{loginUrl}}", vars.loginUrl ?? "")
+    .replaceAll("{{tempPassword}}", vars.tempPassword ?? "");
+}
+
+/** Wrap a plain-text/markdown-ish body in a simple branded HTML shell. */
+export function wrapEmail(body: string) {
+  const html = body
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 16px;line-height:1.6;color:#1a1a17">${p.replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  return `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+    <div style="font-size:20px;font-weight:600;color:#0e5c3f;margin-bottom:20px">Syruvia</div>
+    ${html}
+  </div>`;
 }
 
 export async function sendBroadcast(

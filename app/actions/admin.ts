@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
@@ -15,11 +17,12 @@ import {
   payouts,
   payoutItems,
   messages,
+  inviteTemplates,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { createDiscountForAffiliate } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
-import { sendBroadcast as sendEmails } from "@/lib/email";
+import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -382,4 +385,174 @@ export async function runPayout(): Promise<ActionResult> {
         ? `Paid ${payable.length} affiliate(s) — $${total.toFixed(2)}.`
         : `PayPal batch submitted for ${payable.length} affiliate(s).`,
   };
+}
+
+// ---------- Invites ----------
+
+const APP_URL = process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "";
+
+function slugCode(s: string) {
+  return (s.split(/[\s@]+/)[0] || "PARTNER").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "PARTNER";
+}
+async function uniqueRefCode(base: string) {
+  let code = base;
+  let n = 1;
+  while (await db!.query.affiliates.findFirst({ where: eq(affiliates.refCode, code) })) code = `${base}${n++}`;
+  return code;
+}
+
+async function defaultTemplate() {
+  return (
+    (await db!.query.inviteTemplates.findFirst({ where: eq(inviteTemplates.isDefault, true) })) ??
+    (await db!.query.inviteTemplates.findFirst({}))
+  );
+}
+
+interface InviteOutcome {
+  email: string;
+  ok: boolean;
+  emailed: boolean;
+  tempPassword?: string;
+  code?: string;
+  error?: string;
+}
+
+async function createAndInvite(name: string, email: string, templateId?: string): Promise<InviteOutcome> {
+  email = email.toLowerCase().trim();
+  const existing = await db!.query.users.findFirst({ where: eq(users.email, email) });
+  if (existing) return { email, ok: false, emailed: false, error: "Already exists" };
+
+  const tempPassword = crypto.randomBytes(6).toString("base64url");
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const [user] = await db!
+    .insert(users)
+    .values({ email, name: name || email, passwordHash, role: "affiliate" })
+    .returning();
+
+  const program = await db!.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+  const refCode = await uniqueRefCode(slugCode(name || email));
+  const [aff] = await db!
+    .insert(affiliates)
+    .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, programId: program?.id ?? null })
+    .returning();
+
+  // Issue a discount code.
+  const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
+  const code = `${refCode}${percent}`.toUpperCase();
+  let shopifyDiscountId: string | null = null;
+  if (process.env.SHOPIFY_ADMIN_TOKEN) {
+    try {
+      shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+    } catch (e) {
+      console.error("[invite] shopify code:", e);
+    }
+  }
+  await db!
+    .insert(discountCodes)
+    .values({ affiliateId: aff.id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
+    .onConflictDoNothing();
+
+  // Send the invite email using the chosen (or default) template.
+  let emailed = false;
+  const tpl = templateId
+    ? await db!.query.inviteTemplates.findFirst({ where: eq(inviteTemplates.id, templateId) })
+    : await defaultTemplate();
+  if (tpl && process.env.RESEND_API_KEY) {
+    const vars = { name: name || "there", code, loginUrl: `${APP_URL}/login`, link: `${APP_URL}/api/track?ref=${refCode}`, tempPassword };
+    try {
+      await sendEmail(email, renderTemplate(tpl.subject, vars), wrapEmail(renderTemplate(tpl.body, vars)));
+      emailed = true;
+    } catch (e) {
+      console.error("[invite] email:", e);
+    }
+  }
+
+  return { email, ok: true, emailed, tempPassword, code };
+}
+
+export async function inviteAffiliate(input: unknown): Promise<ActionResult & { tempPassword?: string; emailed?: boolean }> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z.object({ name: z.string().optional(), email: z.string().email(), templateId: z.string().optional() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter a valid email." };
+  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId);
+  revalAdmin();
+  if (!res.ok) return { ok: false, message: `${res.email}: ${res.error}` };
+  return {
+    ok: true,
+    emailed: res.emailed,
+    tempPassword: res.emailed ? undefined : res.tempPassword,
+    message: res.emailed
+      ? `Invite emailed to ${res.email}.`
+      : `Created ${res.email}. Email not sent (Resend not configured) — temp password: ${res.tempPassword}`,
+  };
+}
+
+export async function bulkInviteAffiliates(
+  rows: { name?: string; email: string }[],
+  templateId?: string,
+): Promise<ActionResult & { created: number; emailed: number; skipped: number }> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured.", created: 0, emailed: 0, skipped: 0 };
+  const clean = (rows ?? []).filter((r) => /.+@.+\..+/.test(r.email ?? ""));
+  let created = 0,
+    emailed = 0,
+    skipped = 0;
+  for (const r of clean) {
+    const res = await createAndInvite(r.name ?? "", r.email, templateId);
+    if (res.ok) {
+      created++;
+      if (res.emailed) emailed++;
+    } else skipped++;
+  }
+  revalAdmin();
+  return {
+    ok: created > 0,
+    created,
+    emailed,
+    skipped,
+    message: `Invited ${created} affiliate(s)${emailed ? `, ${emailed} emailed` : ""}${skipped ? `, ${skipped} skipped (duplicates/invalid)` : ""}.`,
+  };
+}
+
+// ---------- Invite templates ----------
+
+const tplSchema = z.object({ name: z.string().min(2), subject: z.string().min(1), body: z.string().min(1) });
+
+export async function createInviteTemplate(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = tplSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const count = await db.select({ c: sql<number>`count(*)` }).from(inviteTemplates);
+  await db.insert(inviteTemplates).values({ ...parsed.data, isDefault: Number(count[0]?.c ?? 0) === 0 });
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Template created." };
+}
+
+export async function updateInviteTemplate(id: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = tplSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  await db.update(inviteTemplates).set(parsed.data).where(eq(inviteTemplates.id, id));
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Template updated." };
+}
+
+export async function deleteInviteTemplate(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.delete(inviteTemplates).where(eq(inviteTemplates.id, id));
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Template deleted." };
+}
+
+export async function setDefaultInviteTemplate(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.update(inviteTemplates).set({ isDefault: false });
+  await db.update(inviteTemplates).set({ isDefault: true }).where(eq(inviteTemplates.id, id));
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Default template set." };
 }

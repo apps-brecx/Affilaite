@@ -4,7 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users, affiliates, programs } from "@/db/schema";
+import { users, affiliates, programs, inviteTemplates } from "@/db/schema";
 import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -56,6 +56,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               cookieWindowDays: 30,
               holdDays: 30,
               payoutMinimum: "25",
+              isDefault: true,
+            });
+          }
+
+          // Seed a starter invite template.
+          const hasTemplate = await db.query.inviteTemplates.findFirst({});
+          if (!hasTemplate) {
+            await db.insert(inviteTemplates).values({
+              name: "Warm welcome",
+              subject: "You're invited to the Syruvia partner program 🎉",
+              body:
+                "Hi {{name}},\n\nYou've been invited to join the Syruvia partner program! Your personal discount code is {{code}} — share it and earn on every sale.\n\nSign in here: {{loginUrl}}\nTemporary password: {{tempPassword}} (change it after your first login)\n\nWelcome aboard!",
               isDefault: true,
             });
           }
