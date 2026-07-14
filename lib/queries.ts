@@ -172,6 +172,10 @@ export async function getDefaultProgram(): Promise<Program | undefined> {
   return (await listPrograms()).find((p) => p.isDefault);
 }
 
+export async function getGroup(id: string): Promise<Group | undefined> {
+  return (await listGroups()).find((g) => g.id === id);
+}
+
 export async function listGroups(): Promise<Group[]> {
   if (!db) return [];
   const rows = await db.select().from(groups).orderBy(groups.name);

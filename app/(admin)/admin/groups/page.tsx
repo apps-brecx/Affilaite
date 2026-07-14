@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UsersRound, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,9 +40,12 @@ export default async function GroupsPage() {
                   <Badge variant="secondary">{g.memberCount}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">{g.description}</p>
+                  <p className="text-sm text-muted-foreground">{g.description || "No description."}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex -space-x-2">
+                      {members.length === 0 && (
+                        <span className="text-xs text-muted-foreground">No members yet</span>
+                      )}
                       {members.map((m) => (
                         <span key={m.id} className="ring-2 ring-card rounded-full">
                           <Avatar name={m.name} size={28} />
@@ -53,8 +57,10 @@ export default async function GroupsPage() {
                         </span>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Manage <ArrowRight className="size-3.5" />
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/admin/groups/${g.id}`}>
+                        Manage <ArrowRight className="size-3.5" />
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>

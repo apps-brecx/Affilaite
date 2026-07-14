@@ -173,6 +173,39 @@ export async function createGroup(input: unknown): Promise<ActionResult> {
   return { ok: true, message: "Group created." };
 }
 
+export async function updateGroup(id: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z.object({ name: z.string().min(2), description: z.string().optional() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter a group name." };
+  await db
+    .update(groups)
+    .set({ name: parsed.data.name, description: parsed.data.description || null })
+    .where(eq(groups.id, id));
+  revalidatePath(`/admin/groups/${id}`);
+  revalidatePath("/admin/groups");
+  return { ok: true, message: "Group updated." };
+}
+
+export async function deleteGroup(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  // Detach members first (their group_id references this group).
+  await db.update(affiliates).set({ groupId: null }).where(eq(affiliates.groupId, id));
+  await db.delete(groups).where(eq(groups.id, id));
+  revalidatePath("/admin/groups");
+  return { ok: true, message: "Group deleted." };
+}
+
+export async function setAffiliateGroup(affiliateId: string, groupId: string | null): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.update(affiliates).set({ groupId }).where(eq(affiliates.id, affiliateId));
+  revalidatePath("/admin/groups");
+  if (groupId) revalidatePath(`/admin/groups/${groupId}`);
+  return { ok: true, message: groupId ? "Added to group." : "Removed from group." };
+}
+
 // ---------- Promotions ----------
 
 export async function createPromotion(input: unknown): Promise<ActionResult> {
