@@ -85,19 +85,19 @@ export interface StoreCollection {
   productsCount: number;
 }
 
-const COLLECTIONS_QUERY = `
+// Full query (newer APIs return productsCount as a Count object); if a field
+// isn't valid for the store's API version we fall back to a minimal query so
+// collections still load — just without the extra fields.
+const COLLECTIONS_FULL = `
   query Collections($first: Int!) {
     collections(first: $first, sortKey: TITLE) {
-      edges {
-        node {
-          id
-          title
-          handle
-          onlineStoreUrl
-          image { url }
-          productsCount { count }
-        }
-      }
+      edges { node { id title handle onlineStoreUrl image { url } productsCount { count } } }
+    }
+  }`;
+const COLLECTIONS_MIN = `
+  query Collections($first: Int!) {
+    collections(first: $first, sortKey: TITLE) {
+      edges { node { id title handle } }
     }
   }`;
 
@@ -107,7 +107,11 @@ export async function getStoreCollections(
   if (!(await shopifyReady())) return { connected: false, collections: [] };
   try {
     const { domain } = await shopifyConfig();
-    const json = await shopifyGraphQL<any>(COLLECTIONS_QUERY, { first: limit });
+    let json = await shopifyGraphQL<any>(COLLECTIONS_FULL, { first: limit });
+    if (json.errors?.length) {
+      console.warn("[getStoreCollections] full query failed, retrying minimal:", json.errors);
+      json = await shopifyGraphQL<any>(COLLECTIONS_MIN, { first: limit });
+    }
     if (json.errors?.length) {
       console.error("[getStoreCollections] GraphQL errors:", json.errors);
       return { connected: true, collections: [], error: json.errors.map((e: any) => e.message).join(", ") };
@@ -121,7 +125,7 @@ export async function getStoreCollections(
         handle: n.handle as string,
         url: (n.onlineStoreUrl as string) || (domain ? `https://${domain}/collections/${n.handle}` : `/collections/${n.handle}`),
         image: n.image?.url ?? null,
-        productsCount: n.productsCount?.count ?? 0,
+        productsCount: typeof n.productsCount === "object" ? n.productsCount?.count ?? 0 : (n.productsCount ?? 0),
       }));
     return { connected: true, collections };
   } catch (e: any) {

@@ -25,12 +25,14 @@ export function CurationList({
   connected,
   noun,
   save,
+  error,
 }: {
   items: CurationItem[];
   config: CatalogConfig;
   connected: boolean;
   noun: string; // "products" | "collections"
   save: (cfg: { order: string[]; hidden: string[] }) => Promise<{ ok: boolean; message: string }>;
+  error?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -125,7 +127,14 @@ export function CurationList({
       <Card>
         <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
           <PackageOpen className="size-6" />
-          No {noun} returned from Shopify yet.
+          {error ? (
+            <>
+              <span>Couldn&apos;t load {noun} from Shopify.</span>
+              <span className="max-w-md text-xs text-danger">{error}</span>
+            </>
+          ) : (
+            <span>No {noun} found in your Shopify store yet.</span>
+          )}
         </CardContent>
       </Card>
     );

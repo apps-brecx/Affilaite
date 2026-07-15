@@ -81,6 +81,7 @@ export default async function PromotionsPage() {
             connected={catalog.connected}
             config={catalogConfig}
             save={saveCatalogConfig}
+            error={catalog.error}
             items={catalog.products.map((p) => ({
               id: p.id,
               title: p.title,
@@ -95,6 +96,7 @@ export default async function PromotionsPage() {
             connected={collections.connected}
             config={collectionConfig}
             save={saveCollectionConfig}
+            error={collections.error}
             items={collections.collections.map((c) => ({
               id: c.id,
               title: c.title,
