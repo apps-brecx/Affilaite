@@ -34,6 +34,7 @@ import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } fro
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { getEarningsSeries } from "@/lib/queries";
+import { notify } from "@/lib/notifications";
 import type { TimePoint } from "@/lib/types";
 
 type EarningsRange = "today" | "week" | "month" | "year" | "all";
@@ -93,6 +94,13 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
       .onConflictDoNothing();
   }
 
+  await notify(
+    id,
+    "dashboard",
+    "You're approved 🎉",
+    "Your partner account is active — grab your link and start earning.",
+    "/dashboard",
+  );
   revalAdmin();
   return { ok: true, message: "Affiliate approved and code issued." };
 }
@@ -127,7 +135,17 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
     .update(commissions)
     .set({ status: "approved" })
     .where(and(inArray(commissions.id, ids), inArray(commissions.status, ["pending", "reversed"])))
-    .returning({ id: commissions.id });
+    .returning({ id: commissions.id, affiliateId: commissions.affiliateId });
+  const affIds = [...new Set(rows.map((r) => r.affiliateId).filter(Boolean))] as string[];
+  for (const affiliateId of affIds) {
+    await notify(
+      affiliateId,
+      "performance",
+      "Commission approved",
+      "New earnings cleared review and are on their way to payout.",
+      "/performance",
+    );
+  }
   revalAdmin();
   return { ok: true, message: `${rows.length} commission(s) approved.` };
 }
@@ -261,6 +279,17 @@ export async function createPromotion(input: unknown): Promise<ActionResult> {
     productImage: d.productImage || null,
     productUrl: d.productUrl || null,
   });
+  const approvedAffs = await db
+    .select({ id: affiliates.id })
+    .from(affiliates)
+    .where(eq(affiliates.status, "approved"));
+  await notify(
+    approvedAffs.map((a) => a.id),
+    "promotions",
+    `New promotion: ${d.name}`,
+    `Earn +${d.bonusValue}% bonus${d.productTitle ? ` — featuring ${d.productTitle}` : ""}.`,
+    "/promotions",
+  );
   revalidatePath("/admin/promotions");
   revalidatePath("/promotions");
   return { ok: true, message: "Promotion launched." };
@@ -290,10 +319,18 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
       : eq(affiliates.status, "approved");
 
   const recipients = await db
-    .select({ email: users.email, name: users.name })
+    .select({ id: affiliates.id, email: users.email, name: users.name })
     .from(affiliates)
     .leftJoin(users, eq(affiliates.userId, users.id))
     .where(where);
+
+  await notify(
+    recipients.map((r) => r.id),
+    "community",
+    subject,
+    body.length > 140 ? `${body.slice(0, 140)}…` : body,
+    "/community",
+  );
 
   await db.insert(messages).values({
     subject,
@@ -374,6 +411,13 @@ export async function createSingleDiscount(input: unknown): Promise<ActionResult
   await db
     .insert(discountCodes)
     .values({ affiliateId, code, percentage: percentage.toString(), shopifyDiscountId, active: true });
+  await notify(
+    affiliateId,
+    "links",
+    "New discount code",
+    `Your code ${code} (${percentage}% off) is ready to share.`,
+    "/links",
+  );
   revalidatePath("/admin/codes");
   return {
     ok: true,
@@ -494,6 +538,13 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
     await db.update(payoutItems).set({ transactionStatus: "SUCCESS" }).where(eq(payoutItems.id, item.id));
   }
 
+  await notify(
+    affiliateId,
+    "payouts",
+    "Payout sent 💸",
+    `A payout of $${amount.toFixed(2)} is on its way to your PayPal.`,
+    "/payouts",
+  );
   revalAdmin();
   return { ok: true, message: `Custom payout of $${amount.toFixed(2)} sent.` };
 }
@@ -569,6 +620,13 @@ export async function runPayout(): Promise<ActionResult> {
       .update(commissions)
       .set({ status: "paid", payoutId: batch.id })
       .where(and(eq(commissions.affiliateId, r.affiliateId), eq(commissions.status, "approved")));
+    await notify(
+      r.affiliateId,
+      "payouts",
+      "Payout sent 💸",
+      `$${Number(r.total).toFixed(2)} is on its way to your PayPal.`,
+      "/payouts",
+    );
   }
 
   revalAdmin();

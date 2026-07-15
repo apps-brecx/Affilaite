@@ -2,6 +2,7 @@
 import { db } from "@/db";
 import { orders, commissions, discountCodes, affiliates, programs, clicks, users } from "@/db/schema";
 import { eq, inArray, gte, desc, and } from "drizzle-orm";
+import { notify } from "./notifications";
 
 const DAY = 864e5;
 
@@ -100,6 +101,14 @@ export async function processOrderCreated(order: any) {
     status: "pending",
     approvableAt: new Date(Date.now() + program.holdDays * DAY),
   });
+
+  await notify(
+    affiliate.id,
+    "dashboard",
+    "New sale attributed 🎉",
+    `You earned ${order.currency} ${amount.toFixed(2)} on a new order.`,
+    "/dashboard",
+  );
 }
 
 /** refunds/create → reverse the commission tied to this order. */

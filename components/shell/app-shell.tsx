@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { markNotificationsReadByPath } from "@/app/actions/notifications";
 import {
   Menu,
   X,
@@ -28,6 +29,7 @@ import {
   Palette,
   Mail,
   UserCircle,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { LogOut } from "lucide-react";
@@ -60,11 +62,29 @@ const ICONS: Record<IconName, LucideIcon> = {
   brand: Palette,
   invites: Mail,
   account: UserCircle,
+  notifications: Bell,
 };
 
-function NavRow({ item, onNavigate }: { item: NavSection["items"][number]; onNavigate?: () => void }) {
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold leading-5 text-danger-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function NavRow({
+  item,
+  onNavigate,
+  badges,
+}: {
+  item: NavSection["items"][number];
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const Icon = ICONS[item.icon];
+  const badge = badges?.[item.href] ?? 0;
   const hasChildren = !!item.children?.length;
   const withinParent = hasChildren && pathname.startsWith(item.href);
   const [open, setOpen] = useState(withinParent);
@@ -136,11 +156,20 @@ function NavRow({ item, onNavigate }: { item: NavSection["items"][number]; onNav
       )}
       <Icon className={cn("size-4 transition-colors", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
       {item.label}
+      {badge > 0 && <NavBadge count={badge} />}
     </Link>
   );
 }
 
-function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
+function NavLinks({
+  sections,
+  onNavigate,
+  badges,
+}: {
+  sections: NavSection[];
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   return (
     <nav className="flex flex-col gap-6">
       {sections.map((section, i) => (
@@ -151,7 +180,7 @@ function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate
             </p>
           )}
           {section.items.map((item) => (
-            <NavRow key={item.href} item={item} onNavigate={onNavigate} />
+            <NavRow key={item.href} item={item} onNavigate={onNavigate} badges={badges} />
           ))}
         </div>
       ))}
@@ -182,14 +211,27 @@ export function AppShell({
   sections,
   user,
   variant,
+  badges,
   children,
 }: {
   sections: NavSection[];
   user: { name: string; email: string; role: string };
   variant: "affiliate" | "admin";
+  badges?: Record<string, number>;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // When an affiliate lands on a tab that has unread notifications, clear them
+  // (server-side) and refresh so the sidebar badge counts come back down.
+  useEffect(() => {
+    if (variant !== "affiliate") return;
+    const hasUnread = (badges?.[pathname] ?? 0) > 0;
+    if (!hasUnread) return;
+    markNotificationsReadByPath(pathname).then(() => router.refresh());
+  }, [pathname, variant, badges, router]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -204,7 +246,7 @@ export function AppShell({
           )}
         </div>
         <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-          <NavLinks sections={sections} />
+          <NavLinks sections={sections} badges={badges} />
         </div>
         <div className="mt-4 space-y-2">
           <Link
@@ -261,7 +303,7 @@ export function AppShell({
                 </button>
               </div>
               <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-                <NavLinks sections={sections} onNavigate={() => setOpen(false)} />
+                <NavLinks sections={sections} onNavigate={() => setOpen(false)} badges={badges} />
               </div>
               <UserCard {...user} />
             </motion.aside>

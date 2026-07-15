@@ -216,6 +216,24 @@ export const assets = pgTable("assets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// --- Per-affiliate notifications (drives the sidebar unread badges) ---
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    // Which portal section this relates to: dashboard | links | promotions |
+    // performance | payouts | assets | community.
+    section: text("section").notNull().default("dashboard"),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ notifAffIdx: index("notif_aff_idx").on(t.affiliateId) }),
+);
+
 // --- Campaigns (affiliate + referral, ReferralCandy-style) ---
 export const campaigns = pgTable("campaigns", {
   id: uuid("id").defaultRandom().primaryKey(),

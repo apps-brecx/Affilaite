@@ -21,7 +21,8 @@ export type IconName =
   | "payments"
   | "brand"
   | "invites"
-  | "account";
+  | "account"
+  | "notifications";
 
 export interface NavItem {
   label: string;
@@ -45,6 +46,7 @@ export const affiliateNav: NavSection[] = [
       { label: "Payouts", href: "/payouts", icon: "payouts" },
       { label: "Assets", href: "/assets", icon: "assets" },
       { label: "Community", href: "/community", icon: "groups" },
+      { label: "Notifications", href: "/notifications", icon: "notifications" },
       { label: "Settings", href: "/settings", icon: "settings" },
     ],
   },
