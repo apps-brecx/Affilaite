@@ -26,6 +26,7 @@ export function CurationList({
   noun,
   save,
   error,
+  newIds,
 }: {
   items: CurationItem[];
   config: CatalogConfig;
@@ -33,7 +34,9 @@ export function CurationList({
   noun: string; // "products" | "collections"
   save: (cfg: { order: string[]; shown: string[] }) => Promise<{ ok: boolean; message: string }>;
   error?: string;
+  newIds?: string[];
 }) {
+  const newSet = useMemo(() => new Set(newIds ?? []), [newIds]);
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
@@ -206,7 +209,10 @@ export function CurationList({
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{p.title}</p>
+                  <p className="flex items-center gap-2 truncate text-sm font-medium">
+                    {p.title}
+                    {newSet.has(id) && <Badge className="shrink-0">New</Badge>}
+                  </p>
                   <p className="flex items-center gap-2 text-xs text-muted-foreground">
                     {p.subtitle ?? ""}
                     {isShown && <Badge variant="success">Shown</Badge>}

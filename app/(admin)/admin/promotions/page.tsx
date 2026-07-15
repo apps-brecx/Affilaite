@@ -8,19 +8,31 @@ import { CatalogControlTab } from "@/components/admin/catalog-control-tab";
 import { CurationList } from "@/components/admin/curation-list";
 import { saveCatalogConfig, saveCollectionConfig } from "@/app/actions/admin";
 import { listPromotions } from "@/lib/queries";
-import { getStoreProducts, getCatalogConfig, getStoreCollections, getCollectionConfig } from "@/lib/products";
+import {
+  getStoreProducts,
+  getCatalogConfig,
+  getStoreCollections,
+  getCollectionConfig,
+  getSeenProducts,
+  getSeenCollections,
+} from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
-  const [promos, catalog, catalogConfig, collections, collectionConfig] = await Promise.all([
+  const [promos, catalog, catalogConfig, collections, collectionConfig, seenP, seenC] = await Promise.all([
     listPromotions(),
     getStoreProducts(100),
     getCatalogConfig(),
     getStoreCollections(100),
     getCollectionConfig(),
+    getSeenProducts(),
+    getSeenCollections(),
   ]);
+
+  const newProductIds = catalog.products.filter((p) => !seenP.has(p.id)).map((p) => p.id);
+  const newCollectionIds = collections.collections.filter((c) => !seenC.has(c.id)).map((c) => c.id);
 
   const promotionsPanel = (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -78,6 +90,8 @@ export default async function PromotionsPage() {
         promotionsPanel={promotionsPanel}
         catalogPanel={
           <CatalogControlTab
+            newProducts={newProductIds.length}
+            newCollections={newCollectionIds.length}
             productsPanel={
               <CurationList
                 noun="products"
@@ -85,6 +99,7 @@ export default async function PromotionsPage() {
                 config={catalogConfig}
                 save={saveCatalogConfig}
                 error={catalog.error}
+                newIds={newProductIds}
                 items={catalog.products.map((p) => ({
                   id: p.id,
                   title: p.title,
@@ -100,6 +115,7 @@ export default async function PromotionsPage() {
                 config={collectionConfig}
                 save={saveCollectionConfig}
                 error={collections.error}
+                newIds={newCollectionIds}
                 items={collections.collections.map((c) => ({
                   id: c.id,
                   title: c.title,

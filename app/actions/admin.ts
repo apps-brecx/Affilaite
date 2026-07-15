@@ -35,6 +35,7 @@ import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
 import { getEarningsSeries } from "@/lib/queries";
+import { getCatalogItemIds } from "@/lib/products";
 import { notify } from "@/lib/notifications";
 import type { TimePoint } from "@/lib/types";
 
@@ -1086,6 +1087,15 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
   revalidatePath("/promotions");
   revalidatePath("/admin/promotions");
   return { ok: true, message: "Catalog updated." };
+}
+
+/** Mark all current Shopify products & collections as "seen" (clears the new-item dot). */
+export async function markCatalogSeen(): Promise<void> {
+  await assertAdmin();
+  if (!db) return;
+  const ids = await getCatalogItemIds();
+  await writeSetting("catalog_seen_products", JSON.stringify(ids.products));
+  await writeSetting("catalog_seen_collections", JSON.stringify(ids.collections));
 }
 
 /** Save which collections affiliates see, and in what order. */

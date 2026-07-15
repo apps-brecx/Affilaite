@@ -171,3 +171,42 @@ export function applyConfig<T extends { id: string }>(items: T[], config: Catalo
 
 export const applyCatalogConfig = applyConfig;
 export const applyCollectionConfig = applyConfig;
+
+// ---------- "New in Shopify" detection (drives the admin notification dot) ----------
+
+// Short-lived cache of catalog ids so the admin sidebar badge doesn't hit
+// Shopify on every page load.
+let _idCache: { at: number; products: string[]; collections: string[] } | null = null;
+
+export async function getCatalogItemIds(): Promise<{ products: string[]; collections: string[] }> {
+  if (_idCache && Date.now() - _idCache.at < 120_000) return _idCache;
+  const [p, c] = await Promise.all([getStoreProducts(250), getStoreCollections(250)]);
+  _idCache = {
+    at: Date.now(),
+    products: p.products.map((x) => x.id),
+    collections: c.collections.map((x) => x.id),
+  };
+  return _idCache;
+}
+
+async function readIdSet(key: string): Promise<Set<string>> {
+  if (!db) return new Set();
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
+  try {
+    const a = JSON.parse(row?.value ?? "[]");
+    return new Set(Array.isArray(a) ? a : []);
+  } catch {
+    return new Set();
+  }
+}
+export const getSeenProducts = () => readIdSet("catalog_seen_products");
+export const getSeenCollections = () => readIdSet("catalog_seen_collections");
+
+/** Count of Shopify products/collections the admin hasn't reviewed yet. */
+export async function getCatalogNewCounts(): Promise<{ products: number; collections: number; total: number }> {
+  if (!(await shopifyReady())) return { products: 0, collections: 0, total: 0 };
+  const [ids, seenP, seenC] = await Promise.all([getCatalogItemIds(), getSeenProducts(), getSeenCollections()]);
+  const products = ids.products.filter((id) => !seenP.has(id)).length;
+  const collections = ids.collections.filter((id) => !seenC.has(id)).length;
+  return { products, collections, total: products + collections };
+}
