@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { markNotificationsReadByPath } from "@/app/actions/notifications";
+import { usePathname } from "next/navigation";
+import { markNotificationsReadByPath, getMyBadges } from "@/app/actions/notifications";
 import {
   Menu,
   X,
@@ -211,7 +211,7 @@ export function AppShell({
   sections,
   user,
   variant,
-  badges,
+  badges: initialBadges,
   children,
 }: {
   sections: NavSection[];
@@ -222,16 +222,37 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
+  const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
 
-  // When an affiliate lands on a tab that has unread notifications, clear them
-  // (server-side) and refresh so the sidebar badge counts come back down.
+  // Live badge counts: poll on an interval and whenever the tab regains focus,
+  // so new notifications show up without a page reload.
   useEffect(() => {
     if (variant !== "affiliate") return;
-    const hasUnread = (badges?.[pathname] ?? 0) > 0;
-    if (!hasUnread) return;
-    markNotificationsReadByPath(pathname).then(() => router.refresh());
-  }, [pathname, variant, badges, router]);
+    let active = true;
+    const refresh = () =>
+      getMyBadges()
+        .then((b) => active && setBadges(b))
+        .catch(() => {});
+    const id = setInterval(refresh, 12000);
+    const onVisible = () => document.visibilityState === "visible" && refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [variant]);
+
+  // Entering a section clears only that section's notifications (which also
+  // brings the Notifications total down). Visiting the Notifications inbox
+  // itself clears nothing — each tab keeps its dot until it's actually opened.
+  useEffect(() => {
+    if (variant !== "affiliate") return;
+    markNotificationsReadByPath(pathname)
+      .then(() => getMyBadges())
+      .then((b) => setBadges(b))
+      .catch(() => {});
+  }, [pathname, variant]);
 
   return (
     <div className="min-h-screen bg-background">

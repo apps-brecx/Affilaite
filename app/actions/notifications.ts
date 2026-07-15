@@ -1,17 +1,41 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { markRead, sectionForPath } from "@/lib/notifications";
+import {
+  markRead,
+  sectionForPath,
+  getBadgeMap,
+  listNotifications,
+  type NotificationRow,
+} from "@/lib/notifications";
 
-/** Mark the current affiliate's notifications for a route as read. */
-export async function markNotificationsReadByPath(path: string): Promise<void> {
+async function myAffiliateId(): Promise<string | undefined> {
   const session = await auth();
-  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  return (session?.user as any)?.affiliateId as string | undefined;
+}
+
+/**
+ * Mark the current affiliate's notifications for a route as read.
+ * Only clears the section that matches the route — visiting the
+ * Notifications inbox itself clears nothing (no matching section).
+ */
+export async function markNotificationsReadByPath(path: string): Promise<void> {
+  const affiliateId = await myAffiliateId();
   if (!affiliateId) return;
-  if (path === "/notifications") {
-    await markRead(affiliateId, "all");
-    return;
-  }
   const section = sectionForPath(path);
   if (section) await markRead(affiliateId, section);
+}
+
+/** Current unread badge map — polled by the shell for live updates. */
+export async function getMyBadges(): Promise<Record<string, number>> {
+  const affiliateId = await myAffiliateId();
+  if (!affiliateId) return {};
+  return getBadgeMap(affiliateId);
+}
+
+/** Current notifications list — polled by the Notifications page for live updates. */
+export async function getMyNotifications(): Promise<NotificationRow[]> {
+  const affiliateId = await myAffiliateId();
+  if (!affiliateId) return [];
+  return listNotifications(affiliateId);
 }

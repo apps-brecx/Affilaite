@@ -77,6 +77,17 @@ export async function getNotificationBadges(
   return { bySection, total };
 }
 
+/** Build the sidebar badge map (href → unread count, plus /notifications total). */
+export async function getBadgeMap(affiliateId: string): Promise<Record<string, number>> {
+  const { bySection, total } = await getNotificationBadges(affiliateId);
+  const badges: Record<string, number> = {};
+  for (const [section, href] of Object.entries(SECTION_HREF)) {
+    if (bySection[section]) badges[href] = bySection[section];
+  }
+  if (total) badges["/notifications"] = total;
+  return badges;
+}
+
 export interface NotificationRow {
   id: string;
   section: string;
