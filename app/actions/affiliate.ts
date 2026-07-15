@@ -7,8 +7,22 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { getEarningsSeries } from "@/lib/queries";
+import type { TimePoint } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; message: string };
+
+export type EarningsRange = "today" | "week" | "month" | "year" | "all";
+
+const RANGE_DAYS: Record<EarningsRange, number> = { today: 1, week: 7, month: 30, year: 365, all: 3650 };
+
+/** Earnings series for the signed-in affiliate over the chosen range. */
+export async function getMyEarnings(range: EarningsRange): Promise<TimePoint[]> {
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return [];
+  return getEarningsSeries(RANGE_DAYS[range] ?? 30, affiliateId);
+}
 
 function slugCode(name: string) {
   return (name.split(/\s+/)[0] || "PARTNER").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "PARTNER";

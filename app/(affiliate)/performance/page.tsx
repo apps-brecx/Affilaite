@@ -4,7 +4,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EarningsArea, ActivityBars } from "@/components/charts/charts";
+import { EarningsPanel } from "@/components/affiliate/earnings-panel";
 import { getAffiliateEarnings, getAffiliateCommissions } from "@/lib/queries";
 import { requireAffiliate } from "@/lib/session";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -13,7 +13,7 @@ export const metadata = { title: "Performance" };
 
 export default async function PerformancePage() {
   const me = await requireAffiliate();
-  const series = await getAffiliateEarnings(30, me.id);
+  const series = await getAffiliateEarnings(30, me.id); // "Last month" is the default range
   const commissions = await getAffiliateCommissions(me.id, 25);
   const hasActivity = me.clicks > 0 || me.orders > 0 || commissions.length > 0;
 
@@ -41,16 +41,10 @@ export default async function PerformancePage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Earnings — last 30 days</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <EarningsArea data={series} />
-              </CardContent>
-            </Card>
+          {/* One big earnings chart with a range selector on top */}
+          <EarningsPanel initial={series} initialRange="month" />
 
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Conversion funnel</CardTitle>
@@ -71,17 +65,6 @@ export default async function PerformancePage() {
                   <p className="text-xs text-muted-foreground">Click → order conversion</p>
                   <p className="font-display text-2xl font-semibold text-primary">{me.conversionRate}%</p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Daily earnings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ActivityBars data={series} />
               </CardContent>
             </Card>
 
