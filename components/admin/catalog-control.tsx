@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowUp, ArrowDown, Save, Loader2, PackageOpen, GripVertical, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +40,17 @@ export function CatalogControl({
   const [hidden, setHidden] = useState<Set<string>>(new Set(config.hidden));
   const [q, setQ] = useState("");
   const [dirty, setDirty] = useState(false);
+  const dragRef = useRef<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  const startDrag = (id: string) => {
+    dragRef.current = id;
+    setDragId(id);
+  };
+  const endDrag = () => {
+    dragRef.current = null;
+    setDragId(null);
+  };
 
   const move = (index: number, dir: -1 | 1) => {
     const j = index + dir;
@@ -47,6 +58,22 @@ export function CatalogControl({
     const next = order.slice();
     [next[index], next[j]] = [next[j], next[index]];
     setOrder(next);
+    setDirty(true);
+  };
+
+  // Live reorder as the dragged row passes over another row.
+  const onDragEnter = (overId: string) => {
+    const d = dragRef.current;
+    if (!d || d === overId) return;
+    setOrder((prev) => {
+      const from = prev.indexOf(d);
+      const to = prev.indexOf(overId);
+      if (from === -1 || to === -1) return prev;
+      const next = prev.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, d);
+      return next;
+    });
     setDirty(true);
   };
 
@@ -101,7 +128,7 @@ export function CatalogControl({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Choose what affiliates see and drag the order with the arrows.{" "}
+            Drag rows to reorder (or use the arrows), and toggle the eye to hide.{" "}
             <span className="font-medium text-foreground">{visibleCount}</span> of {order.length} shown.
           </p>
         </div>
@@ -123,7 +150,21 @@ export function CatalogControl({
             const isHidden = hidden.has(id);
             const realIndex = order.indexOf(id);
             return (
-              <div key={id} className={cn("flex items-center gap-3 px-4 py-2.5", isHidden && "opacity-55")}>
+              <div
+                key={id}
+                draggable={!q}
+                onDragStart={() => startDrag(id)}
+                onDragEnter={() => onDragEnter(id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDragEnd={endDrag}
+                onDrop={endDrag}
+                className={cn(
+                  "flex select-none items-center gap-3 px-4 py-2.5 transition-colors",
+                  isHidden && "opacity-55",
+                  !q && "cursor-grab active:cursor-grabbing",
+                  dragId === id && "bg-accent/60 opacity-60 ring-1 ring-inset ring-primary/30",
+                )}
+              >
                 <GripVertical className="size-4 shrink-0 text-muted-foreground/50" />
                 <span className="size-10 shrink-0 overflow-hidden rounded-md bg-muted">
                   {p.image ? (
