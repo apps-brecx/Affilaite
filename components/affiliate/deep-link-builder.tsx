@@ -4,12 +4,20 @@ import { useState } from "react";
 import { Link2 } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { CopyButton } from "@/components/ui/copy-button";
-import { buildReferralLink, STORE_URL } from "@/lib/links";
+import { buildReferralLink } from "@/lib/links";
 
-export function DeepLinkBuilder({ refCode }: { refCode: string }) {
+export function DeepLinkBuilder({
+  refCode,
+  appUrl,
+  defaultDestination,
+}: {
+  refCode: string;
+  appUrl: string;
+  defaultDestination: string;
+}) {
   const [url, setUrl] = useState("");
-  const target = url.trim() || STORE_URL;
-  const built = buildReferralLink(refCode, target);
+  const target = url.trim() || defaultDestination;
+  const built = buildReferralLink(refCode, target, appUrl);
 
   return (
     <div className="space-y-3">
@@ -22,7 +30,7 @@ export function DeepLinkBuilder({ refCode }: { refCode: string }) {
               id="deep"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={`${STORE_URL}/products/signature-coat`}
+              placeholder={`${defaultDestination.replace(/\/$/, "")}/products/signature-coat`}
               className="pl-9"
             />
           </div>

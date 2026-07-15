@@ -5,13 +5,15 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
 import { requireAffiliate } from "@/lib/session";
-import { buildReferralLink, qrDataUrl } from "@/lib/links";
+import { buildReferralLink, qrDataUrl, APP_URL } from "@/lib/links";
+import { getDefaultDestination } from "@/lib/queries";
 
 export const metadata = { title: "Links & Codes" };
 
 export default async function LinksPage() {
   const me = await requireAffiliate();
-  const link = buildReferralLink(me.refCode);
+  const destination = await getDefaultDestination();
+  const link = buildReferralLink(me.refCode, destination);
   const qr = await qrDataUrl(link);
 
   const shareTargets = [
@@ -103,7 +105,7 @@ export default async function LinksPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <DeepLinkBuilder refCode={me.refCode} />
+          <DeepLinkBuilder refCode={me.refCode} appUrl={APP_URL} defaultDestination={destination} />
         </CardContent>
       </Card>
     </div>
