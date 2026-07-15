@@ -337,7 +337,7 @@ export function AppShell({
         {/* Desktop top bar */}
         <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-3 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
           <span className="mr-auto text-sm text-muted-foreground">
-            {variant === "admin" ? "Syruvia · Admin" : "Syruvia · Partner Portal"}
+            {variant === "admin" ? "Sipfluence · Admin" : "Sipfluence · Partner Portal"}
           </span>
           <ThemeToggle />
           <button

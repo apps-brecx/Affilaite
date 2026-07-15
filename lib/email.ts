@@ -40,8 +40,8 @@ export function wrapEmail(body: string) {
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px;line-height:1.6;color:#1a1a17">${p.replace(/\n/g, "<br/>")}</p>`)
     .join("");
-  return `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-    <div style="font-size:20px;font-weight:600;color:#0e5c3f;margin-bottom:20px">Syruvia</div>
+  return `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#FFF7F1">
+    <div style="font-size:22px;font-weight:700;color:#431431;margin-bottom:20px">Sip<span style="color:#FF5C9E">fluence</span></div>
     ${html}
   </div>`;
 }

@@ -79,9 +79,9 @@ export interface BrandSettings {
 
 export function defaultBrand(): BrandSettings {
   return {
-    logoText: "Syruvia",
-    primaryColor: "#0e5c3f",
-    accentColor: "#b8873a",
+    logoText: "Sipfluence",
+    primaryColor: "#FF5C9E",
+    accentColor: "#FFC94D",
     signupHeadline: "",
     signupSubtext: "",
     approvedMessage: "",
