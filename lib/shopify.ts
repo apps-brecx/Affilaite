@@ -25,7 +25,15 @@ export async function shopifyGraphQL<T = any>(query: string, variables?: Record<
     },
     body: JSON.stringify({ query, variables }),
   });
-  if (!res.ok) throw new Error(`Shopify GraphQL ${res.status}`);
+  if (!res.ok) {
+    const hint =
+      res.status === 401 || res.status === 403
+        ? " — the Admin API access token was rejected. Check it's a valid token (starts with shpat_) with the right scopes."
+        : res.status === 404
+          ? " — check the store domain and API version."
+          : "";
+    throw new Error(`Shopify GraphQL ${res.status}${hint}`);
+  }
   return res.json() as Promise<T>;
 }
 

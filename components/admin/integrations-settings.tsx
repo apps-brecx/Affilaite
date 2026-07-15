@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Loader2, Save, Unplug } from "lucide-react";
+import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Loader2, Save, Unplug, Plug } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { saveIntegration, disconnectIntegration } from "@/app/actions/admin";
+import { saveIntegration, disconnectIntegration, testShopifyConnection } from "@/app/actions/admin";
 
 export interface IntegrationsStatus {
   shopify: { ready: boolean; domain: string; version: string; tokenMask: string; secretMask: string };
@@ -31,6 +31,7 @@ function IntegrationCard({
   ready,
   children,
   fields,
+  onTest,
 }: {
   service: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -38,8 +39,10 @@ function IntegrationCard({
   ready: boolean;
   children: React.ReactNode;
   fields: () => Record<string, string>;
+  onTest?: () => Promise<{ ok: boolean; message: string }>;
 }) {
   const [pending, start] = useTransition();
+  const [testing, startTest] = useTransition();
   const router = useRouter();
   const toast = useToast();
 
@@ -48,6 +51,12 @@ function IntegrationCard({
       const res = await saveIntegration(service, fields());
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) router.refresh();
+    });
+
+  const test = () =>
+    startTest(async () => {
+      const res = await onTest!();
+      toast(res.message, res.ok ? "success" : "error");
     });
 
   const disconnect = () => {
@@ -80,9 +89,16 @@ function IntegrationCard({
           ) : (
             <span />
           )}
-          <Button size="sm" onClick={save} disabled={pending}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save &amp; connect
-          </Button>
+          <div className="flex items-center gap-2">
+            {onTest && (
+              <Button variant="secondary" size="sm" onClick={test} disabled={testing || pending}>
+                {testing ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />} Test
+              </Button>
+            )}
+            <Button size="sm" onClick={save} disabled={pending}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save &amp; connect
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -127,6 +143,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         title="Shopify"
         ready={status.shopify.ready}
         fields={() => ({ domain, version, token, apiSecret })}
+        onTest={testShopifyConnection}
       >
         <Field label="Store domain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="your-store.myshopify.com" />
         <Field label="Admin API access token" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={secretPlaceholder(status.shopify.tokenMask) || "shpat_…"} className="font-mono" />

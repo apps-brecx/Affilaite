@@ -33,6 +33,7 @@ import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
+import { shopifyGraphQL } from "@/lib/shopify";
 import { getEarningsSeries } from "@/lib/queries";
 import { notify } from "@/lib/notifications";
 import type { TimePoint } from "@/lib/types";
@@ -1071,6 +1072,20 @@ export async function saveIntegration(service: string, fields: Record<string, st
   }
   revalidatePath("/admin/settings/integrations");
   return { ok: true, message: `${service.charAt(0).toUpperCase() + service.slice(1)} connection saved.` };
+}
+
+/** Ping Shopify with the saved credentials so admins can verify the token works. */
+export async function testShopifyConnection(): Promise<ActionResult> {
+  await assertAdmin();
+  if (!(await shopifyReady())) return { ok: false, message: "Enter a store domain and access token first." };
+  try {
+    const json = await shopifyGraphQL<any>(`{ shop { name myshopifyDomain } }`);
+    if (json.errors?.length) return { ok: false, message: json.errors.map((e: any) => e.message).join(", ") };
+    const name = json.data?.shop?.name;
+    return { ok: true, message: name ? `Connected to “${name}”.` : "Connected to Shopify." };
+  } catch (e: any) {
+    return { ok: false, message: e?.message ?? "Could not reach Shopify." };
+  }
 }
 
 export async function disconnectIntegration(service: string): Promise<ActionResult> {
