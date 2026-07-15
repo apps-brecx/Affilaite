@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Loader2, LogIn } from "lucide-react";
@@ -38,7 +39,12 @@ export function LoginForm() {
         <Input name="email" type="email" required placeholder="you@email.com" autoComplete="email" />
       </div>
       <div className="space-y-1.5">
-        <Label>Password</Label>
+        <div className="flex items-center justify-between">
+          <Label>Password</Label>
+          <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <Input name="password" type="password" required placeholder="••••••••" autoComplete="current-password" />
       </div>
       <Button type="submit" className="w-full" size="lg" disabled={pending}>

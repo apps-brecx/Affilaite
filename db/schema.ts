@@ -47,6 +47,20 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// --- Password reset tokens (hashed, single-use, expiring) ---
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ tokenIdx: index("reset_token_idx").on(t.tokenHash) }),
+);
+
 // --- Program = a commission ruleset ---
 export const programs = pgTable("programs", {
   id: uuid("id").defaultRandom().primaryKey(),

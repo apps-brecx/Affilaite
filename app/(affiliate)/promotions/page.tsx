@@ -1,4 +1,4 @@
-import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles } from "lucide-react";
+import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles, Layers } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,14 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { CatalogBrowser } from "@/components/affiliate/catalog-browser";
 import { requireAffiliate } from "@/lib/session";
 import { getPromotionsForAffiliate, getDefaultDestination } from "@/lib/queries";
-import { getStoreProducts, getCatalogConfig, applyCatalogConfig } from "@/lib/products";
+import {
+  getStoreProducts,
+  getCatalogConfig,
+  applyCatalogConfig,
+  getStoreCollections,
+  getCollectionConfig,
+  applyCollectionConfig,
+} from "@/lib/products";
 import { buildReferralLink } from "@/lib/links";
 import { formatDate } from "@/lib/utils";
 
@@ -15,10 +22,12 @@ export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
   const me = await requireAffiliate();
-  const [promos, catalog, config, website] = await Promise.all([
+  const [promos, catalog, config, collectionsRaw, collectionConfig, website] = await Promise.all([
     getPromotionsForAffiliate(me),
     getStoreProducts(100),
     getCatalogConfig(),
+    getStoreCollections(100),
+    getCollectionConfig(),
     getDefaultDestination(),
   ]);
 
@@ -30,6 +39,11 @@ export default async function PromotionsPage() {
     currency: p.currency,
     available: p.available,
     shareLink: buildReferralLink(me.refCode, p.url),
+  }));
+
+  const visibleCollections = applyCollectionConfig(collectionsRaw.collections, collectionConfig).map((c) => ({
+    ...c,
+    shareLink: buildReferralLink(me.refCode, c.url),
   }));
 
   return (
@@ -117,6 +131,40 @@ export default async function PromotionsPage() {
           </div>
         )}
       </section>
+
+      {/* Shop by collection */}
+      {visibleCollections.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Layers className="size-4" /> Shop by collection
+          </h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {visibleCollections.map((c) => (
+              <Card key={c.id} className="group flex flex-col overflow-hidden transition-shadow hover:shadow-lift">
+                <a href={c.shareLink} target="_blank" rel="noopener noreferrer" className="relative block aspect-[16/10] bg-muted">
+                  {c.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.image} alt={c.title} className="size-full object-cover transition-transform group-hover:scale-105" />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-muted-foreground">
+                      <Layers className="size-7" />
+                    </span>
+                  )}
+                </a>
+                <div className="flex flex-1 flex-col gap-2 p-3">
+                  <div className="flex-1">
+                    <p className="truncate text-sm font-medium leading-snug">{c.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.productsCount} product{c.productsCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <CopyButton value={c.shareLink} variant="outline" label="Copy share link" className="w-full text-xs" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Product catalog — opt-in */}
       {visibleProducts.length === 0 ? (

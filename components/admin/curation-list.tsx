@@ -8,33 +8,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { saveCatalogConfig } from "@/app/actions/admin";
-import type { StoreProduct, CatalogConfig } from "@/lib/products";
+import type { CatalogConfig } from "@/lib/products";
 import { cn } from "@/lib/utils";
 
-export function CatalogControl({
-  products,
+export interface CurationItem {
+  id: string;
+  title: string;
+  image: string | null;
+  subtitle?: string;
+}
+
+/** Reusable "choose what affiliates see + reorder" list, for products or collections. */
+export function CurationList({
+  items,
   config,
   connected,
+  noun,
+  save,
 }: {
-  products: StoreProduct[];
+  items: CurationItem[];
   config: CatalogConfig;
   connected: boolean;
+  noun: string; // "products" | "collections"
+  save: (cfg: { order: string[]; hidden: string[] }) => Promise<{ ok: boolean; message: string }>;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
 
-  const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-
-  // Initial order: saved order first, then any new products, in default order.
+  const byId = useMemo(() => new Map(items.map((p) => [p.id, p])), [items]);
   const initialOrder = useMemo(() => {
     const pos = new Map(config.order.map((id, i) => [id, i] as const));
-    return products
+    return items
       .slice()
       .sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER))
       .map((p) => p.id);
-  }, [products, config.order]);
+  }, [items, config.order]);
 
   const [order, setOrder] = useState<string[]>(initialOrder);
   const [hidden, setHidden] = useState<Set<string>>(new Set(config.hidden));
@@ -61,7 +70,6 @@ export function CatalogControl({
     setDirty(true);
   };
 
-  // Live reorder as the dragged row passes over another row.
   const onDragEnter = (overId: string) => {
     const d = dragRef.current;
     if (!d || d === overId) return;
@@ -86,9 +94,9 @@ export function CatalogControl({
     setDirty(true);
   };
 
-  const save = () =>
+  const onSave = () =>
     start(async () => {
-      const res = await saveCatalogConfig({ order, hidden: [...hidden] });
+      const res = await save({ order, hidden: [...hidden] });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         setDirty(false);
@@ -107,17 +115,17 @@ export function CatalogControl({
       <Card>
         <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
           <PackageOpen className="size-6" />
-          Connect Shopify to curate the catalog affiliates see.
+          Connect Shopify to curate the {noun} affiliates see.
         </CardContent>
       </Card>
     );
   }
-  if (products.length === 0) {
+  if (items.length === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
           <PackageOpen className="size-6" />
-          No products returned from Shopify yet.
+          No {noun} returned from Shopify yet.
         </CardContent>
       </Card>
     );
@@ -126,18 +134,16 @@ export function CatalogControl({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Drag rows to reorder (or use the arrows), and toggle the eye to hide.{" "}
-            <span className="font-medium text-foreground">{visibleCount}</span> of {order.length} shown.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Drag rows to reorder (or use the arrows), and toggle the eye to hide.{" "}
+          <span className="font-medium text-foreground">{visibleCount}</span> of {order.length} shown.
+        </p>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="h-9 w-44 pl-8" />
           </div>
-          <Button size="sm" onClick={save} disabled={pending || !dirty}>
+          <Button size="sm" onClick={onSave} disabled={pending || !dirty}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save order
           </Button>
         </div>
@@ -178,8 +184,8 @@ export function CatalogControl({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{p.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.price ? `${p.currency === "USD" ? "$" : ""}${p.price}` : "—"}
+                  <p className="flex items-center text-xs text-muted-foreground">
+                    {p.subtitle ?? ""}
                     {isHidden && <Badge variant="muted" className="ml-2">Hidden</Badge>}
                   </p>
                 </div>
@@ -203,10 +209,10 @@ export function CatalogControl({
               </div>
             );
           })}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No products match your search.</p>}
+          {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No {noun} match your search.</p>}
         </CardContent>
       </Card>
-      {q && <p className="text-center text-xs text-muted-foreground">Clear the search to reorder products.</p>}
+      {q && <p className="text-center text-xs text-muted-foreground">Clear the search to reorder.</p>}
     </div>
   );
 }

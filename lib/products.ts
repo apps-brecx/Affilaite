@@ -74,16 +74,72 @@ export async function getStoreProducts(
   }
 }
 
-// ---------- Admin-curated catalog (what affiliates see, and in which order) ----------
+// ---------- Collections ----------
 
-export interface CatalogConfig {
-  order: string[]; // product ids in the order the admin wants
-  hidden: string[]; // product ids hidden from affiliates
+export interface StoreCollection {
+  id: string;
+  title: string;
+  handle: string;
+  url: string;
+  image: string | null;
+  productsCount: number;
 }
 
-export async function getCatalogConfig(): Promise<CatalogConfig> {
+const COLLECTIONS_QUERY = `
+  query Collections($first: Int!) {
+    collections(first: $first, sortKey: TITLE) {
+      edges {
+        node {
+          id
+          title
+          handle
+          onlineStoreUrl
+          image { url }
+          productsCount { count }
+        }
+      }
+    }
+  }`;
+
+export async function getStoreCollections(
+  limit = 50,
+): Promise<{ connected: boolean; collections: StoreCollection[]; error?: string }> {
+  if (!(await shopifyReady())) return { connected: false, collections: [] };
+  try {
+    const { domain } = await shopifyConfig();
+    const json = await shopifyGraphQL<any>(COLLECTIONS_QUERY, { first: limit });
+    if (json.errors?.length) {
+      console.error("[getStoreCollections] GraphQL errors:", json.errors);
+      return { connected: true, collections: [], error: json.errors.map((e: any) => e.message).join(", ") };
+    }
+    const edges = json.data?.collections?.edges ?? [];
+    const collections: StoreCollection[] = edges
+      .map((e: any) => e.node)
+      .map((n: any) => ({
+        id: n.id as string,
+        title: n.title as string,
+        handle: n.handle as string,
+        url: (n.onlineStoreUrl as string) || (domain ? `https://${domain}/collections/${n.handle}` : `/collections/${n.handle}`),
+        image: n.image?.url ?? null,
+        productsCount: n.productsCount?.count ?? 0,
+      }));
+    return { connected: true, collections };
+  } catch (e: any) {
+    console.error("[getStoreCollections]", e);
+    return { connected: true, collections: [], error: e?.message ?? "Could not reach Shopify" };
+  }
+}
+
+// ---------- Admin curation (what affiliates see + order), for products and collections ----------
+
+export interface CatalogConfig {
+  order: string[]; // ids in the order the admin wants
+  hidden: string[]; // ids hidden from affiliates
+}
+
+async function readConfig(key: string): Promise<CatalogConfig> {
   if (!db) return { order: [], hidden: [] };
-  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, "catalog_config") });
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
   if (!row?.value) return { order: [], hidden: [] };
   try {
     const c = JSON.parse(row.value);
@@ -93,13 +149,19 @@ export async function getCatalogConfig(): Promise<CatalogConfig> {
   }
 }
 
-/** Apply the admin's curation: drop hidden products and sort by the saved order. */
-export function applyCatalogConfig(products: StoreProduct[], config: CatalogConfig): StoreProduct[] {
+export const getCatalogConfig = () => readConfig("catalog_config");
+export const getCollectionConfig = () => readConfig("collection_config");
+
+/** Apply the admin's curation: drop hidden items and sort by the saved order. */
+export function applyConfig<T extends { id: string }>(items: T[], config: CatalogConfig): T[] {
   const hidden = new Set(config.hidden);
-  const visible = products.filter((p) => !hidden.has(p.id));
+  const visible = items.filter((p) => !hidden.has(p.id));
   if (!config.order.length) return visible;
   const pos = new Map(config.order.map((id, i) => [id, i] as const));
   return visible
     .slice()
     .sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }
+
+export const applyCatalogConfig = applyConfig;
+export const applyCollectionConfig = applyConfig;

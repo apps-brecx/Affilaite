@@ -1088,6 +1088,18 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
   return { ok: true, message: "Catalog updated." };
 }
 
+/** Save which collections affiliates see, and in what order. */
+export async function saveCollectionConfig(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z.object({ order: z.array(z.string()), hidden: z.array(z.string()) }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid collection settings." };
+  await writeSetting("collection_config", JSON.stringify(parsed.data));
+  revalidatePath("/promotions");
+  revalidatePath("/admin/promotions");
+  return { ok: true, message: "Collections updated." };
+}
+
 /** Ping Shopify with the saved credentials so admins can verify the token works. */
 export async function testShopifyConnection(): Promise<ActionResult> {
   await assertAdmin();
