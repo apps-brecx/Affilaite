@@ -1074,6 +1074,20 @@ export async function saveIntegration(service: string, fields: Record<string, st
   return { ok: true, message: `${service.charAt(0).toUpperCase() + service.slice(1)} connection saved.` };
 }
 
+/** Save which products affiliates see in the catalog, and in what order. */
+export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({ order: z.array(z.string()), hidden: z.array(z.string()) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid catalog settings." };
+  await writeSetting("catalog_config", JSON.stringify(parsed.data));
+  revalidatePath("/promotions");
+  revalidatePath("/admin/promotions");
+  return { ok: true, message: "Catalog updated." };
+}
+
 /** Ping Shopify with the saved credentials so admins can verify the token works. */
 export async function testShopifyConnection(): Promise<ActionResult> {
   await assertAdmin();

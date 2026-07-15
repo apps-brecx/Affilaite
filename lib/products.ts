@@ -1,4 +1,7 @@
 // lib/products.ts — read the store's product catalog from Shopify.
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { appSettings } from "@/db/schema";
 import { shopifyGraphQL } from "./shopify";
 import { shopifyReady, shopifyConfig } from "./integrations";
 
@@ -69,4 +72,34 @@ export async function getStoreProducts(
     console.error("[getStoreProducts]", e);
     return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };
   }
+}
+
+// ---------- Admin-curated catalog (what affiliates see, and in which order) ----------
+
+export interface CatalogConfig {
+  order: string[]; // product ids in the order the admin wants
+  hidden: string[]; // product ids hidden from affiliates
+}
+
+export async function getCatalogConfig(): Promise<CatalogConfig> {
+  if (!db) return { order: [], hidden: [] };
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, "catalog_config") });
+  if (!row?.value) return { order: [], hidden: [] };
+  try {
+    const c = JSON.parse(row.value);
+    return { order: Array.isArray(c.order) ? c.order : [], hidden: Array.isArray(c.hidden) ? c.hidden : [] };
+  } catch {
+    return { order: [], hidden: [] };
+  }
+}
+
+/** Apply the admin's curation: drop hidden products and sort by the saved order. */
+export function applyCatalogConfig(products: StoreProduct[], config: CatalogConfig): StoreProduct[] {
+  const hidden = new Set(config.hidden);
+  const visible = products.filter((p) => !hidden.has(p.id));
+  if (!config.order.length) return visible;
+  const pos = new Map(config.order.map((id, i) => [id, i] as const));
+  return visible
+    .slice()
+    .sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }

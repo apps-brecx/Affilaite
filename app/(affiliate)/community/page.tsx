@@ -1,12 +1,35 @@
 import { UsersRound, Mail, Inbox, Megaphone } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireAffiliate } from "@/lib/session";
-import { getGroup, getMessagesForAffiliate } from "@/lib/queries";
-import { relativeTime } from "@/lib/utils";
+import { getGroup, getMessagesForAffiliate, type InboxMessage } from "@/lib/queries";
+import { relativeTime, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Community" };
+
+/** Group label for a message's day: Today / Yesterday / full date. */
+function dayLabel(iso: string | null): string {
+  if (!iso) return "Earlier";
+  const d = new Date(iso);
+  const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const now = new Date();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (key(d) === key(now)) return "Today";
+  if (key(d) === key(yesterday)) return "Yesterday";
+  return formatDate(iso);
+}
+
+function groupByDay(messages: InboxMessage[]): { label: string; items: InboxMessage[] }[] {
+  const groups: { label: string; items: InboxMessage[] }[] = [];
+  for (const m of messages) {
+    const label = dayLabel(m.sentAt);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(m);
+    else groups.push({ label, items: [m] });
+  }
+  return groups;
+}
 
 export default async function CommunityPage() {
   const me = await requireAffiliate();
@@ -69,27 +92,33 @@ export default async function CommunityPage() {
               description="Announcements and messages from the Syruvia team will appear here."
             />
           ) : (
-            <div className="space-y-3">
-              {messages.map((m) => (
-                <Card key={m.id}>
-                  <CardContent className="space-y-2 p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Megaphone className="size-4" />
-                        </span>
-                        <p className="font-medium">{m.subject || "Message"}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {m.scope === "group" && <Badge variant="secondary">Your group</Badge>}
-                        {m.sentAt && (
-                          <span className="text-xs text-muted-foreground">{relativeTime(m.sentAt)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="whitespace-pre-wrap pl-10 text-sm leading-relaxed text-muted-foreground">{m.body}</p>
-                  </CardContent>
-                </Card>
+            <div className="space-y-6">
+              {groupByDay(messages).map((group) => (
+                <div key={group.label} className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+                    <span className="h-px flex-1 bg-hairline" />
+                  </div>
+                  {group.items.map((m) => (
+                    <Card key={m.id}>
+                      <CardContent className="space-y-2 p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                              <Megaphone className="size-4" />
+                            </span>
+                            <p className="font-medium">{m.subject || "Message"}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {m.scope === "group" && <Badge variant="secondary">Your group</Badge>}
+                            {m.sentAt && <span className="text-xs text-muted-foreground">{relativeTime(m.sentAt)}</span>}
+                          </div>
+                        </div>
+                        <p className="whitespace-pre-wrap pl-10 text-sm leading-relaxed text-muted-foreground">{m.body}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ))}
             </div>
           )}

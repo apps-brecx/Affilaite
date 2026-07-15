@@ -3,22 +3,23 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PromotionForm } from "@/components/admin/promotion-form";
+import { PromotionsTabs } from "@/components/admin/promotions-tabs";
+import { CatalogControl } from "@/components/admin/catalog-control";
 import { listPromotions } from "@/lib/queries";
-import { getStoreProducts } from "@/lib/products";
+import { getStoreProducts, getCatalogConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
-  const [promos, catalog] = await Promise.all([listPromotions(), getStoreProducts(100)]);
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Promotions"
-        description="Time-boxed bonus commissions to spark a push — automatically applied on top of standard rates."
-      />
+  const [promos, catalog, catalogConfig] = await Promise.all([
+    listPromotions(),
+    getStoreProducts(100),
+    getCatalogConfig(),
+  ]);
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  const promotionsPanel = (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {promos.length === 0 && (
             <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
@@ -58,8 +59,23 @@ export default async function PromotionsPage() {
           ))}
         </div>
 
-        <PromotionForm products={catalog.products} connected={catalog.connected} error={catalog.error} />
-      </div>
+      <PromotionForm products={catalog.products} connected={catalog.connected} error={catalog.error} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Promotions"
+        description="Time-boxed bonus commissions to spark a push, and control over the product catalog affiliates see."
+      />
+
+      <PromotionsTabs
+        promotionsPanel={promotionsPanel}
+        catalogPanel={
+          <CatalogControl products={catalog.products} config={catalogConfig} connected={catalog.connected} />
+        }
+      />
     </div>
   );
 }
