@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EarningsArea } from "@/components/charts/charts";
+import { EarningsPanel } from "@/components/affiliate/earnings-panel";
 import { CountUp } from "@/components/ui/count-up";
 import {
   getAffiliateSummary,
@@ -74,21 +74,9 @@ export default async function DashboardPage() {
 
       {/* Chart + recent */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Earnings</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Last 30 days</p>
-            </div>
-            <div className="text-right">
-              <p className="font-display text-xl font-semibold">{formatCurrency(monthTotal)}</p>
-              <p className="text-xs text-muted-foreground">this period</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <EarningsArea data={series} />
-          </CardContent>
-        </Card>
+        <div className="lg:col-span-2">
+          <EarningsPanel initial={series} initialRange="month" height={280} />
+        </div>
 
         <Card>
           <CardHeader>

@@ -28,6 +28,17 @@ import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
+import { getEarningsSeries } from "@/lib/queries";
+import type { TimePoint } from "@/lib/types";
+
+type EarningsRange = "today" | "week" | "month" | "year" | "all";
+const REVENUE_RANGE_DAYS: Record<EarningsRange, number> = { today: 1, week: 7, month: 30, year: 365, all: 3650 };
+
+/** Program-wide affiliate-driven revenue series for a range (admin only). */
+export async function getRevenueRange(range: EarningsRange): Promise<TimePoint[]> {
+  await assertAdmin();
+  return getEarningsSeries(REVENUE_RANGE_DAYS[range] ?? 30);
+}
 
 export type ActionResult = { ok: boolean; message: string };
 

@@ -18,9 +18,16 @@ const RANGES: { id: EarningsRange; label: string }[] = [
 export function EarningsPanel({
   initial,
   initialRange = "month",
+  title = "Earnings",
+  action = getMyEarnings,
+  height = 320,
 }: {
   initial: TimePoint[];
   initialRange?: EarningsRange;
+  title?: string;
+  /** Server action that returns the earnings series for a range. */
+  action?: (range: EarningsRange) => Promise<TimePoint[]>;
+  height?: number;
 }) {
   const [range, setRange] = useState<EarningsRange>(initialRange);
   const [data, setData] = useState<TimePoint[]>(initial);
@@ -33,17 +40,17 @@ export function EarningsPanel({
     if (r === range) return;
     setRange(r);
     start(async () => {
-      const next = await getMyEarnings(r);
+      const next = await action(r);
       setData(next);
     });
   };
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between space-y-0">
+      <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Earnings</CardTitle>
-          <p className="mt-1 tnum text-sm text-muted-foreground">
+          <CardTitle>{title}</CardTitle>
+          <p className="tnum mt-1 text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">{formatCurrency(total)}</span> · {orders} order{orders === 1 ? "" : "s"}
           </p>
         </div>
@@ -65,7 +72,7 @@ export function EarningsPanel({
       </CardHeader>
       <CardContent>
         <div className={cn("transition-opacity", pending && "opacity-50")}>
-          <EarningsArea data={data} height={320} />
+          <EarningsArea data={data} height={height} />
         </div>
       </CardContent>
     </Card>

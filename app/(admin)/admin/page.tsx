@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EarningsArea, RankBars } from "@/components/charts/charts";
+import { RankBars } from "@/components/charts/charts";
+import { EarningsPanel } from "@/components/affiliate/earnings-panel";
 import { ApprovalQueue } from "@/components/admin/approval-queue";
+import { getRevenueRange } from "@/app/actions/admin";
 import {
   getAdminKpis,
   getRevenueSeries,
@@ -53,21 +55,9 @@ export default async function AdminHome() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Affiliate-driven revenue</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Last 30 days</p>
-            </div>
-            <div className="text-right">
-              <p className="font-display text-xl font-semibold">{formatCurrency(revenue)}</p>
-              <p className="text-xs text-success">▲ {kpis.affiliateRevenueDelta}% vs prior</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <EarningsArea data={series} height={280} />
-          </CardContent>
-        </Card>
+        <div className="lg:col-span-2">
+          <EarningsPanel initial={series} initialRange="month" title="Affiliate-driven revenue" action={getRevenueRange} height={280} />
+        </div>
 
         <Card>
           <CardHeader>
