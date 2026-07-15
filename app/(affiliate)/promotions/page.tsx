@@ -1,4 +1,4 @@
-import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles, Layers } from "lucide-react";
+import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,58 +132,24 @@ export default async function PromotionsPage() {
         )}
       </section>
 
-      {/* Shop by collection */}
-      {visibleCollections.length > 0 && (
+      {/* Catalog — opt-in, collections + products together */}
+      {visibleProducts.length === 0 && visibleCollections.length === 0 ? (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <Layers className="size-4" /> Shop by collection
-          </h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {visibleCollections.map((c) => (
-              <Card key={c.id} className="group flex flex-col overflow-hidden transition-shadow hover:shadow-lift">
-                <a href={c.shareLink} target="_blank" rel="noopener noreferrer" className="relative block aspect-[16/10] bg-muted">
-                  {c.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.image} alt={c.title} className="size-full object-cover transition-transform group-hover:scale-105" />
-                  ) : (
-                    <span className="flex size-full items-center justify-center text-muted-foreground">
-                      <Layers className="size-7" />
-                    </span>
-                  )}
-                </a>
-                <div className="flex flex-1 flex-col gap-2 p-3">
-                  <div className="flex-1">
-                    <p className="truncate text-sm font-medium leading-snug">{c.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {c.productsCount} product{c.productsCount === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <CopyButton value={c.shareLink} variant="outline" label="Copy share link" className="w-full text-xs" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Product catalog — opt-in */}
-      {visibleProducts.length === 0 ? (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <ShoppingBag className="size-4" /> Product catalog
+            <ShoppingBag className="size-4" /> Catalog
           </h2>
           <EmptyState
             icon={PackageOpen}
             title={catalog.connected ? "No products to show yet" : "Catalog coming soon"}
             description={
               catalog.connected
-                ? "Products will show up here once they're published in Shopify and made visible by the team."
-                : "The product catalog appears here once the store is connected. In the meantime, share your code and link from Links & Codes."
+                ? "Products and collections show up here once they're published in Shopify and made visible by the team."
+                : "The catalog appears here once the store is connected. In the meantime, share your code and link from Links & Codes."
             }
           />
         </section>
       ) : (
-        <CatalogBrowser products={visibleProducts} />
+        <CatalogBrowser products={visibleProducts} collections={visibleCollections} />
       )}
     </div>
   );

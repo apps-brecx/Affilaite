@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PromotionForm } from "@/components/admin/promotion-form";
 import { PromotionsTabs } from "@/components/admin/promotions-tabs";
+import { CatalogControlTab } from "@/components/admin/catalog-control-tab";
 import { CurationList } from "@/components/admin/curation-list";
 import { saveCatalogConfig, saveCollectionConfig } from "@/app/actions/admin";
 import { listPromotions } from "@/lib/queries";
@@ -76,33 +77,37 @@ export default async function PromotionsPage() {
       <PromotionsTabs
         promotionsPanel={promotionsPanel}
         catalogPanel={
-          <CurationList
-            noun="products"
-            connected={catalog.connected}
-            config={catalogConfig}
-            save={saveCatalogConfig}
-            error={catalog.error}
-            items={catalog.products.map((p) => ({
-              id: p.id,
-              title: p.title,
-              image: p.image,
-              subtitle: p.price ? `${p.currency === "USD" ? "$" : ""}${p.price}` : "—",
-            }))}
-          />
-        }
-        collectionsPanel={
-          <CurationList
-            noun="collections"
-            connected={collections.connected}
-            config={collectionConfig}
-            save={saveCollectionConfig}
-            error={collections.error}
-            items={collections.collections.map((c) => ({
-              id: c.id,
-              title: c.title,
-              image: c.image,
-              subtitle: `${c.productsCount} product${c.productsCount === 1 ? "" : "s"}`,
-            }))}
+          <CatalogControlTab
+            productsPanel={
+              <CurationList
+                noun="products"
+                connected={catalog.connected}
+                config={catalogConfig}
+                save={saveCatalogConfig}
+                error={catalog.error}
+                items={catalog.products.map((p) => ({
+                  id: p.id,
+                  title: p.title,
+                  image: p.image,
+                  subtitle: p.price ? `${p.currency === "USD" ? "$" : ""}${p.price}` : "—",
+                }))}
+              />
+            }
+            collectionsPanel={
+              <CurationList
+                noun="collections"
+                connected={collections.connected}
+                config={collectionConfig}
+                save={saveCollectionConfig}
+                error={collections.error}
+                items={collections.collections.map((c) => ({
+                  id: c.id,
+                  title: c.title,
+                  image: c.image,
+                  subtitle: `${c.productsCount} product${c.productsCount === 1 ? "" : "s"}`,
+                }))}
+              />
+            }
           />
         }
       />

@@ -1,26 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { BadgePercent, ShoppingBag, Layers } from "lucide-react";
+import { BadgePercent, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function PromotionsTabs({
   promotionsPanel,
   catalogPanel,
-  collectionsPanel,
 }: {
   promotionsPanel: React.ReactNode;
   catalogPanel: React.ReactNode;
-  collectionsPanel: React.ReactNode;
 }) {
-  const [tab, setTab] = useState<"promotions" | "catalog" | "collections">("promotions");
+  const [tab, setTab] = useState<"promotions" | "catalog">("promotions");
 
   const TabButton = ({
     id,
     icon: Icon,
     children,
   }: {
-    id: "promotions" | "catalog" | "collections";
+    id: "promotions" | "catalog";
     icon: typeof BadgePercent;
     children: React.ReactNode;
   }) => (
@@ -43,13 +41,10 @@ export function PromotionsTabs({
           Promotions
         </TabButton>
         <TabButton id="catalog" icon={ShoppingBag}>
-          Products
-        </TabButton>
-        <TabButton id="collections" icon={Layers}>
-          Collections
+          Catalog control
         </TabButton>
       </div>
-      {tab === "promotions" ? promotionsPanel : tab === "catalog" ? catalogPanel : collectionsPanel}
+      {tab === "promotions" ? promotionsPanel : catalogPanel}
     </div>
   );
 }
