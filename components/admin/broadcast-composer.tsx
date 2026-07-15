@@ -14,7 +14,8 @@ const VARS = ["{{name}}", "{{code}}", "{{earnings}}", "{{link}}"];
 interface AudienceOption {
   label: string;
   count: number;
-  status: string[];
+  status?: string[];
+  groupIds?: string[];
 }
 
 export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }) {
@@ -31,7 +32,7 @@ export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }
       return;
     }
     start(async () => {
-      const res = await sendBroadcast({ subject, body, status: audience.status });
+      const res = await sendBroadcast({ subject, body, status: audience.status, groupIds: audience.groupIds });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         setSubject("");

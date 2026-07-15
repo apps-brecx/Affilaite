@@ -263,22 +263,34 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
-    .object({ subject: z.string().min(1), body: z.string().min(1), status: z.array(z.string()).optional() })
+    .object({
+      subject: z.string().min(1),
+      body: z.string().min(1),
+      status: z.array(z.string()).optional(),
+      groupIds: z.array(z.string()).optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Add a subject and message." };
-  const { subject, body, status } = parsed.data;
+  const { subject, body, status, groupIds } = parsed.data;
+
+  // Target either specific groups or a set of statuses (default: approved).
+  const where = groupIds?.length
+    ? inArray(affiliates.groupId, groupIds as any)
+    : status?.length
+      ? inArray(affiliates.status, status as any)
+      : eq(affiliates.status, "approved");
 
   const recipients = await db
     .select({ email: users.email, name: users.name })
     .from(affiliates)
     .leftJoin(users, eq(affiliates.userId, users.id))
-    .where(status?.length ? inArray(affiliates.status, status as any) : eq(affiliates.status, "approved"));
+    .where(where);
 
   await db.insert(messages).values({
     subject,
     body,
     channel: "email",
-    audience: { status: status ?? ["approved"] },
+    audience: groupIds?.length ? { groupIds } : { status: status ?? ["approved"] },
     sentAt: new Date(),
   });
 
@@ -291,7 +303,8 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
   }
 
   revalidatePath("/admin/messages");
-  return { ok: true, message: `Broadcast sent to ${recipients.length} affiliate(s).` };
+  revalidatePath("/community");
+  return { ok: true, message: `Message sent to ${recipients.length} affiliate(s).` };
 }
 
 // ---------- Bulk discount codes ----------

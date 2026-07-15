@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, UsersRound } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { GroupManager } from "@/components/admin/group-manager";
+import { GroupMessageComposer } from "@/components/admin/group-message-composer";
 import { getGroup, listAffiliates } from "@/lib/queries";
 
 export default async function GroupManagePage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +32,12 @@ export default async function GroupManagePage({ params }: { params: Promise<{ id
       </PageHeader>
 
       <GroupManager group={group} members={members} candidates={candidates} />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <GroupMessageComposer groupId={group.id} groupName={group.name} memberCount={members.length} />
+        </div>
+      </div>
     </div>
   );
 }

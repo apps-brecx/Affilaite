@@ -1,7 +1,7 @@
 // lib/queries.ts — the data-access seam. Real Drizzle queries against Postgres.
 // Everything reflects the database; when there's no data, callers get empty
 // results and the UI shows honest empty states. No fabricated numbers.
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { db, isDbConfigured } from "@/db";
 import {
   affiliates,
@@ -481,6 +481,78 @@ function labelAudience(a: any): string {
   if (a.status?.length) return a.status.join(", ");
   if (a.groupIds?.length) return `${a.groupIds.length} group(s)`;
   return "All affiliates";
+}
+
+export interface InboxMessage {
+  id: string;
+  subject: string;
+  body: string;
+  sentAt: string | null;
+  scope: "group" | "everyone";
+}
+
+/**
+ * Messages an affiliate should see in their portal: broadcasts to everyone,
+ * to their status, or to a group they belong to. Personalization variables
+ * are rendered against the affiliate.
+ */
+export async function getMessagesForAffiliate(aff: Affiliate): Promise<InboxMessage[]> {
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(isNotNull(messages.sentAt))
+    .orderBy(desc(messages.sentAt));
+
+  const personalize = (text: string) =>
+    (text ?? "")
+      .replaceAll("{{name}}", aff.name)
+      .replaceAll("{{code}}", aff.code ?? aff.refCode)
+      .replaceAll("{{earnings}}", `$${(aff.totalEarned ?? 0).toFixed(2)}`)
+      .replaceAll("{{link}}", `${aff.refCode}`);
+
+  const out: InboxMessage[] = [];
+  for (const m of rows) {
+    const a = (m.audience ?? {}) as { groupIds?: string[]; status?: string[] };
+    const inGroup = !!(aff.groupId && a.groupIds?.includes(aff.groupId));
+    const inStatus = !!a.status?.includes(aff.status);
+    const everyone = !a.groupIds?.length && !a.status?.length;
+    if (!inGroup && !inStatus && !everyone) continue;
+    out.push({
+      id: m.id,
+      subject: personalize(m.subject ?? ""),
+      body: personalize(m.body ?? ""),
+      sentAt: m.sentAt ? new Date(m.sentAt).toISOString() : null,
+      scope: inGroup ? "group" : "everyone",
+    });
+  }
+  return out;
+}
+
+/** Live & upcoming promotions relevant to an affiliate (their group or all). */
+export async function getPromotionsForAffiliate(aff: Affiliate): Promise<Promotion[]> {
+  if (!db) return [];
+  const rows = await db.select().from(promotions).orderBy(desc(promotions.startsAt));
+  const groupMap = new Map((await db.select().from(groups)).map((g) => [g.id, g.name]));
+  const now = Date.now();
+  return rows
+    .filter((p) => !p.groupId || p.groupId === aff.groupId)
+    .map((p) => {
+      const start = p.startsAt ? new Date(p.startsAt).getTime() : now;
+      const end = p.endsAt ? new Date(p.endsAt).getTime() : now;
+      const status = now < start ? "scheduled" : now > end ? "ended" : "live";
+      return {
+        id: p.id,
+        name: p.name,
+        bonusType: (p.bonusType as "percent" | "flat") ?? "percent",
+        bonusValue: num(p.bonusValue),
+        startsAt: new Date(start).toISOString(),
+        endsAt: new Date(end).toISOString(),
+        groupName: p.groupId ? groupMap.get(p.groupId) ?? "Your group" : "All affiliates",
+        status: status as Promotion["status"],
+      };
+    })
+    .filter((p) => p.status !== "ended");
 }
 
 export async function listPromotions(): Promise<Promotion[]> {

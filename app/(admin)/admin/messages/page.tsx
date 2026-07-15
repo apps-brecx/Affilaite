@@ -3,18 +3,19 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BroadcastComposer } from "@/components/admin/broadcast-composer";
-import { listMessages, listAffiliates } from "@/lib/queries";
+import { listMessages, listAffiliates, listGroups } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Messages" };
 
 export default async function MessagesPage() {
-  const [messages, affiliates] = await Promise.all([listMessages(), listAffiliates()]);
+  const [messages, affiliates, groups] = await Promise.all([listMessages(), listAffiliates(), listGroups()]);
   const countBy = (s: string) => affiliates.filter((a) => a.status === s).length;
   const audiences = [
     { label: "All approved", count: countBy("approved"), status: ["approved"] },
     { label: "Pending applicants", count: countBy("pending"), status: ["pending"] },
     { label: "Everyone", count: affiliates.length, status: ["approved", "pending", "suspended"] },
+    ...groups.map((g) => ({ label: g.name, count: g.memberCount, groupIds: [g.id] })),
   ];
   return (
     <div className="space-y-8">
