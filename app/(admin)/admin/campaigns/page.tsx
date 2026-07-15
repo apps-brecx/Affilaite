@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
-import { CampaignForm } from "@/components/admin/campaign-form";
+import { CampaignWizard } from "@/components/admin/campaign-wizard";
 import { listCampaigns, getDefaultDestination } from "@/lib/queries";
 import { APP_URL } from "@/lib/links";
 import type { Campaign } from "@/lib/types";
@@ -65,40 +65,38 @@ export default async function CampaignsPage() {
       <PageHeader
         title="Campaigns"
         description="Run affiliate campaigns for creators and referral campaigns for customers — assign affiliates to each."
-      />
+      >
+        <CampaignWizard appUrl={APP_URL} defaultDestination={defaultDestination} />
+      </PageHeader>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-8 lg:col-span-2">
-          {/* Affiliate campaigns */}
-          <section className="space-y-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <Users className="size-4" /> Affiliate campaigns
-            </h2>
-            {affiliate.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
-                No affiliate campaigns yet.
-              </p>
-            ) : (
-              affiliate.map((c) => <CampaignCard key={c.id} c={c} />)
-            )}
-          </section>
+      <div className="mx-auto max-w-4xl space-y-8">
+        {/* Affiliate campaigns */}
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Users className="size-4" /> Affiliate campaigns
+          </h2>
+          {affiliate.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
+              No affiliate campaigns yet — click <strong>New campaign</strong> to create one.
+            </p>
+          ) : (
+            affiliate.map((c) => <CampaignCard key={c.id} c={c} />)
+          )}
+        </section>
 
-          {/* Referral campaigns */}
-          <section className="space-y-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <Gift className="size-4" /> Referral campaigns
-            </h2>
-            {referral.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
-                No referral campaigns yet — create a give-get program to reward customer referrals.
-              </p>
-            ) : (
-              referral.map((c) => <CampaignCard key={c.id} c={c} />)
-            )}
-          </section>
-        </div>
-
-        <CampaignForm appUrl={APP_URL} defaultDestination={defaultDestination} />
+        {/* Referral campaigns */}
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Gift className="size-4" /> Referral campaigns
+          </h2>
+          {referral.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
+              No referral campaigns yet — create a give-get program to reward customer referrals.
+            </p>
+          ) : (
+            referral.map((c) => <CampaignCard key={c.id} c={c} />)
+          )}
+        </section>
       </div>
     </div>
   );

@@ -23,7 +23,12 @@ import {
   appSettings,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { createDiscountForAffiliate } from "@/lib/discounts";
+import {
+  createDiscountForAffiliate,
+  updateDiscountInShopify,
+  deleteDiscountInShopify,
+  setDiscountActiveInShopify,
+} from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
 import { defaultConfig } from "@/lib/campaign-config";
@@ -318,7 +323,158 @@ export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise
   return { ok: true, message: `Created ${created} discount code(s).` };
 }
 
+/** Create one discount code for a single affiliate (also pushes to Shopify when connected). */
+export async function createSingleDiscount(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      affiliateId: z.string().min(1),
+      code: z.string().trim().min(3, "Code must be at least 3 characters").regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, - and _ only"),
+      percentage: z.coerce.number().positive().max(100),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const code = parsed.data.code.toUpperCase();
+  const { affiliateId, percentage } = parsed.data;
+
+  const exists = await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, code) });
+  if (exists) return { ok: false, message: `Code “${code}” already exists.` };
+
+  let shopifyDiscountId: string | null = null;
+  if (await shopifyReady()) {
+    try {
+      shopifyDiscountId = await createDiscountForAffiliate(code, percentage);
+    } catch (e: any) {
+      return { ok: false, message: `Shopify rejected the code: ${e.message}` };
+    }
+  }
+  await db
+    .insert(discountCodes)
+    .values({ affiliateId, code, percentage: percentage.toString(), shopifyDiscountId, active: true });
+  revalidatePath("/admin/codes");
+  return {
+    ok: true,
+    message: shopifyDiscountId ? `Code “${code}” created in Shopify.` : `Code “${code}” saved (Shopify not connected).`,
+  };
+}
+
+/** Change a code's text or percentage — syncs to Shopify if the code is linked. */
+export async function updateDiscountCode(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      id: z.string().min(1),
+      code: z.string().trim().min(3, "Code must be at least 3 characters").regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, - and _ only"),
+      percentage: z.coerce.number().positive().max(100),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const code = parsed.data.code.toUpperCase();
+  const { id, percentage } = parsed.data;
+
+  const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
+  if (!existing) return { ok: false, message: "Code not found." };
+
+  // Guard against colliding with another code.
+  const clash = await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, code) });
+  if (clash && clash.id !== id) return { ok: false, message: `Code “${code}” is already taken.` };
+
+  if (existing.shopifyDiscountId) {
+    try {
+      await updateDiscountInShopify(existing.shopifyDiscountId, { code, value: percentage, valueType: "percent" });
+    } catch (e: any) {
+      return { ok: false, message: `Shopify update failed: ${e.message}` };
+    }
+  }
+  await db
+    .update(discountCodes)
+    .set({ code, percentage: percentage.toString() })
+    .where(eq(discountCodes.id, id));
+  revalidatePath("/admin/codes");
+  return { ok: true, message: `Code updated to “${code}”.` };
+}
+
+/** Enable or disable a code — deactivates in Shopify without deleting. */
+export async function toggleDiscountCode(id: string, active: boolean): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
+  if (!existing) return { ok: false, message: "Code not found." };
+  if (existing.shopifyDiscountId) {
+    try {
+      await setDiscountActiveInShopify(existing.shopifyDiscountId, active);
+    } catch (e: any) {
+      return { ok: false, message: `Shopify sync failed: ${e.message}` };
+    }
+  }
+  await db.update(discountCodes).set({ active }).where(eq(discountCodes.id, id));
+  revalidatePath("/admin/codes");
+  return { ok: true, message: active ? "Code activated." : "Code deactivated." };
+}
+
+/** Permanently delete a code — removes it from Shopify too. */
+export async function deleteDiscountCode(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
+  if (!existing) return { ok: false, message: "Code not found." };
+  if (existing.shopifyDiscountId) {
+    try {
+      await deleteDiscountInShopify(existing.shopifyDiscountId);
+    } catch (e: any) {
+      return { ok: false, message: `Shopify delete failed: ${e.message}` };
+    }
+  }
+  await db.delete(discountCodes).where(eq(discountCodes.id, id));
+  revalidatePath("/admin/codes");
+  return { ok: true, message: `Code “${existing.code}” deleted.` };
+}
+
 // ---------- Payouts ----------
+
+/** Pay a single affiliate a custom (ad-hoc) amount — a bonus or manual payout. */
+export async function runCustomPayout(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({ affiliateId: z.string().min(1), amount: z.coerce.number().positive("Enter an amount") })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const { affiliateId, amount } = parsed.data;
+
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+  if (!aff) return { ok: false, message: "Affiliate not found." };
+  if (!aff.paypalEmail) return { ok: false, message: "This affiliate has no PayPal email on file." };
+
+  const senderBatchId = `CUSTOM-${new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`;
+  const [batch] = await db
+    .insert(payouts)
+    .values({ senderBatchId, status: "processing", totalAmount: amount.toFixed(2), affiliateCount: 1 })
+    .returning();
+  const [item] = await db
+    .insert(payoutItems)
+    .values({ payoutId: batch.id, affiliateId, amount: amount.toFixed(2), transactionStatus: "PENDING" })
+    .returning();
+
+  if (await paypalReady()) {
+    try {
+      const res = await createPayoutBatch(senderBatchId, [{ senderItemId: item.id, amount: amount.toFixed(2), email: aff.paypalEmail }]);
+      await db.update(payouts).set({ paypalBatchId: res.payoutBatchId ?? null }).where(eq(payouts.id, batch.id));
+    } catch (e) {
+      console.error("[runCustomPayout] PayPal error:", e);
+      await db.update(payouts).set({ status: "failed" }).where(eq(payouts.id, batch.id));
+      return { ok: false, message: "PayPal payout failed — see logs." };
+    }
+  } else {
+    await db.update(payouts).set({ status: "success" }).where(eq(payouts.id, batch.id));
+    await db.update(payoutItems).set({ transactionStatus: "SUCCESS" }).where(eq(payoutItems.id, item.id));
+  }
+
+  revalAdmin();
+  return { ok: true, message: `Custom payout of $${amount.toFixed(2)} sent.` };
+}
 
 export async function runPayout(): Promise<ActionResult> {
   await assertAdmin();

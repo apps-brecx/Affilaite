@@ -416,6 +416,39 @@ export async function listPayouts(): Promise<Payout[]> {
   }));
 }
 
+export interface DiscountCodeRow {
+  id: string;
+  code: string;
+  percentage: number;
+  active: boolean;
+  affiliateId: string | null;
+  affiliateName: string | null;
+  shopifyDiscountId: string | null;
+  syncedToShopify: boolean;
+  createdAt: string | null;
+}
+
+export async function listDiscountCodes(): Promise<DiscountCodeRow[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({ code: discountCodes, affName: users.name, affId: affiliates.id })
+    .from(discountCodes)
+    .leftJoin(affiliates, eq(discountCodes.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .orderBy(desc(discountCodes.createdAt));
+  return rows.map((r) => ({
+    id: r.code.id,
+    code: r.code.code,
+    percentage: Number(r.code.percentage ?? 0),
+    active: r.code.active ?? true,
+    affiliateId: r.affId ?? null,
+    affiliateName: r.affName ?? null,
+    shopifyDiscountId: r.code.shopifyDiscountId ?? null,
+    syncedToShopify: !!r.code.shopifyDiscountId,
+    createdAt: r.code.createdAt ? r.code.createdAt.toISOString() : null,
+  }));
+}
+
 export async function getPayableBatch() {
   if (!db) return [];
   const affs = await loadAffiliates(eq(affiliates.status, "approved"));
