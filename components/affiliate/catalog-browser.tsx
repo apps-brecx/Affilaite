@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ShoppingBag, PackageOpen, ChevronDown, Layers } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ShoppingBag, PackageOpen, ChevronDown, Layers, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CopyButton } from "@/components/ui/copy-button";
 
 export interface CatalogItem {
@@ -34,8 +35,19 @@ export function CatalogBrowser({
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"products" | "collections">(products.length ? "products" : "collections");
+  const [q, setQ] = useState("");
   const showTabs = products.length > 0 && collections.length > 0;
   const active = view === "collections" && collections.length ? "collections" : products.length ? "products" : "collections";
+
+  const term = q.trim().toLowerCase();
+  const filteredProducts = useMemo(
+    () => (term ? products.filter((p) => p.title.toLowerCase().includes(term)) : products),
+    [products, term],
+  );
+  const filteredCollections = useMemo(
+    () => (term ? collections.filter((c) => c.title.toLowerCase().includes(term)) : collections),
+    [collections, term],
+  );
 
   const summary = [
     products.length ? `${products.length} product${products.length === 1 ? "" : "s"}` : "",
@@ -80,31 +92,47 @@ export function CatalogBrowser({
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* Products / Collections tabs */}
-          {showTabs && (
-            <div className="inline-flex items-center gap-0.5 rounded-lg border border-hairline bg-muted/40 p-0.5">
-              <button
-                onClick={() => setView("products")}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active === "products" ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <PackageOpen className="size-4" /> Products
-              </button>
-              <button
-                onClick={() => setView("collections")}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active === "collections" ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Layers className="size-4" /> Collections
-              </button>
+          {/* Tabs + search */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {showTabs ? (
+              <div className="inline-flex items-center gap-0.5 rounded-lg border border-hairline bg-muted/40 p-0.5">
+                <button
+                  onClick={() => setView("products")}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active === "products" ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <PackageOpen className="size-4" /> Products
+                </button>
+                <button
+                  onClick={() => setView("collections")}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active === "collections" ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Layers className="size-4" /> Collections
+                </button>
+              </div>
+            ) : (
+              <span />
+            )}
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={`Search ${active}…`}
+                className="h-9 pl-9"
+              />
             </div>
-          )}
+          </div>
 
           {active === "collections" ? (
+            filteredCollections.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">No collections match &ldquo;{q}&rdquo;.</p>
+            ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {collections.map((c) => (
+              {filteredCollections.map((c) => (
                 <Card key={c.id} className="group flex flex-col overflow-hidden transition-shadow hover:shadow-lift">
                   <a href={c.shareLink} target="_blank" rel="noopener noreferrer" className="relative block aspect-[16/10] bg-muted">
                     {c.image ? (
@@ -130,9 +158,12 @@ export function CatalogBrowser({
                 </Card>
               ))}
             </div>
+            )
+          ) : filteredProducts.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">No products match &ldquo;{q}&rdquo;.</p>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <Card key={product.id} className="group flex flex-col overflow-hidden transition-shadow hover:shadow-lift">
                   <div className="relative aspect-square bg-muted">
                     {product.image ? (

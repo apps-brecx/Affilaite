@@ -31,7 +31,7 @@ export function CurationList({
   config: CatalogConfig;
   connected: boolean;
   noun: string; // "products" | "collections"
-  save: (cfg: { order: string[]; hidden: string[] }) => Promise<{ ok: boolean; message: string }>;
+  save: (cfg: { order: string[]; shown: string[] }) => Promise<{ ok: boolean; message: string }>;
   error?: string;
 }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export function CurationList({
   }, [items, config.order]);
 
   const [order, setOrder] = useState<string[]>(initialOrder);
-  const [hidden, setHidden] = useState<Set<string>>(new Set(config.hidden));
+  const [shown, setShown] = useState<Set<string>>(new Set(config.shown));
   const [q, setQ] = useState("");
   const [dirty, setDirty] = useState(false);
   const dragRef = useRef<string | null>(null);
@@ -87,8 +87,8 @@ export function CurationList({
     setDirty(true);
   };
 
-  const toggleHidden = (id: string) => {
-    setHidden((prev) => {
+  const toggleShown = (id: string) => {
+    setShown((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -96,9 +96,18 @@ export function CurationList({
     setDirty(true);
   };
 
+  const showAllFiltered = () => {
+    setShown((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((id) => next.add(id));
+      return next;
+    });
+    setDirty(true);
+  };
+
   const onSave = () =>
     start(async () => {
-      const res = await save({ order, hidden: [...hidden] });
+      const res = await save({ order, shown: [...shown] });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         setDirty(false);
@@ -110,7 +119,7 @@ export function CurationList({
     const p = byId.get(id);
     return p && (!q || p.title.toLowerCase().includes(q.toLowerCase()));
   });
-  const visibleCount = order.filter((id) => !hidden.has(id)).length;
+  const shownCount = order.filter((id) => shown.has(id)).length;
 
   if (!connected) {
     return (
@@ -144,16 +153,21 @@ export function CurationList({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          Drag rows to reorder (or use the arrows), and toggle the eye to hide.{" "}
-          <span className="font-medium text-foreground">{visibleCount}</span> of {order.length} shown.
+          Toggle the eye to show a {noun.replace(/s$/, "")} to affiliates — hidden by default. Drag to reorder.{" "}
+          <span className="font-medium text-foreground">{shownCount}</span> of {order.length} shown.
         </p>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="h-9 w-44 pl-8" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${noun}…`} className="h-9 w-48 pl-8" />
           </div>
+          {q && (
+            <Button size="sm" variant="outline" onClick={showAllFiltered} title="Show all matching">
+              <Eye className="size-4" /> Show all
+            </Button>
+          )}
           <Button size="sm" onClick={onSave} disabled={pending || !dirty}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save order
+            {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
           </Button>
         </div>
       </div>
@@ -162,7 +176,7 @@ export function CurationList({
         <CardContent className="divide-y divide-hairline p-0">
           {filtered.map((id) => {
             const p = byId.get(id)!;
-            const isHidden = hidden.has(id);
+            const isShown = shown.has(id);
             const realIndex = order.indexOf(id);
             return (
               <div
@@ -175,7 +189,7 @@ export function CurationList({
                 onDrop={endDrag}
                 className={cn(
                   "flex select-none items-center gap-3 px-4 py-2.5 transition-colors",
-                  isHidden && "opacity-55",
+                  !isShown && "opacity-55",
                   !q && "cursor-grab active:cursor-grabbing",
                   dragId === id && "bg-accent/60 opacity-60 ring-1 ring-inset ring-primary/30",
                 )}
@@ -193,9 +207,9 @@ export function CurationList({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{p.title}</p>
-                  <p className="flex items-center text-xs text-muted-foreground">
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
                     {p.subtitle ?? ""}
-                    {isHidden && <Badge variant="muted" className="ml-2">Hidden</Badge>}
+                    {isShown && <Badge variant="success">Shown</Badge>}
                   </p>
                 </div>
                 <div className="flex items-center gap-0.5">
@@ -211,8 +225,8 @@ export function CurationList({
                   >
                     <ArrowDown className="size-4" />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => toggleHidden(id)} title={isHidden ? "Show" : "Hide"}>
-                    {isHidden ? <EyeOff className="size-4 text-muted-foreground" /> : <Eye className="size-4 text-primary" />}
+                  <Button variant="ghost" size="icon-sm" onClick={() => toggleShown(id)} title={isShown ? "Hide from affiliates" : "Show to affiliates"}>
+                    {isShown ? <Eye className="size-4 text-primary" /> : <EyeOff className="size-4 text-muted-foreground" />}
                   </Button>
                 </div>
               </div>

@@ -1079,7 +1079,7 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
-    .object({ order: z.array(z.string()), hidden: z.array(z.string()) })
+    .object({ order: z.array(z.string()), shown: z.array(z.string()) })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid catalog settings." };
   await writeSetting("catalog_config", JSON.stringify(parsed.data));
@@ -1092,7 +1092,7 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
 export async function saveCollectionConfig(input: unknown): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
-  const parsed = z.object({ order: z.array(z.string()), hidden: z.array(z.string()) }).safeParse(input);
+  const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid collection settings." };
   await writeSetting("collection_config", JSON.stringify(parsed.data));
   revalidatePath("/promotions");

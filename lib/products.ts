@@ -135,31 +135,33 @@ export async function getStoreCollections(
 }
 
 // ---------- Admin curation (what affiliates see + order), for products and collections ----------
+// Allowlist model: nothing is shown to affiliates until the admin explicitly
+// enables it. `shown` holds the ids the admin has turned on.
 
 export interface CatalogConfig {
   order: string[]; // ids in the order the admin wants
-  hidden: string[]; // ids hidden from affiliates
+  shown: string[]; // ids the admin has made visible to affiliates
 }
 
 async function readConfig(key: string): Promise<CatalogConfig> {
-  if (!db) return { order: [], hidden: [] };
+  if (!db) return { order: [], shown: [] };
   const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
-  if (!row?.value) return { order: [], hidden: [] };
+  if (!row?.value) return { order: [], shown: [] };
   try {
     const c = JSON.parse(row.value);
-    return { order: Array.isArray(c.order) ? c.order : [], hidden: Array.isArray(c.hidden) ? c.hidden : [] };
+    return { order: Array.isArray(c.order) ? c.order : [], shown: Array.isArray(c.shown) ? c.shown : [] };
   } catch {
-    return { order: [], hidden: [] };
+    return { order: [], shown: [] };
   }
 }
 
 export const getCatalogConfig = () => readConfig("catalog_config");
 export const getCollectionConfig = () => readConfig("collection_config");
 
-/** Apply the admin's curation: drop hidden items and sort by the saved order. */
+/** Apply the admin's curation: only show allowlisted items, in the saved order. */
 export function applyConfig<T extends { id: string }>(items: T[], config: CatalogConfig): T[] {
-  const hidden = new Set(config.hidden);
-  const visible = items.filter((p) => !hidden.has(p.id));
+  const shown = new Set(config.shown);
+  const visible = items.filter((p) => shown.has(p.id));
   if (!config.order.length) return visible;
   const pos = new Map(config.order.map((id, i) => [id, i] as const));
   return visible
