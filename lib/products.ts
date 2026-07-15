@@ -85,21 +85,20 @@ export interface StoreCollection {
   productsCount: number;
 }
 
-// Full query (newer APIs return productsCount as a Count object); if a field
-// isn't valid for the store's API version we fall back to a minimal query so
-// collections still load — just without the extra fields.
-const COLLECTIONS_FULL = `
+// Query in tiers: the count field's shape varies by API version, so if the
+// full query is rejected we step down — keeping images/URLs before dropping to
+// the bare minimum — so collections load with as many fields as possible.
+const node = (extra: string) => `
   query Collections($first: Int!) {
     collections(first: $first, sortKey: TITLE) {
-      edges { node { id title handle onlineStoreUrl image { url } productsCount { count } } }
+      edges { node { id title handle ${extra} } }
     }
   }`;
-const COLLECTIONS_MIN = `
-  query Collections($first: Int!) {
-    collections(first: $first, sortKey: TITLE) {
-      edges { node { id title handle } }
-    }
-  }`;
+const COLLECTIONS_TIERS = [
+  node("onlineStoreUrl image { url } productsCount { count }"),
+  node("onlineStoreUrl image { url }"),
+  node(""),
+];
 
 export async function getStoreCollections(
   limit = 50,
@@ -107,12 +106,13 @@ export async function getStoreCollections(
   if (!(await shopifyReady())) return { connected: false, collections: [] };
   try {
     const { domain } = await shopifyConfig();
-    let json = await shopifyGraphQL<any>(COLLECTIONS_FULL, { first: limit });
-    if (json.errors?.length) {
-      console.warn("[getStoreCollections] full query failed, retrying minimal:", json.errors);
-      json = await shopifyGraphQL<any>(COLLECTIONS_MIN, { first: limit });
+    let json: any = null;
+    for (const query of COLLECTIONS_TIERS) {
+      json = await shopifyGraphQL<any>(query, { first: limit });
+      if (!json.errors?.length) break;
+      console.warn("[getStoreCollections] query tier failed, stepping down:", json.errors);
     }
-    if (json.errors?.length) {
+    if (json?.errors?.length) {
       console.error("[getStoreCollections] GraphQL errors:", json.errors);
       return { connected: true, collections: [], error: json.errors.map((e: any) => e.message).join(", ") };
     }

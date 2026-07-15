@@ -104,7 +104,7 @@ export default async function PromotionsPage() {
                   id: c.id,
                   title: c.title,
                   image: c.image,
-                  subtitle: `${c.productsCount} product${c.productsCount === 1 ? "" : "s"}`,
+                  subtitle: c.productsCount > 0 ? `${c.productsCount} product${c.productsCount === 1 ? "" : "s"}` : "Collection",
                 }))}
               />
             }
