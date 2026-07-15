@@ -39,3 +39,10 @@ export async function getMyNotifications(): Promise<NotificationRow[]> {
   if (!affiliateId) return [];
   return listNotifications(affiliateId);
 }
+
+/** Explicit "mark all as read" — used by the notifications bell. */
+export async function markAllNotificationsRead(): Promise<void> {
+  const affiliateId = await myAffiliateId();
+  if (!affiliateId) return;
+  await markRead(affiliateId, "all");
+}

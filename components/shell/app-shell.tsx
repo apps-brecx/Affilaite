@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/shell/notification-bell";
 import { cn } from "@/lib/utils";
 import type { NavSection, IconName } from "@/lib/nav";
 
@@ -223,6 +224,7 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
+  const refreshBadges = () => getMyBadges().then((b) => setBadges(b)).catch(() => {});
 
   // Live badge counts: poll on an interval and whenever the tab regains focus,
   // so new notifications show up without a page reload.
@@ -270,12 +272,14 @@ export function AppShell({
           <NavLinks sections={sections} badges={badges} />
         </div>
         <div className="mt-4 space-y-2">
-          <Link
-            href="#"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-          >
-            <LifeBuoy className="size-4" /> Support
-          </Link>
+          {variant === "affiliate" && (
+            <Link
+              href="/community"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            >
+              <LifeBuoy className="size-4" /> Help &amp; community
+            </Link>
+          )}
           <UserCard {...user} />
         </div>
       </aside>
@@ -284,10 +288,11 @@ export function AppShell({
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-hairline bg-background/80 px-4 py-3 backdrop-blur-lg lg:hidden">
         <Logo />
         <div className="flex items-center gap-2">
+          {variant === "affiliate" && <NotificationBell count={badges["/notifications"] ?? 0} onChange={refreshBadges} />}
           <ThemeToggle />
           <button
             onClick={() => setOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-hairline"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-hairline"
             aria-label="Open menu"
           >
             <Menu className="size-4" />
@@ -335,14 +340,15 @@ export function AppShell({
       {/* Main */}
       <div className="lg:pl-64">
         {/* Desktop top bar */}
-        <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-3 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
+        <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-2 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
           <span className="mr-auto text-sm text-muted-foreground">
             {variant === "admin" ? "Sipfluence · Admin" : "Sipfluence · Partner Portal"}
           </span>
+          {variant === "affiliate" && <NotificationBell count={badges["/notifications"] ?? 0} onChange={refreshBadges} />}
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <LogOut className="size-3.5" /> Sign out
           </button>

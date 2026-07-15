@@ -37,19 +37,24 @@ export interface NavSection {
 }
 
 export const affiliateNav: NavSection[] = [
+  { items: [{ label: "Dashboard", href: "/dashboard", icon: "dashboard" }] },
   {
+    title: "Earn",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
       { label: "Links & Codes", href: "/links", icon: "links" },
       { label: "Promotions", href: "/promotions", icon: "promotions" },
       { label: "Performance", href: "/performance", icon: "performance" },
       { label: "Payouts", href: "/payouts", icon: "payouts" },
-      { label: "Assets", href: "/assets", icon: "assets" },
-      { label: "Community", href: "/community", icon: "groups" },
-      { label: "Notifications", href: "/notifications", icon: "notifications" },
-      { label: "Settings", href: "/settings", icon: "settings" },
     ],
   },
+  {
+    title: "Resources",
+    items: [
+      { label: "Assets", href: "/assets", icon: "assets" },
+      { label: "Community", href: "/community", icon: "groups" },
+    ],
+  },
+  { items: [{ label: "Settings", href: "/settings", icon: "settings" }] },
 ];
 
 export const adminNav: NavSection[] = [
