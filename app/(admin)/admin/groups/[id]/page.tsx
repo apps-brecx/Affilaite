@@ -31,13 +31,9 @@ export default async function GroupManagePage({ params }: { params: Promise<{ id
         </span>
       </PageHeader>
 
-      <GroupManager group={group} members={members} candidates={candidates} />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <GroupMessageComposer groupId={group.id} groupName={group.name} memberCount={members.length} />
-        </div>
-      </div>
+      <GroupManager group={group} members={members} candidates={candidates}>
+        <GroupMessageComposer groupId={group.id} groupName={group.name} memberCount={members.length} />
+      </GroupManager>
     </div>
   );
 }

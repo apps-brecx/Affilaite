@@ -1,15 +1,16 @@
-import { BadgePercent, Calendar } from "lucide-react";
+import { BadgePercent, Calendar, ShoppingBag } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PromotionForm } from "@/components/admin/promotion-form";
 import { listPromotions } from "@/lib/queries";
+import { getStoreProducts } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
-  const promos = await listPromotions();
+  const [promos, catalog] = await Promise.all([listPromotions(), getStoreProducts(100)]);
   return (
     <div className="space-y-8">
       <PageHeader
@@ -39,6 +40,11 @@ export default async function PromotionsPage() {
                     <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Calendar className="size-3.5" /> {formatDate(p.startsAt)} — {formatDate(p.endsAt)} · {p.groupName}
                     </p>
+                    {p.product && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <ShoppingBag className="size-3" /> Featuring <span className="font-medium text-foreground">{p.product.title}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
@@ -52,7 +58,7 @@ export default async function PromotionsPage() {
           ))}
         </div>
 
-        <PromotionForm />
+        <PromotionForm products={catalog.products} />
       </div>
     </div>
   );

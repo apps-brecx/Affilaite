@@ -199,6 +199,11 @@ export const promotions = pgTable("promotions", {
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   groupId: uuid("group_id").references(() => groups.id),
+  // Optional featured product from the Shopify catalog.
+  productId: text("product_id"),
+  productTitle: text("product_title"),
+  productImage: text("product_image"),
+  productUrl: text("product_url"),
 });
 
 // --- Creative assets ---

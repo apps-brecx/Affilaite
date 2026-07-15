@@ -242,6 +242,10 @@ export async function createPromotion(input: unknown): Promise<ActionResult> {
       bonusValue: z.coerce.number().positive(),
       startsAt: z.string().optional(),
       endsAt: z.string().optional(),
+      productId: z.string().optional(),
+      productTitle: z.string().optional(),
+      productImage: z.string().optional(),
+      productUrl: z.string().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -252,8 +256,13 @@ export async function createPromotion(input: unknown): Promise<ActionResult> {
     bonusValue: d.bonusValue.toString(),
     startsAt: d.startsAt ? new Date(d.startsAt) : new Date(),
     endsAt: d.endsAt ? new Date(d.endsAt) : new Date(Date.now() + 14 * 86_400_000),
+    productId: d.productId || null,
+    productTitle: d.productTitle || null,
+    productImage: d.productImage || null,
+    productUrl: d.productUrl || null,
   });
   revalidatePath("/admin/promotions");
+  revalidatePath("/promotions");
   return { ok: true, message: "Promotion launched." };
 }
 

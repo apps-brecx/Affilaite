@@ -17,10 +17,12 @@ export function GroupManager({
   group,
   members,
   candidates,
+  children,
 }: {
   group: Group;
   members: Affiliate[];
   candidates: Affiliate[];
+  children?: React.ReactNode;
 }) {
   const [pending, start] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -101,6 +103,8 @@ export function GroupManager({
             ))}
           </CardContent>
         </Card>
+
+        {children}
       </div>
 
       {/* Right: add + settings */}

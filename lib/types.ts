@@ -149,6 +149,12 @@ export interface Promotion {
   endsAt: string;
   groupName: string;
   status: "scheduled" | "live" | "ended";
+  product?: {
+    id: string;
+    title: string;
+    image: string | null;
+    url: string;
+  } | null;
 }
 
 export interface Asset {

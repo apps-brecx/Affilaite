@@ -45,32 +45,64 @@ export default async function PromotionsPage() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {promos.map((p) => (
-              <Card key={p.id} className={p.status === "live" ? "border-success/30 ring-1 ring-success/10" : ""}>
-                <CardContent className="flex items-center justify-between gap-4 p-5">
-                  <div className="flex items-center gap-4">
-                    <span className="flex size-12 items-center justify-center rounded-xl bg-gold/10 text-gold ring-gilded">
-                      <Sparkles className="size-5" />
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{p.name}</p>
-                        <StatusPill status={p.status} />
+            {promos.map((p) => {
+              const productLink = p.product ? buildReferralLink(me.refCode, p.product.url) : null;
+              return (
+                <Card key={p.id} className={p.status === "live" ? "border-success/30 ring-1 ring-success/10" : ""}>
+                  <CardContent className="flex flex-col gap-4 p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <span className="flex size-12 items-center justify-center rounded-xl bg-gold/10 text-gold ring-gilded">
+                          <Sparkles className="size-5" />
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{p.name}</p>
+                            <StatusPill status={p.status} />
+                          </div>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Calendar className="size-3.5" /> {formatDate(p.startsAt)} — {formatDate(p.endsAt)}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Calendar className="size-3.5" /> {formatDate(p.startsAt)} — {formatDate(p.endsAt)}
-                      </p>
+                      <div className="text-right">
+                        <p className="font-display text-2xl font-semibold text-gold">
+                          +{p.bonusType === "percent" ? `${p.bonusValue}%` : `$${p.bonusValue}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">bonus for you</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-display text-2xl font-semibold text-gold">
-                      +{p.bonusType === "percent" ? `${p.bonusValue}%` : `$${p.bonusValue}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground">bonus for you</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                    {p.product && productLink && (
+                      <div className="flex items-center gap-3 rounded-xl border border-hairline bg-muted/30 p-3">
+                        <span className="size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          {p.product.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.product.image} alt={p.product.title} className="size-full object-cover" />
+                          ) : (
+                            <span className="flex size-full items-center justify-center text-muted-foreground">
+                              <ShoppingBag className="size-5" />
+                            </span>
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground">Featured item</p>
+                          <p className="truncate text-sm font-medium">{p.product.title}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Button size="sm" variant="secondary" asChild>
+                            <a href={productLink} target="_blank" rel="noopener noreferrer">
+                              Shop <ExternalLink className="size-3.5" />
+                            </a>
+                          </Button>
+                          <CopyButton value={productLink} label="Copy link" />
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>

@@ -550,6 +550,7 @@ export async function getPromotionsForAffiliate(aff: Affiliate): Promise<Promoti
         endsAt: new Date(end).toISOString(),
         groupName: p.groupId ? groupMap.get(p.groupId) ?? "Your group" : "All affiliates",
         status: status as Promotion["status"],
+        product: promoProduct(p),
       };
     })
     .filter((p) => p.status !== "ended");
@@ -572,8 +573,19 @@ export async function listPromotions(): Promise<Promotion[]> {
       endsAt: new Date(end).toISOString(),
       groupName: "All affiliates",
       status: status as Promotion["status"],
+      product: promoProduct(p),
     };
   });
+}
+
+function promoProduct(p: {
+  productId: string | null;
+  productTitle: string | null;
+  productImage: string | null;
+  productUrl: string | null;
+}): Promotion["product"] {
+  if (!p.productId || !p.productUrl) return null;
+  return { id: p.productId, title: p.productTitle ?? "Featured product", image: p.productImage, url: p.productUrl };
 }
 
 export async function listAssets(): Promise<Asset[]> {
