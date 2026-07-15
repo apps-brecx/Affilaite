@@ -37,9 +37,28 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => (
-    <button ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />
-  ),
+  ({ className, variant, size, asChild = false, children, ...props }, ref) => {
+    const classes = cn(buttonVariants({ variant, size, className }));
+
+    // `asChild` merges the button styling onto its single child (e.g. a
+    // Next.js <Link>) instead of wrapping it in a <button>. This keeps the
+    // markup valid and, crucially, makes the child the flex container so
+    // text + icon stay on one line.
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<any>;
+      return React.cloneElement(child, {
+        ...props,
+        ref,
+        className: cn(classes, child.props.className),
+      });
+    }
+
+    return (
+      <button ref={ref} className={classes} {...props}>
+        {children}
+      </button>
+    );
+  },
 );
 Button.displayName = "Button";
 
