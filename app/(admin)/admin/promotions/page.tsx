@@ -58,7 +58,7 @@ export default async function PromotionsPage() {
           ))}
         </div>
 
-        <PromotionForm products={catalog.products} />
+        <PromotionForm products={catalog.products} connected={catalog.connected} error={catalog.error} />
       </div>
     </div>
   );

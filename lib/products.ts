@@ -15,7 +15,7 @@ export interface StoreProduct {
 
 const PRODUCTS_QUERY = `
   query Catalog($first: Int!) {
-    products(first: $first, sortKey: BEST_SELLING) {
+    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
       edges {
         node {
           id
@@ -35,11 +35,18 @@ const PRODUCTS_QUERY = `
  * Fetch the live product catalog. Returns `connected: false` when Shopify
  * isn't set up so the UI can show a friendly placeholder instead of an error.
  */
-export async function getStoreProducts(limit = 24): Promise<{ connected: boolean; products: StoreProduct[] }> {
+export async function getStoreProducts(
+  limit = 24,
+): Promise<{ connected: boolean; products: StoreProduct[]; error?: string }> {
   if (!(await shopifyReady())) return { connected: false, products: [] };
   try {
     const { domain } = await shopifyConfig();
     const json = await shopifyGraphQL<any>(PRODUCTS_QUERY, { first: limit });
+    const errs = json.errors;
+    if (errs?.length) {
+      console.error("[getStoreProducts] GraphQL errors:", errs);
+      return { connected: true, products: [], error: errs.map((e: any) => e.message).join(", ") };
+    }
     const edges = json.data?.products?.edges ?? [];
     const products: StoreProduct[] = edges
       .map((e: any) => e.node)
@@ -58,8 +65,8 @@ export async function getStoreProducts(limit = 24): Promise<{ connected: boolean
         };
       });
     return { connected: true, products };
-  } catch (e) {
+  } catch (e: any) {
     console.error("[getStoreProducts]", e);
-    return { connected: true, products: [] };
+    return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };
   }
 }

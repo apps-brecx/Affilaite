@@ -27,7 +27,7 @@ export function Logo({
             text
           ) : (
             <>
-              Syruvia<span className="text-gradient-gold">Aite</span>
+              Syruvi<span className="text-gradient-gold">Aite</span>
             </>
           )}
         </span>

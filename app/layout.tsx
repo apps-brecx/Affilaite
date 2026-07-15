@@ -25,8 +25,8 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SyruviaAite — Syruvia Partner Program",
-    template: "%s · SyruviaAite",
+    default: "SyruviAite — Syruvia Partner Program",
+    template: "%s · SyruviAite",
   },
   description:
     "Syruvia's affiliate & referral platform. Coupon-first attribution, native PayPal payouts, and a partner portal built for Syruvia's creators.",

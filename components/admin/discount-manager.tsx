@@ -16,6 +16,7 @@ import {
   X,
   CloudOff,
   Cloud,
+  CloudUpload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import {
   updateDiscountCode,
   toggleDiscountCode,
   deleteDiscountCode,
+  pushDiscountToShopify,
 } from "@/app/actions/admin";
 import type { DiscountCodeRow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,13 @@ export function DiscountManager({
   const toggle = (c: DiscountCodeRow) =>
     start(async () => {
       const res = await toggleDiscountCode(c.id, !c.active);
+      toast(res.message, res.ok ? "success" : "error");
+      if (res.ok) refresh();
+    });
+
+  const push = (c: DiscountCodeRow) =>
+    start(async () => {
+      const res = await pushDiscountToShopify(c.id);
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) refresh();
     });
@@ -148,6 +157,11 @@ export function DiscountManager({
                     <p className="truncate text-xs text-muted-foreground">{c.affiliateName ?? "Unassigned"}</p>
                   </div>
                   <div className="flex items-center gap-1">
+                    {shopifyConnected && !c.syncedToShopify && (
+                      <Button variant="ghost" size="sm" onClick={() => push(c)} disabled={pending} title="Push to Shopify">
+                        <CloudUpload className="size-4 text-primary" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => toggle(c)} disabled={pending} title={c.active ? "Deactivate" : "Activate"}>
                       <Power className={cn("size-4", c.active ? "text-success" : "text-muted-foreground")} />
                     </Button>

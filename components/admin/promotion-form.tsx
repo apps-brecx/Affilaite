@@ -11,7 +11,15 @@ import { createPromotion } from "@/app/actions/admin";
 import type { StoreProduct } from "@/lib/products";
 import { cn } from "@/lib/utils";
 
-export function PromotionForm({ products = [] }: { products?: StoreProduct[] }) {
+export function PromotionForm({
+  products = [],
+  connected = false,
+  error,
+}: {
+  products?: StoreProduct[];
+  connected?: boolean;
+  error?: string;
+}) {
   const [pending, start] = useTransition();
   const router = useRouter();
   const toast = useToast();
@@ -100,7 +108,11 @@ export function PromotionForm({ products = [] }: { products?: StoreProduct[] }) 
               </div>
             ) : products.length === 0 ? (
               <p className="rounded-lg border border-dashed border-hairline px-3 py-2.5 text-xs text-muted-foreground">
-                Connect Shopify to feature a product with the offer.
+                {!connected
+                  ? "Connect Shopify to feature a product with the offer."
+                  : error
+                    ? `Couldn't load products: ${error}`
+                    : "No products found in your Shopify store."}
               </p>
             ) : (
               <Button type="button" variant="outline" className="w-full justify-start" onClick={() => setPickerOpen((v) => !v)}>

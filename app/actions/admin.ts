@@ -498,6 +498,24 @@ export async function deleteDiscountCode(id: string): Promise<ActionResult> {
   return { ok: true, message: `Code “${existing.code}” deleted.` };
 }
 
+/** Push a local-only code up to Shopify (for codes created before Shopify was connected). */
+export async function pushDiscountToShopify(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
+  const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
+  if (!existing) return { ok: false, message: "Code not found." };
+  if (existing.shopifyDiscountId) return { ok: false, message: "This code is already in Shopify." };
+  try {
+    const shopifyDiscountId = await createDiscountForAffiliate(existing.code, Number(existing.percentage ?? 0));
+    await db.update(discountCodes).set({ shopifyDiscountId }).where(eq(discountCodes.id, id));
+  } catch (e: any) {
+    return { ok: false, message: `Shopify rejected the code: ${e.message}` };
+  }
+  revalidatePath("/admin/codes");
+  return { ok: true, message: `Code “${existing.code}” is now live in Shopify.` };
+}
+
 // ---------- Payouts ----------
 
 /** Pay a single affiliate a custom (ad-hoc) amount — a bonus or manual payout. */
