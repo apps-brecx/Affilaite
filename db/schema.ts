@@ -204,6 +204,9 @@ export const commissions = pgTable(
     status: commissionStatus("status").notNull().default("pending"),
     approvableAt: timestamp("approvable_at"),
     payoutId: uuid("payout_id").references(() => payouts.id),
+    // Which campaign's rules produced this commission (if any) — drives
+    // per-campaign reward rates, gates, and per-affiliate caps.
+    campaignId: uuid("campaign_id").references(() => campaigns.id),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({
@@ -212,6 +215,7 @@ export const commissions = pgTable(
     orderIdx: index("comm_order_idx").on(t.orderId), // refund/clawback lookups
     payoutIdx: index("comm_payout_idx").on(t.payoutId), // payout claim/release
     approvableIdx: index("comm_approvable_idx").on(t.approvableAt), // cron maturation
+    campaignIdx: index("comm_campaign_idx").on(t.campaignId), // per-campaign caps
     // At most one *positive* commission per order (negative refund adjustments
     // are exempt so post-payout clawbacks can be netted against later batches).
     orderPositiveUniq: uniqueIndex("comm_order_positive_uniq")

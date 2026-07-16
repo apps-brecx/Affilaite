@@ -1,9 +1,10 @@
 // lib/attribution.ts — the core engine: coupon-first, link-second, last-click.
 import { db } from "@/db";
-import { orders, commissions, discountCodes, affiliates, programs, clicks, users } from "@/db/schema";
+import { orders, commissions, discountCodes, affiliates, programs, clicks, users, campaigns, affiliateCampaigns } from "@/db/schema";
 import { eq, inArray, gte, desc, and, sql } from "drizzle-orm";
 import { notify } from "./notifications";
 import { sendEmailSafe } from "./email";
+import { mergeConfig } from "./campaign-config";
 
 const DAY = 864e5;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -107,16 +108,57 @@ export async function processOrderCreated(order: any) {
     if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) return;
   }
 
-  // 6. Calculate + record commission
+  // 6. Calculate + record commission.
+  // Base is the order subtotal (never shipping/tax). The program supplies the
+  // hold window + the fallback rate; if the affiliate is in an active campaign,
+  // that campaign's reward rules (rate, bonus, min-order, first-purchase, and
+  // per-affiliate cap) take over so configured rewards actually pay.
   const program = affiliate.programId ? await getProgram(affiliate.programId) : await getDefaultProgram();
-  if (!program) return;
-  if (program.newCustomerOnly && !orderRow.isNewCustomer) return;
+  const holdDays = program?.holdDays ?? 30;
+  const base = Number(order.subtotal_price);
+  const rate = (valueType: string, value: number) => (valueType === "percent" ? (base * value) / 100 : value);
 
-  const base = Number(order.subtotal_price); // commission on subtotal, not shipping/tax
-  const amount =
-    program.commissionType === "percent"
-      ? (base * Number(program.commissionValue)) / 100
-      : Number(program.commissionValue);
+  const [campRow] = await db
+    .select({ camp: campaigns })
+    .from(affiliateCampaigns)
+    .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
+    .where(and(eq(affiliateCampaigns.affiliateId, affiliate.id), eq(campaigns.status, "active")))
+    .orderBy(desc(affiliateCampaigns.createdAt))
+    .limit(1);
+  const campaign = campRow?.camp;
+
+  let amount: number;
+  let campaignId: string | null = null;
+
+  if (campaign) {
+    const cfg = mergeConfig(campaign.config);
+    const cond = cfg.conditions;
+    // Minimum order — by subtotal amount or by the customer's lifetime order count.
+    if (cond.minOrderType === "amount" && base < Number(cond.minOrderValue || 0)) return;
+    if (cond.minOrderType === "orders" && (order.customer?.orders_count ?? 1) < Number(cond.minOrderValue || 0)) return;
+    // First-purchase-only trigger.
+    if (cond.trigger === "first" && !orderRow.isNewCustomer) return;
+    // Per-advocate cap: how many rewards this affiliate has already earned in this campaign.
+    if (cond.maxPerAdvocateEnabled && Number(cond.maxPerAdvocate) > 0) {
+      const [{ c }] = await db
+        .select({ c: sql<number>`count(*)` })
+        .from(commissions)
+        .where(and(eq(commissions.affiliateId, affiliate.id), eq(commissions.campaignId, campaign.id), sql`${commissions.amount} >= 0`));
+      if (Number(c) >= Number(cond.maxPerAdvocate)) return;
+    }
+    amount = rate(cfg.reward.valueType, Number(cfg.reward.value));
+    if (cfg.reward.bonusEnabled && Number(cfg.reward.bonusValue) > 0) {
+      amount += rate(cfg.reward.bonusType, Number(cfg.reward.bonusValue));
+    }
+    campaignId = campaign.id;
+  } else {
+    if (!program) return;
+    if (program.newCustomerOnly && !orderRow.isNewCustomer) return;
+    amount = rate(program.commissionType, Number(program.commissionValue));
+  }
+
+  amount = Math.round(amount * 100) / 100;
+  if (!(amount > 0)) return; // nothing to pay (e.g. non-monetary custom reward)
 
   // Idempotent: the partial unique index on commissions(order_id) WHERE
   // amount >= 0 means a second attribution of the same order is a no-op.
@@ -125,12 +167,13 @@ export async function processOrderCreated(order: any) {
     .values({
       orderId: orderRow.id,
       affiliateId: affiliate.id,
-      programId: program.id,
+      programId: program?.id ?? null,
+      campaignId,
       amount: amount.toFixed(2),
       currency: order.currency,
       attributedBy,
       status: "pending",
-      approvableAt: new Date(Date.now() + program.holdDays * DAY),
+      approvableAt: new Date(Date.now() + holdDays * DAY),
     })
     .onConflictDoNothing()
     .returning({ id: commissions.id });
