@@ -74,6 +74,8 @@ async function deliverTwilio(cfg: Awaited<ReturnType<typeof smsConfig>>, to: str
       hint = " — this API Key lacks Messaging permission. Use your Account SID + Auth Token instead (clear the API Key SID field and put your Auth Token in the secret field), or create a Standard API Key with Messaging access.";
     } else if (/20003|authenticate/i.test(detail)) {
       hint = " — authentication failed. The 'Auth Token / API Key secret' must be your Twilio Auth Token (Console dashboard, next to the Account SID), not the old API Key secret. Re-enter it and save.";
+    } else if (/572002|trial|verified recipient/i.test(detail)) {
+      hint = " — your Twilio account is still a trial, which can only text VERIFIED numbers. Verify this number in Twilio (Phone Numbers → Verified Caller IDs), or upgrade the account to send to anyone (required for real signups).";
     }
     throw new Error(`Twilio ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}${hint}`);
   }
