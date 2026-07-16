@@ -1108,8 +1108,9 @@ async function writeSecret(key: string, value: string) {
 
 const INTEGRATION_KEYS: Record<string, string[]> = {
   shopify: ["int_shopify_domain", "int_shopify_version", "int_shopify_token", "int_shopify_secret"],
-  paypal: ["int_paypal_base", "int_paypal_client_id", "int_paypal_client_secret"],
+  paypal: ["int_paypal_base", "int_paypal_client_id", "int_paypal_client_secret", "int_paypal_webhook_id"],
   email: ["int_email_from", "int_resend_key"],
+  sms: ["int_sms_provider", "int_sms_from", "int_sms_key", "int_sms_secret"],
 };
 
 export async function saveIntegration(service: string, fields: Record<string, string>): Promise<ActionResult> {
@@ -1122,11 +1123,17 @@ export async function saveIntegration(service: string, fields: Record<string, st
     await writeSecret("int_shopify_secret", fields.apiSecret ?? "");
   } else if (service === "paypal") {
     if (fields.base !== undefined) await writeSetting("int_paypal_base", fields.base.trim());
+    if (fields.webhookId !== undefined) await writeSetting("int_paypal_webhook_id", fields.webhookId.trim());
     await writeSecret("int_paypal_client_id", fields.clientId ?? "");
     await writeSecret("int_paypal_client_secret", fields.clientSecret ?? "");
   } else if (service === "email") {
     if (fields.from !== undefined) await writeSetting("int_email_from", fields.from.trim());
     await writeSecret("int_resend_key", fields.apiKey ?? "");
+  } else if (service === "sms") {
+    if (fields.provider !== undefined) await writeSetting("int_sms_provider", fields.provider.trim());
+    if (fields.from !== undefined) await writeSetting("int_sms_from", fields.from.trim());
+    await writeSecret("int_sms_key", fields.apiKey ?? "");
+    await writeSecret("int_sms_secret", fields.apiSecret ?? "");
   } else {
     return { ok: false, message: "Unknown integration." };
   }

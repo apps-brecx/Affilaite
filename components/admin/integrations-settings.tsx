@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, Wallet, Mail, CheckCircle2, AlertCircle, Loader2, Save, Unplug, Plug } from "lucide-react";
+import { ShoppingBag, Wallet, Mail, MessageSquare, CheckCircle2, AlertCircle, Loader2, Save, Unplug, Plug } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -12,8 +12,9 @@ import { saveIntegration, disconnectIntegration, testShopifyConnection } from "@
 
 export interface IntegrationsStatus {
   shopify: { ready: boolean; domain: string; version: string; tokenMask: string; secretMask: string };
-  paypal: { ready: boolean; base: string; clientIdMask: string; clientSecretMask: string };
+  paypal: { ready: boolean; base: string; clientIdMask: string; clientSecretMask: string; webhookId: string };
   email: { ready: boolean; from: string; keyMask: string };
+  sms: { ready: boolean; provider: string; from: string; keyMask: string; secretMask: string };
 }
 
 function StatusBadge({ ready }: { ready: boolean }) {
@@ -125,13 +126,19 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
   const [version, setVersion] = useState(status.shopify.version);
   const [token, setToken] = useState("");
   const [apiSecret, setApiSecret] = useState("");
-  // PayPal
+  // PayPal (also powers Venmo payouts)
   const [base, setBase] = useState(status.paypal.base || "https://api-m.sandbox.paypal.com");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [webhookId, setWebhookId] = useState(status.paypal.webhookId || "");
   // Email
   const [from, setFrom] = useState(status.email.from);
   const [apiKey, setApiKey] = useState("");
+  // SMS (phone verification)
+  const [smsProvider, setSmsProvider] = useState(status.sms.provider || "");
+  const [smsFrom, setSmsFrom] = useState(status.sms.from || "");
+  const [smsKey, setSmsKey] = useState("");
+  const [smsSecret, setSmsSecret] = useState("");
 
   const secretPlaceholder = (mask: string) => (mask ? `${mask} — leave blank to keep` : "");
 
@@ -154,10 +161,15 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
       <IntegrationCard
         service="paypal"
         icon={Wallet}
-        title="PayPal Payouts"
+        title="PayPal & Venmo Payouts"
         ready={status.paypal.ready}
-        fields={() => ({ base, clientId, clientSecret })}
+        fields={() => ({ base, clientId, clientSecret, webhookId })}
       >
+        <div className="rounded-lg bg-primary/[0.06] p-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Venmo payouts run through this connection.</span> PayPal
+          Payouts sends to Venmo using each affiliate&apos;s verified phone number — no separate Venmo login. Your
+          PayPal business account must have Venmo payouts enabled.
+        </div>
         <div className="space-y-1.5">
           <Label>Environment</Label>
           <select value={base} onChange={(e) => setBase(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle">
@@ -167,6 +179,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         </div>
         <Field label="Client ID" type="password" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder={secretPlaceholder(status.paypal.clientIdMask) || "AeXf…"} className="font-mono" />
         <Field label="Client secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder={secretPlaceholder(status.paypal.clientSecretMask) || "EL9k…"} className="font-mono" />
+        <Field label="Webhook ID" hint="From PayPal → Webhooks. Required to verify inbound payout status webhooks." value={webhookId} onChange={(e) => setWebhookId(e.target.value)} placeholder="4XY12345ABC…" className="font-mono" />
       </IntegrationCard>
 
       <IntegrationCard
@@ -178,6 +191,23 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
       >
         <Field label="API key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={secretPlaceholder(status.email.keyMask) || "re_…"} className="font-mono" />
         <Field label="From address" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Syruvia <affiliates@yourbrand.com>" />
+      </IntegrationCard>
+
+      <IntegrationCard
+        service="sms"
+        icon={MessageSquare}
+        title="SMS (phone verification)"
+        ready={status.sms.ready}
+        fields={() => ({ provider: smsProvider, from: smsFrom, apiKey: smsKey, apiSecret: smsSecret })}
+      >
+        <div className="rounded-lg bg-primary/[0.06] p-3 text-xs text-muted-foreground">
+          Sends the signup verification codes. Leave <span className="font-medium text-foreground">Provider</span> blank
+          to keep it in demo mode (codes are logged, not texted). Enter a provider name once a delivery adapter is wired.
+        </div>
+        <Field label="Provider" value={smsProvider} onChange={(e) => setSmsProvider(e.target.value)} placeholder="twilio" />
+        <Field label="Sender ID / from number" value={smsFrom} onChange={(e) => setSmsFrom(e.target.value)} placeholder="+1 555 000 1111" />
+        <Field label="API key / Account SID" type="password" value={smsKey} onChange={(e) => setSmsKey(e.target.value)} placeholder={secretPlaceholder(status.sms.keyMask) || "AC…"} className="font-mono" />
+        <Field label="API secret / Auth token" type="password" value={smsSecret} onChange={(e) => setSmsSecret(e.target.value)} placeholder={secretPlaceholder(status.sms.secretMask) || "••••••"} className="font-mono" />
       </IntegrationCard>
     </div>
   );
