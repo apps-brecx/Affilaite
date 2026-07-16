@@ -52,6 +52,7 @@ export const affiliateNav: NavSection[] = [
     items: [
       { label: "Assets", href: "/assets", icon: "assets" },
       { label: "Community", href: "/community", icon: "groups" },
+      { label: "Notifications", href: "/notifications", icon: "notifications" },
     ],
   },
   { items: [{ label: "Settings", href: "/settings", icon: "settings" }] },

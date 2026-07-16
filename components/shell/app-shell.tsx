@@ -38,7 +38,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
-import { NotificationBell } from "@/components/shell/notification-bell";
 import { cn } from "@/lib/utils";
 import type { NavSection, IconName } from "@/lib/nav";
 
@@ -224,7 +223,6 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
-  const refreshBadges = () => getMyBadges().then((b) => setBadges(b)).catch(() => {});
 
   // Live badge counts: poll on an interval and whenever the tab regains focus,
   // so new notifications show up without a page reload.
@@ -288,7 +286,6 @@ export function AppShell({
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-hairline bg-background/80 px-4 py-3 backdrop-blur-lg lg:hidden">
         <Logo />
         <div className="flex items-center gap-2">
-          {variant === "affiliate" && <NotificationBell count={badges["/notifications"] ?? 0} onChange={refreshBadges} />}
           <ThemeToggle />
           <button
             onClick={() => setOpen(true)}
@@ -344,7 +341,6 @@ export function AppShell({
           <span className="mr-auto text-sm text-muted-foreground">
             {variant === "admin" ? "Sipfluence · Admin" : "Sipfluence · Partner Portal"}
           </span>
-          {variant === "affiliate" && <NotificationBell count={badges["/notifications"] ?? 0} onChange={refreshBadges} />}
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
