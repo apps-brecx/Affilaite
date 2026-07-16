@@ -486,6 +486,13 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
     sentAt: new Date(),
   });
 
+  // A broadcast to a single group also lands in that group's chat feed, so the
+  // Community group chat and broadcasts stay in sync (one place to look).
+  if (groupIds?.length === 1 && !affiliateIds?.length) {
+    const senderId = ((await auth())?.user as any)?.id ?? null;
+    await db.insert(groupMessages).values({ groupId: groupIds[0], senderId, body: `${subject}\n\n${body}` });
+  }
+
   if (await emailReady()) {
     // In-app notification goes to everyone; email respects the "Program updates" opt-out.
     await sendEmails(
@@ -1671,6 +1678,7 @@ export async function decideSampleRequest(
         productTitle: req.productTitle ?? "Product sample",
         affiliateName: user?.name ?? user?.email ?? "affiliate",
         address: req.addressSnapshot ?? null,
+        sampleId: req.id,
       });
     } catch (e: any) {
       shopifyNote = ` (Shopify draft order failed: ${e?.message ?? "error"})`;

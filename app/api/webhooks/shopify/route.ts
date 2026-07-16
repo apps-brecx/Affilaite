@@ -3,11 +3,14 @@ import { webhookEvents } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { verifyShopifyHmac } from "@/lib/shopify";
 import { processOrderCreated, processRefund, processCancelledOrder } from "@/lib/attribution";
+import { processSampleFulfillment } from "@/lib/samples";
 
 async function dispatch(topic: string, payload: any) {
   if (topic === "orders/create" || topic === "orders/paid") await processOrderCreated(payload);
   else if (topic === "orders/cancelled") await processCancelledOrder(payload);
   else if (topic === "refunds/create") await processRefund(payload);
+  // Auto-mark a sample shipped when its Shopify order is fulfilled.
+  else if (topic === "orders/fulfilled" || topic === "fulfillments/create" || topic === "fulfillments/update") await processSampleFulfillment(payload);
 }
 
 export async function POST(req: Request) {

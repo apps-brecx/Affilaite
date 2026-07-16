@@ -225,6 +225,10 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
+  // Admin badges come straight from the server (recomputed on every
+  // router.refresh() after an action), so the red dot clears the moment a
+  // request is handled. Affiliate badges use the polling state below.
+  const effectiveBadges = variant === "admin" ? initialBadges ?? {} : badges;
 
   // Live badge counts: poll on an interval and whenever the tab regains focus,
   // so new notifications show up without a page reload.
@@ -269,7 +273,7 @@ export function AppShell({
           )}
         </div>
         <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-          <NavLinks sections={sections} badges={badges} />
+          <NavLinks sections={sections} badges={effectiveBadges} />
         </div>
         <div className="mt-4 space-y-2">
           {variant === "affiliate" && (
@@ -328,7 +332,7 @@ export function AppShell({
                 </button>
               </div>
               <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-                <NavLinks sections={sections} onNavigate={() => setOpen(false)} badges={badges} />
+                <NavLinks sections={sections} onNavigate={() => setOpen(false)} badges={effectiveBadges} />
               </div>
               <UserCard {...user} />
             </motion.aside>

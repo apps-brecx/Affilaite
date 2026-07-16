@@ -2,32 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Truck, Loader2 } from "lucide-react";
+import { Check, X, Loader2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { decideSampleRequest } from "@/app/actions/admin";
 
 export function SampleActions({ id, status }: { id: string; status: string }) {
   const [pending, start] = useTransition();
   const [action, setAction] = useState<string | null>(null);
-  const [shipOpen, setShipOpen] = useState(false);
-  const [carrier, setCarrier] = useState("");
-  const [trackingNumber, setTrackingNumber] = useState("");
-  const [trackingUrl, setTrackingUrl] = useState("");
   const router = useRouter();
   const toast = useToast();
 
-  const run = (a: "approve" | "reject" | "ship") => {
+  const run = (a: "approve" | "reject") => {
     setAction(a);
     start(async () => {
-      const res = await decideSampleRequest(id, a, a === "ship" ? { carrier, trackingNumber, trackingUrl } : undefined);
+      const res = await decideSampleRequest(id, a);
       toast(res.message, res.ok ? "success" : "error");
       setAction(null);
-      if (res.ok) {
-        setShipOpen(false);
-        router.refresh();
-      }
+      if (res.ok) router.refresh();
     });
   };
 
@@ -46,28 +38,12 @@ export function SampleActions({ id, status }: { id: string; status: string }) {
     );
   }
 
+  // Approved orders ship automatically once fulfilled in Shopify.
   if (status === "approved") {
-    if (!shipOpen) {
-      return (
-        <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setShipOpen(true)}>
-          <Truck className="size-4" /> Mark shipped
-        </Button>
-      );
-    }
     return (
-      <div className="flex w-full flex-col gap-2 sm:w-72">
-        <div className="grid grid-cols-2 gap-2">
-          <Input placeholder="Carrier (USPS…)" value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-8 text-sm" />
-          <Input placeholder="Tracking #" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} className="h-8 text-sm" />
-        </div>
-        <Input placeholder="Tracking URL (optional)" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} className="h-8 text-sm" />
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1" disabled={pending} onClick={() => run("ship")}>
-            {spin("ship") ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />} Confirm shipped
-          </Button>
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setShipOpen(false)}>Cancel</Button>
-        </div>
-      </div>
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+        <Truck className="size-3.5" /> Ships when fulfilled in Shopify
+      </span>
     );
   }
 

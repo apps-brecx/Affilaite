@@ -8,7 +8,7 @@ import { SampleCatalog } from "@/components/affiliate/sample-catalog";
 import { PromoBanner } from "@/components/ui/promo-banner";
 import { requireAffiliate } from "@/lib/session";
 import { getMySampleRequests, getBanner } from "@/lib/queries";
-import { getStoreProducts, getSamplesConfig, applyConfig } from "@/lib/products";
+import { getStoreProducts, getCatalogConfig, applyCatalogConfig, getSamplesConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -22,16 +22,25 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function SamplesPage() {
   const me = await requireAffiliate();
-  const [catalog, config, mine, banner] = await Promise.all([
+  const [catalog, promoConfig, samplesConfig, mine, banner] = await Promise.all([
     getStoreProducts(100),
+    getCatalogConfig(),
     getSamplesConfig(),
     getMySampleRequests(me.id),
     getBanner("samples"),
   ]);
 
-  // Curated + ordered, then out-of-stock items sink to the bottom.
-  const curated = applyConfig(catalog.products, config);
-  const shown = [...curated].sort((a, b) => Number(a.available === false) - Number(b.available === false));
+  // Only products the affiliate can see in Promotions are sample-able. Then the
+  // samples curation narrows/orders that set; out-of-stock sinks to the bottom.
+  const promoShown = applyCatalogConfig(catalog.products, promoConfig);
+  let shown = samplesConfig.shown.length
+    ? promoShown.filter((p) => samplesConfig.shown.includes(p.id))
+    : promoShown;
+  if (samplesConfig.order.length) {
+    const pos = new Map(samplesConfig.order.map((id, i) => [id, i] as const));
+    shown = [...shown].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+  }
+  shown = [...shown].sort((a, b) => Number(a.available === false) - Number(b.available === false));
   const openProductIds = mine
     .filter((r) => (r.status === "requested" || r.status === "approved") && r.productId)
     .map((r) => r.productId as string);

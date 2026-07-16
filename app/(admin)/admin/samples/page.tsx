@@ -3,10 +3,11 @@ import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SampleActions } from "@/components/admin/sample-actions";
-import { SamplesSettings } from "@/components/admin/samples-settings";
+import { SamplesCuration, SamplesBanner } from "@/components/admin/samples-settings";
+import { CreateReveal } from "@/components/admin/create-reveal";
 import { requireAdmin } from "@/lib/session";
 import { listSampleRequests, getBanner } from "@/lib/queries";
-import { getStoreProducts, getSamplesConfig } from "@/lib/products";
+import { getStoreProducts, getCatalogConfig, applyCatalogConfig, getSamplesConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -20,15 +21,19 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function AdminSamplesPage() {
   await requireAdmin();
-  const [requests, catalog, samplesConfig, banner] = await Promise.all([
+  const [requests, catalog, promoConfig, samplesConfig, banner] = await Promise.all([
     listSampleRequests(),
     getStoreProducts(100),
+    getCatalogConfig(),
     getSamplesConfig(),
     getBanner("samples"),
   ]);
   const open = requests.filter((r) => r.status === "requested");
-  const rest = requests.filter((r) => r.status !== "requested");
-  const catalogForSettings = catalog.products.map((p) => ({ id: p.id, title: p.title, image: p.image, available: p.available }));
+  const approved = requests.filter((r) => r.status === "approved");
+  const rest = requests.filter((r) => r.status !== "requested" && r.status !== "approved");
+  // Only products the affiliate can see in Promotions are sample-able.
+  const promoShown = applyCatalogConfig(catalog.products, promoConfig);
+  const catalogForSettings = promoShown.map((p) => ({ id: p.id, title: p.title, image: p.image, available: p.available }));
 
   const Row = ({ r }: { r: (typeof requests)[number] }) => {
     const s = STATUS[r.status] ?? STATUS.requested;
@@ -54,6 +59,9 @@ export default async function AdminSamplesPage() {
                 <PackageOpen className="size-3" /> Draft order
               </Badge>
             )}
+            {r.trackingNumber && (
+              <Badge variant="secondary">{r.carrier ? `${r.carrier} ` : ""}{r.trackingNumber}</Badge>
+            )}
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {r.affiliateName}
@@ -67,12 +75,7 @@ export default async function AdminSamplesPage() {
           )}
           {r.note && <p className="mt-1 text-xs italic text-muted-foreground">“{r.note}”</p>}
           {r.productUrl && (
-            <a
-              href={r.productUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
+            <a href={r.productUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
               View product <ExternalLink className="size-3" />
             </a>
           )}
@@ -83,19 +86,23 @@ export default async function AdminSamplesPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Sample requests"
-        description="Review affiliate sample requests. Approving creates a Shopify draft order (when connected) so you can fulfill and ship."
+        description="Review affiliate sample requests. Approving creates a Shopify draft order; once you fulfill it in Shopify it's marked shipped automatically."
       />
 
-      <SamplesSettings
-        products={catalogForSettings}
-        order={samplesConfig.order}
-        shown={samplesConfig.shown}
-        banner={banner}
-      />
+      {/* Settings collapsed behind buttons */}
+      <div className="flex flex-wrap gap-2">
+        <CreateReveal label="See catalog">
+          <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} shown={samplesConfig.shown} /></div>
+        </CreateReveal>
+        <CreateReveal label="Sample banner">
+          <div className="max-w-lg pt-2"><SamplesBanner banner={banner} /></div>
+        </CreateReveal>
+      </div>
 
+      {/* Awaiting review — the default view */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -112,19 +119,24 @@ export default async function AdminSamplesPage() {
         </CardContent>
       </Card>
 
+      {/* Approved / awaiting fulfillment — behind a button */}
+      {approved.length > 0 && (
+        <CreateReveal label={`Approved orders (${approved.length})`}>
+          <Card className="mt-2">
+            <CardHeader><CardTitle className="flex items-center gap-2"><Check className="size-4 text-success" /> Approved — awaiting Shopify fulfillment</CardTitle></CardHeader>
+            <CardContent className="space-y-3">{approved.map((r) => <Row key={r.id} r={r} />)}</CardContent>
+          </Card>
+        </CreateReveal>
+      )}
+
+      {/* Shipped / rejected history — behind a button */}
       {rest.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gift className="size-4 text-primary" /> History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {rest.map((r) => (
-              <Row key={r.id} r={r} />
-            ))}
-          </CardContent>
-        </Card>
+        <CreateReveal label={`History (${rest.length})`}>
+          <Card className="mt-2">
+            <CardHeader><CardTitle className="flex items-center gap-2"><Gift className="size-4 text-primary" /> History</CardTitle></CardHeader>
+            <CardContent className="space-y-3">{rest.map((r) => <Row key={r.id} r={r} />)}</CardContent>
+          </Card>
+        </CreateReveal>
       )}
 
       {requests.length === 0 && (

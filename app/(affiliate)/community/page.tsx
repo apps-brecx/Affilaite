@@ -47,8 +47,8 @@ export default async function CommunityPage() {
         description="Your group and every message from the Sipfluence team — all in one place."
       />
 
-      {/* Group chat — WhatsApp-style feed from the team */}
-      {group && (
+      {/* Group chat — WhatsApp-style feed from the team (only when there's something) */}
+      {group && chat.length > 0 && (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <UsersRound className="size-4" /> {group.name}
