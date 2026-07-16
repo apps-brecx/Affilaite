@@ -88,12 +88,11 @@ export async function paypalConfig() {
 }
 
 export async function smsConfig() {
+  // Twilio Verify — no sender number; Twilio generates, sends, and checks codes.
   return {
-    provider: await plain("int_sms_provider", "SMS_PROVIDER"),
     accountSid: await plain("int_sms_account_sid", "TWILIO_ACCOUNT_SID"),
-    apiKey: await secret("int_sms_key", "SMS_API_KEY"),
-    apiSecret: await secret("int_sms_secret", "SMS_API_SECRET"),
-    from: await plain("int_sms_from", "SMS_FROM"),
+    authToken: await secret("int_sms_secret", "TWILIO_AUTH_TOKEN"),
+    verifyServiceSid: await plain("int_sms_verify_service", "TWILIO_VERIFY_SERVICE_SID"),
   };
 }
 
@@ -118,7 +117,7 @@ export async function emailReady() {
 }
 export async function smsReady() {
   const c = await smsConfig();
-  return Boolean(c.provider);
+  return Boolean(c.accountSid && c.authToken && c.verifyServiceSid);
 }
 
 /** Non-secret status snapshot for the Settings UI. */
@@ -128,6 +127,6 @@ export async function integrationsStatus() {
     shopify: { ready: Boolean(s.domain && s.token), domain: s.domain, version: s.version, tokenMask: mask(s.token), secretMask: mask(s.apiSecret) },
     paypal: { ready: Boolean(p.clientId && p.clientSecret), base: p.base, clientIdMask: mask(p.clientId), clientSecretMask: mask(p.clientSecret), webhookId: p.webhookId },
     email: { ready: Boolean(e.apiKey), from: e.from, keyMask: mask(e.apiKey) },
-    sms: { ready: Boolean(sms.provider), provider: sms.provider, accountSid: sms.accountSid, from: sms.from, keyMask: mask(sms.apiKey), secretMask: mask(sms.apiSecret) },
+    sms: { ready: Boolean(sms.accountSid && sms.authToken && sms.verifyServiceSid), accountSid: sms.accountSid, verifyServiceSid: sms.verifyServiceSid, authTokenMask: mask(sms.authToken) },
   };
 }

@@ -42,16 +42,12 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
-      # SMS for signup phone verification (optional — blank keeps demo mode).
-      - key: SMS_PROVIDER
-        sync: false
+      # Twilio Verify for signup phone verification (optional — blank = demo mode).
       - key: TWILIO_ACCOUNT_SID
         sync: false
-      - key: SMS_API_KEY
+      - key: TWILIO_AUTH_TOKEN
         sync: false
-      - key: SMS_API_SECRET
-        sync: false
-      - key: SMS_FROM
+      - key: TWILIO_VERIFY_SERVICE_SID
         sync: false
       - key: APP_URL
         sync: false

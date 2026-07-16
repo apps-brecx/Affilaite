@@ -1,82 +1,65 @@
-// lib/sms.ts — provider-agnostic SMS seam.
-// Everything upstream (OTP generation, verification, the admin toggle, signup
-// gating) is fully built. To go live, pick a provider and implement `deliver()`
-// below — nothing else has to change.
+// lib/sms.ts — phone verification via the Twilio Verify API.
+// Twilio generates, delivers, and validates the one-time code; we never see or
+// store it. No sender number is needed (Verify manages its own).
+import twilio from "twilio";
 import { smsConfig } from "./integrations";
 
-export interface SmsResult {
+export interface VerifyResult {
   sent: boolean;
-  simulated: boolean; // true when no provider is wired → nothing actually went out
+  simulated: boolean; // true when Verify isn't configured — nothing was sent
   error?: string;
 }
 
-export async function sendSms(to: string, body: string): Promise<SmsResult> {
+/** Are all three Twilio Verify credentials present? */
+export async function verifyConfigured(): Promise<boolean> {
+  const c = await smsConfig();
+  return Boolean(c.accountSid && c.authToken && c.verifyServiceSid);
+}
+
+/** Ask Twilio Verify to send an SMS code to a phone number. */
+export async function sendVerification(phone: string): Promise<VerifyResult> {
   const cfg = await smsConfig();
-  if (!cfg.provider) {
-    // No provider configured — don't pretend a text was delivered. In demo
-    // mode the code is logged so the flow is still testable end-to-end.
-    console.info(`[sms:simulated] to=${to} :: ${body}`);
+  if (!cfg.accountSid || !cfg.authToken || !cfg.verifyServiceSid) {
+    console.info(`[verify:simulated] would send a code to ${phone}`);
     return { sent: false, simulated: true };
   }
   try {
-    await deliver(cfg, to, body);
+    const client = twilio(cfg.accountSid, cfg.authToken);
+    await client.verify.v2.services(cfg.verifyServiceSid).verifications.create({ to: phone, channel: "sms" });
     return { sent: true, simulated: false };
   } catch (e: any) {
-    console.error("[sms] send failed:", e);
-    return { sent: false, simulated: false, error: e?.message ?? "SMS send failed" };
+    console.error("[sendVerification]", e);
+    return { sent: false, simulated: false, error: twilioMessage(e) };
   }
 }
 
-/**
- * The pluggable seam. Twilio is wired below; add other providers as new cases.
- */
-async function deliver(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, body: string): Promise<void> {
-  const provider = cfg.provider.trim().toLowerCase();
-  if (provider === "twilio") return deliverTwilio(cfg, to, body);
-  throw new Error(`SMS provider "${cfg.provider}" has no delivery adapter.`);
-}
-
-/**
- * Twilio Messages API. The Account SID (AC…) always goes in the request URL.
- * Auth is either Account SID + Auth Token, or — when an API Key SID (SK…) is
- * provided — API Key SID + its secret (recommended). `from` is a sender number
- * (E.164) or a Messaging Service SID (starts with "MG").
- */
-async function deliverTwilio(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, body: string): Promise<void> {
-  const accountSid = cfg.accountSid.trim();
-  const apiKeySid = cfg.apiKey.trim(); // optional SK… key
-  const secret = cfg.apiSecret.trim(); // Auth Token, or API Key secret
-  const from = cfg.from.trim();
-  if (!accountSid.startsWith("AC")) {
-    throw new Error("Twilio Account SID must start with 'AC' (find it on your Twilio Console dashboard).");
+/** Check a user-entered code with Twilio Verify. `approved` means verified. */
+export async function checkVerification(phone: string, code: string): Promise<{ approved: boolean; error?: string }> {
+  const cfg = await smsConfig();
+  if (!cfg.accountSid || !cfg.authToken || !cfg.verifyServiceSid) {
+    return { approved: false, error: "SMS verification isn't configured." };
   }
-  if (!secret || !from) {
-    throw new Error("Twilio needs an Account SID (AC…), an Auth Token or API Key secret, and a From number.");
-  }
-  // Username = API Key SID when given, else the Account SID.
-  const authUser = apiKeySid || accountSid;
-
-  const params = new URLSearchParams({ To: to, Body: body });
-  if (from.startsWith("MG")) params.set("MessagingServiceSid", from);
-  else params.set("From", from);
-
-  const auth = Buffer.from(`${authUser}:${secret}`).toString("base64");
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    let hint = "";
-    // 70051 / "required permission ... missing" = the API Key can't send SMS.
-    if (/70051|required permission|messages\/create/i.test(detail)) {
-      hint = " — this API Key lacks Messaging permission. Use your Account SID + Auth Token instead (clear the API Key SID field and put your Auth Token in the secret field), or create a Standard API Key with Messaging access.";
-    } else if (/20003|authenticate/i.test(detail)) {
-      hint = " — authentication failed. The 'Auth Token / API Key secret' must be your Twilio Auth Token (Console dashboard, next to the Account SID), not the old API Key secret. Re-enter it and save.";
-    } else if (/572002|trial|verified recipient/i.test(detail)) {
-      hint = " — your Twilio account is still a trial, which can only text VERIFIED numbers. Verify this number in Twilio (Phone Numbers → Verified Caller IDs), or upgrade the account to send to anyone (required for real signups).";
+  try {
+    const client = twilio(cfg.accountSid, cfg.authToken);
+    const check = await client.verify.v2.services(cfg.verifyServiceSid).verificationChecks.create({ to: phone, code });
+    return { approved: check.status === "approved" };
+  } catch (e: any) {
+    // A wrong code comes back as status "pending" (handled above); a throw here
+    // means the verification expired / was already used / max attempts hit.
+    console.error("[checkVerification]", e);
+    if (e?.status === 404 || e?.code === 20404) {
+      return { approved: false, error: "That code has expired — request a new one." };
     }
-    throw new Error(`Twilio ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}${hint}`);
+    return { approved: false, error: twilioMessage(e) };
   }
+}
+
+function twilioMessage(e: any): string {
+  if (e?.code === 60200) return "That doesn't look like a valid phone number.";
+  if (e?.code === 60203) return "Too many attempts for this number — wait a bit and try again.";
+  if (e?.code === 60202) return "Max check attempts reached — request a new code.";
+  if (e?.code === 20404) return "Verify Service not found — check the Verify Service SID (VA…).";
+  if (e?.status === 401 || e?.code === 20003) return "Twilio auth failed — check the Account SID and Auth Token.";
+  if (e?.code === 60205) return "SMS isn't supported for this number.";
+  return e?.message ?? "Twilio Verify error";
 }

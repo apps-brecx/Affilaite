@@ -1,16 +1,11 @@
 // lib/phone.ts — phone number normalization + verification helpers (server-side).
-import crypto from "crypto";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { phoneVerifications } from "@/db/schema";
 import { getSetting } from "@/lib/queries";
 
-export const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-export const RESEND_COOLDOWN_MS = 45 * 1000;
-export const MAX_ATTEMPTS = 5;
+export const RESEND_COOLDOWN_MS = 60 * 1000; // a new code can only be requested every 60s
 const VERIFIED_WINDOW_MS = 30 * 60 * 1000; // signup must finish within 30 min of verifying
-
-export const hashCode = (c: string) => crypto.createHash("sha256").update(c).digest("hex");
 
 /** Loose E.164-ish normalization: keep a leading +, strip formatting, sanity-check length. */
 export function normalizePhone(raw: string): string | null {

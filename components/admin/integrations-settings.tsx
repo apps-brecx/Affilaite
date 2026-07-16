@@ -14,7 +14,7 @@ export interface IntegrationsStatus {
   shopify: { ready: boolean; domain: string; version: string; tokenMask: string; secretMask: string };
   paypal: { ready: boolean; base: string; clientIdMask: string; clientSecretMask: string; webhookId: string };
   email: { ready: boolean; from: string; keyMask: string };
-  sms: { ready: boolean; provider: string; accountSid: string; from: string; keyMask: string; secretMask: string };
+  sms: { ready: boolean; accountSid: string; verifyServiceSid: string; authTokenMask: string };
 }
 
 function StatusBadge({ ready }: { ready: boolean }) {
@@ -167,13 +167,10 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
   // Email
   const [from, setFrom] = useState(status.email.from);
   const [apiKey, setApiKey] = useState("");
-  // SMS (phone verification)
-  const [smsProvider, setSmsProvider] = useState(status.sms.provider || "");
+  // SMS verification (Twilio Verify)
   const [smsAccountSid, setSmsAccountSid] = useState(status.sms.accountSid || "");
-  const [smsFrom, setSmsFrom] = useState(status.sms.from || "");
-  const [smsKey, setSmsKey] = useState("");
-  const [smsSecret, setSmsSecret] = useState("");
-  const [clearSmsKey, setClearSmsKey] = useState(false);
+  const [smsVerifyService, setSmsVerifyService] = useState(status.sms.verifyServiceSid || "");
+  const [smsAuthToken, setSmsAuthToken] = useState("");
 
   const secretPlaceholder = (mask: string) => (mask ? `${mask} — leave blank to keep` : "");
 
@@ -232,28 +229,18 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
       <IntegrationCard
         service="sms"
         icon={MessageSquare}
-        title="SMS (phone verification)"
+        title="SMS verification (Twilio Verify)"
         ready={status.sms.ready}
-        fields={() => ({ provider: smsProvider, accountSid: smsAccountSid, from: smsFrom, apiKey: smsKey, apiSecret: smsSecret, clearApiKey: clearSmsKey ? "1" : "" })}
+        fields={() => ({ accountSid: smsAccountSid, authToken: smsAuthToken, verifyServiceSid: smsVerifyService })}
       >
         <div className="rounded-lg bg-primary/[0.06] p-3 text-xs text-muted-foreground">
-          Sends the signup verification codes. <span className="font-medium text-foreground">Twilio is supported</span> —
-          set Provider to <code className="rounded bg-muted px-1 py-0.5 font-mono">twilio</code>. Two ways to authenticate:
-          <span className="font-medium text-foreground"> Account SID + Auth Token</span> (leave API Key SID blank), or an
-          <span className="font-medium text-foreground"> API Key SID + its secret</span> (put the secret in Auth Token /
-          secret). The Account SID (AC…) is always required. Leave Provider blank for demo mode.
+          Signup codes are sent and checked by <span className="font-medium text-foreground">Twilio Verify</span> — Twilio
+          generates and validates the code, so there&apos;s no sender number to configure. Create a Verify Service in the
+          Twilio Console and paste its SID (VA…) below, along with your Account SID and Auth Token.
         </div>
-        <Field label="Provider" value={smsProvider} onChange={(e) => setSmsProvider(e.target.value)} placeholder="twilio" />
-        <Field label="Account SID (AC…)" value={smsAccountSid} onChange={(e) => setSmsAccountSid(e.target.value)} placeholder="AC…" className="font-mono" hint="From your Twilio Console dashboard. Always starts with AC." />
-        <Field label="API Key SID (SK…) — optional" type="password" value={smsKey} onChange={(e) => setSmsKey(e.target.value)} placeholder={secretPlaceholder(status.sms.keyMask) || "leave blank to use Auth Token"} className="font-mono" disabled={clearSmsKey} />
-        {status.sms.keyMask && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <input type="checkbox" checked={clearSmsKey} onChange={(e) => setClearSmsKey(e.target.checked)} className="size-3.5 accent-primary" />
-            Remove the saved API Key and authenticate with Account SID + Auth Token instead
-          </label>
-        )}
-        <Field label="Auth Token / API Key secret" type="password" value={smsSecret} onChange={(e) => setSmsSecret(e.target.value)} placeholder={secretPlaceholder(status.sms.secretMask) || "••••••"} className="font-mono" />
-        <Field label="From number / Messaging Service SID" value={smsFrom} onChange={(e) => setSmsFrom(e.target.value)} placeholder="+1 555 000 1111 or MG…" />
+        <Field label="Account SID (AC…)" value={smsAccountSid} onChange={(e) => setSmsAccountSid(e.target.value)} placeholder="AC…" className="font-mono" hint="Twilio Console dashboard. Always starts with AC." />
+        <Field label="Auth Token" type="password" value={smsAuthToken} onChange={(e) => setSmsAuthToken(e.target.value)} placeholder={secretPlaceholder(status.sms.authTokenMask) || "••••••"} className="font-mono" hint="Twilio Console dashboard, next to the Account SID." />
+        <Field label="Verify Service SID (VA…)" value={smsVerifyService} onChange={(e) => setSmsVerifyService(e.target.value)} placeholder="VA…" className="font-mono" hint="Twilio Console → Verify → Services." />
         <InlineTester inputType="tel" placeholder="+1 555 123 4567" buttonLabel="Send test code" action={testSms} />
       </IntegrationCard>
     </div>

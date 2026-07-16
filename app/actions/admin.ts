@@ -32,7 +32,7 @@ import {
 } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
-import { sendSms } from "@/lib/sms";
+import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
@@ -1157,7 +1157,7 @@ const INTEGRATION_KEYS: Record<string, string[]> = {
   shopify: ["int_shopify_domain", "int_shopify_version", "int_shopify_token", "int_shopify_secret"],
   paypal: ["int_paypal_base", "int_paypal_client_id", "int_paypal_client_secret", "int_paypal_webhook_id"],
   email: ["int_email_from", "int_resend_key"],
-  sms: ["int_sms_provider", "int_sms_account_sid", "int_sms_from", "int_sms_key", "int_sms_secret"],
+  sms: ["int_sms_account_sid", "int_sms_secret", "int_sms_verify_service", "int_sms_provider", "int_sms_from", "int_sms_key"],
 };
 
 export async function saveIntegration(service: string, fields: Record<string, string>): Promise<ActionResult> {
@@ -1177,20 +1177,10 @@ export async function saveIntegration(service: string, fields: Record<string, st
     if (fields.from !== undefined) await writeSetting("int_email_from", fields.from.trim());
     await writeSecret("int_resend_key", fields.apiKey ?? "");
   } else if (service === "sms") {
-    if (fields.provider !== undefined) await writeSetting("int_sms_provider", fields.provider.trim());
+    // Twilio Verify: Account SID + Auth Token + Verify Service SID (no sender number).
     if (fields.accountSid !== undefined) await writeSetting("int_sms_account_sid", fields.accountSid.trim());
-    if (fields.from !== undefined) await writeSetting("int_sms_from", fields.from.trim());
-    // Explicit clear lets an admin drop a bad API Key and fall back to Auth Token.
-    if (fields.clearApiKey === "1") {
-      await writeSetting("int_sms_key", "");
-      // The old API-Key secret is useless without its key — replace it with the
-      // supplied Auth Token, or clear it so a stale wrong secret can't linger.
-      if (fields.apiSecret && fields.apiSecret.trim()) await writeSecret("int_sms_secret", fields.apiSecret.trim());
-      else await writeSetting("int_sms_secret", "");
-    } else {
-      await writeSecret("int_sms_key", fields.apiKey ?? "");
-      await writeSecret("int_sms_secret", fields.apiSecret ?? "");
-    }
+    if (fields.verifyServiceSid !== undefined) await writeSetting("int_sms_verify_service", fields.verifyServiceSid.trim());
+    await writeSecret("int_sms_secret", fields.authToken ?? "");
   } else {
     return { ok: false, message: "Unknown integration." };
   }
@@ -1247,15 +1237,15 @@ export async function testShopifyConnection(): Promise<ActionResult> {
   }
 }
 
-/** Send a test SMS so the admin can confirm the provider works end-to-end. */
+/** Send a real Twilio Verify code so the admin can confirm the setup works. */
 export async function testSms(phoneRaw: string): Promise<ActionResult> {
   await assertAdmin();
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false, message: "Enter a valid phone number to test." };
-  const res = await sendSms(phone, "Your Sipfluence test code is 123456. If you got this, SMS is working. 🎉");
-  if (res.simulated) return { ok: false, message: "No SMS provider connected — set Provider to 'twilio' and save first." };
+  const res = await sendVerification(phone);
+  if (res.simulated) return { ok: false, message: "Twilio Verify isn't connected — enter the credentials and save first." };
   if (!res.sent) return { ok: false, message: `SMS failed: ${res.error ?? "unknown error"}` };
-  return { ok: true, message: `Test text sent to ${phone}.` };
+  return { ok: true, message: `Verification code sent to ${phone} — check the phone.` };
 }
 
 /** Send a test email so the admin can confirm Resend + the from-address work. */
