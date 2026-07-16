@@ -441,17 +441,20 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
       body: z.string().min(1),
       status: z.array(z.string()).optional(),
       groupIds: z.array(z.string()).optional(),
+      affiliateIds: z.array(z.string()).optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Add a subject and message." };
-  const { subject, body, status, groupIds } = parsed.data;
+  const { subject, body, status, groupIds, affiliateIds } = parsed.data;
 
-  // Target either specific groups or a set of statuses (default: approved).
-  const where = groupIds?.length
-    ? inArray(affiliates.groupId, groupIds as any)
-    : status?.length
-      ? inArray(affiliates.status, status as any)
-      : eq(affiliates.status, "approved");
+  // Target specific affiliates, or groups, or a set of statuses (default: approved).
+  const where = affiliateIds?.length
+    ? inArray(affiliates.id, affiliateIds as any)
+    : groupIds?.length
+      ? inArray(affiliates.groupId, groupIds as any)
+      : status?.length
+        ? inArray(affiliates.status, status as any)
+        : eq(affiliates.status, "approved");
 
   const recipients = await db
     .select({ id: affiliates.id, email: users.email, name: users.name, prefs: affiliates.notificationPrefs })
@@ -471,7 +474,7 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
     subject,
     body,
     channel: "email",
-    audience: groupIds?.length ? { groupIds } : { status: status ?? ["approved"] },
+    audience: (affiliateIds?.length ? { affiliateIds } : groupIds?.length ? { groupIds } : { status: status ?? ["approved"] }) as any,
     recipientCount: recipients.length,
     sentAt: new Date(),
   });

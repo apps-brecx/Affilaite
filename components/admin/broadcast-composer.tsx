@@ -16,10 +16,16 @@ interface AudienceOption {
   count: number;
   status?: string[];
   groupIds?: string[];
+  affiliateIds?: string[];
 }
 
-export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }) {
-  const [audience, setAudience] = useState(audiences[0]);
+export function BroadcastComposer({ audiences, defaultAffiliate }: { audiences: AudienceOption[]; defaultAffiliate?: { id: string; name: string } }) {
+  // When arriving from an affiliate's "Message" button, prepend a "just them"
+  // audience and preselect it.
+  const allAudiences: AudienceOption[] = defaultAffiliate
+    ? [{ label: `Just ${defaultAffiliate.name}`, count: 1, affiliateIds: [defaultAffiliate.id] }, ...audiences]
+    : audiences;
+  const [audience, setAudience] = useState(allAudiences[0]);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [pending, start] = useTransition();
@@ -32,7 +38,7 @@ export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }
       return;
     }
     start(async () => {
-      const res = await sendBroadcast({ subject, body, status: audience.status, groupIds: audience.groupIds });
+      const res = await sendBroadcast({ subject, body, status: audience.status, groupIds: audience.groupIds, affiliateIds: audience.affiliateIds });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         setSubject("");
@@ -58,7 +64,7 @@ export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5"><Users className="size-3.5" /> Audience</Label>
             <div className="flex flex-wrap gap-2">
-              {audiences.map((a) => (
+              {allAudiences.map((a) => (
                 <button
                   key={a.label}
                   onClick={() => setAudience(a)}

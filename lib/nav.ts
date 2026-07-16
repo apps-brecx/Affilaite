@@ -69,9 +69,8 @@ export const adminNav: NavSection[] = [
     title: "People",
     items: [
       { label: "Affiliates", href: "/admin/affiliates", icon: "affiliates" },
-      { label: "Groups", href: "/admin/groups", icon: "groups" },
       { label: "Samples", href: "/admin/samples", icon: "samples" },
-      { label: "Messages", href: "/admin/messages", icon: "messages" },
+      { label: "Messages & Groups", href: "/admin/messages", icon: "messages" },
     ],
   },
   {

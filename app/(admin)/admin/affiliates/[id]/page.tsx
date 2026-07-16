@@ -4,6 +4,7 @@ import { ArrowLeft, Mail, Building2, CircleDollarSign } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,7 +67,12 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
               </div>
             </div>
           </div>
-          <AffiliateActions id={a.id} status={a.status} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin/messages?to=${a.id}`}><Mail className="size-4" /> Message</Link>
+            </Button>
+            <AffiliateActions id={a.id} status={a.status} />
+          </div>
         </CardContent>
       </Card>
 

@@ -20,8 +20,8 @@ export default async function GroupManagePage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-8">
-      <Link href="/admin/groups" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> All groups
+      <Link href="/admin/messages" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Messages &amp; Groups
       </Link>
 
       <PageHeader
