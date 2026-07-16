@@ -173,6 +173,8 @@ export const affiliates = pgTable(
     country: text("country"),
     // Admin can bar an affiliate from requesting product samples (abuse control).
     samplesBanned: boolean("samples_banned").notNull().default(false),
+    // Linked Shopify customer (created or matched by email when they join).
+    shopifyCustomerId: text("shopify_customer_id"),
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),

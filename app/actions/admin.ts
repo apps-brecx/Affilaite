@@ -32,6 +32,7 @@ import {
   setDiscountActiveInShopify,
   uniqueDiscountCode,
 } from "@/lib/discounts";
+import { upsertShopifyCustomer } from "@/lib/shopify-customers";
 import { createPayoutBatch, getPayoutBatch, parsePayoutBatch, rollupBatchStatus } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
 import { sendVerification } from "@/lib/sms";
@@ -123,6 +124,12 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
       "You're approved 🎉",
       `Hi ${approvedUser.name ?? "there"},\n\nYour Sipfluence partner account is approved${issuedCode ? ` and your discount code is ${issuedCode}` : ""}. Sign in to grab your link and start earning.\n\n${APP_URL}/login`,
     );
+  }
+
+  // Create (or link an existing) Shopify customer for this affiliate.
+  if (!aff.shopifyCustomerId && approvedUser?.email) {
+    const cid = await upsertShopifyCustomer(approvedUser.email, approvedUser.name);
+    if (cid) await db.update(affiliates).set({ shopifyCustomerId: cid }).where(eq(affiliates.id, id));
   }
 
   revalAdmin();
@@ -993,9 +1000,11 @@ async function createAndInvite(
   const code = cleanCode || `${refCode}${percent}`.toUpperCase();
 
   const phone = phoneRaw && phoneRaw.trim() ? normalizePhone(phoneRaw) : null;
+  // Invited affiliates are approved on the spot — link them to Shopify now.
+  const shopifyCustomerId = await upsertShopifyCustomer(email, name || null);
   const [aff] = await db!
     .insert(affiliates)
-    .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, phone, address: address?.trim() || null, programId: program?.id ?? null })
+    .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, phone, address: address?.trim() || null, programId: program?.id ?? null, shopifyCustomerId })
     .returning();
 
   // Issue the discount code (create in Shopify only if it's a freshly generated one;

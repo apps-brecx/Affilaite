@@ -1,0 +1,1 @@
+ALTER TABLE "affiliates" ADD COLUMN "shopify_customer_id" text;
