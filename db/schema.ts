@@ -214,6 +214,10 @@ export const commissions = pgTable(
     attributedBy: text("attributed_by"),
     status: commissionStatus("status").notNull().default("pending"),
     approvableAt: timestamp("approvable_at"),
+    // Fraud review: flagged commissions are held out of auto-approval and
+    // surface in the admin review queue until an admin approves/rejects.
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
     payoutId: uuid("payout_id").references(() => payouts.id),
     // Which campaign's rules produced this commission (if any) — drives
     // per-campaign reward rates, gates, and per-affiliate caps.

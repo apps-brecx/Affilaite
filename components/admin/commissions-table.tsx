@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, RotateCcw, Download, Loader2 } from "lucide-react";
+import { Check, RotateCcw, Download, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { approveCommissions, reverseCommissions } from "@/app/actions/admin";
@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Commission, CommissionState } from "@/lib/types";
 
-const FILTERS: { label: string; value: CommissionState | "all" }[] = [
+const FILTERS: { label: string; value: CommissionState | "all" | "flagged" }[] = [
   { label: "All", value: "all" },
+  { label: "Needs review", value: "flagged" },
   { label: "Pending", value: "pending" },
   { label: "Approved", value: "approved" },
   { label: "Paid", value: "paid" },
@@ -22,7 +23,7 @@ const FILTERS: { label: string; value: CommissionState | "all" }[] = [
 ];
 
 export function CommissionsTable({ commissions }: { commissions: Commission[] }) {
-  const [filter, setFilter] = useState<CommissionState | "all">("all");
+  const [filter, setFilter] = useState<CommissionState | "all" | "flagged">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -39,8 +40,14 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
     });
   };
 
+  const flaggedCount = useMemo(() => commissions.filter((c) => c.flagged).length, [commissions]);
   const rows = useMemo(
-    () => (filter === "all" ? commissions : commissions.filter((c) => c.status === filter)),
+    () =>
+      filter === "all"
+        ? commissions
+        : filter === "flagged"
+          ? commissions.filter((c) => c.flagged)
+          : commissions.filter((c) => c.status === filter),
     [commissions, filter],
   );
 
@@ -82,6 +89,11 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
               }`}
             >
               {f.label}
+              {f.value === "flagged" && flaggedCount > 0 && (
+                <span className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-danger-foreground">
+                  {flaggedCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -141,7 +153,16 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
                     <span className="font-medium">{c.affiliateName}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{c.orderNumber}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    {c.orderNumber}
+                    {c.flagged && (
+                      <span title={c.flagReason ?? "Flagged for review"} className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium text-danger">
+                        <AlertTriangle className="size-3" /> Review
+                      </span>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <Badge variant={c.attributedBy === "coupon" ? "gold" : "secondary"} className="capitalize">
                     {c.attributedBy}

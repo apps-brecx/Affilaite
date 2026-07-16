@@ -221,7 +221,8 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
   // Only pending/reversed commissions can be approved — never touch paid ones.
   const rows = await db
     .update(commissions)
-    .set({ status: "approved" })
+    // Approving clears any fraud flag — it's been reviewed and cleared.
+    .set({ status: "approved", flagged: false })
     .where(and(inArray(commissions.id, ids), inArray(commissions.status, ["pending", "reversed"])))
     .returning({ id: commissions.id, affiliateId: commissions.affiliateId });
   const affIds = [...new Set(rows.map((r) => r.affiliateId).filter(Boolean))] as string[];
@@ -244,7 +245,7 @@ export async function reverseCommissions(ids: string[]): Promise<ActionResult> {
   // Only pending/approved commissions can be reversed — paid ones are settled.
   const rows = await db
     .update(commissions)
-    .set({ status: "reversed" })
+    .set({ status: "reversed", flagged: false })
     .where(and(inArray(commissions.id, ids), inArray(commissions.status, ["pending", "approved"])))
     .returning({ id: commissions.id });
   revalAdmin();

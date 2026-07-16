@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save, Gift, SlidersHorizontal, Ticket, Users2, Wallet, Sparkles } from "lucide-react";
+import { Loader2, Save, Gift, SlidersHorizontal, Ticket, Users2, Wallet, Sparkles, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -282,6 +282,23 @@ export function CampaignRewards({ campaign }: { campaign: Campaign }) {
               <Switch checked={cfg.friend.promoExpires} onCheckedChange={(v) => upd("friend", { promoExpires: v })} label="Promo expires" description="Ends with the campaign" />
             </>
           )}
+        </Section>
+
+        {/* Commission approval */}
+        <Section icon={ShieldCheck} title="Commission approval" desc="Whether each sale needs your sign-off before it can be paid.">
+          <Segmented
+            value={cfg.approval.mode}
+            onChange={(v) => upd("approval", { mode: v })}
+            options={[
+              { value: "auto", label: "Automatic" },
+              { value: "manual", label: "Review each" },
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">
+            {cfg.approval.mode === "auto"
+              ? "Commissions approve automatically after the hold window. Suspicious ones are still flagged for review."
+              : "Every commission waits in the review queue until you approve it (Commissions → Needs review)."}
+          </p>
         </Section>
 
         {/* Payout */}

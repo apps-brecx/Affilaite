@@ -120,6 +120,13 @@
       "when": 1784231145325,
       "tag": "0016_affiliate_address_parts",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784233881465,
+      "tag": "0017_commission_fraud_flags",
+      "breakpoints": true
     }
   ]
 }

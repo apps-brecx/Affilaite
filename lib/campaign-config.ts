@@ -41,6 +41,9 @@ export interface CampaignConfig {
     promoExpires: boolean; // promo
   };
   payout: { mode: "automatic" | "manual" };
+  // How commissions from this campaign clear: "auto" matures after the hold
+  // window; "manual" requires an admin to approve each one.
+  approval: { mode: "auto" | "manual" };
 }
 
 export function defaultConfig(): CampaignConfig {
@@ -50,6 +53,7 @@ export function defaultConfig(): CampaignConfig {
     coupon: { expires: false, combineProduct: false, combineOrder: false, combineShipping: true, appliesTo: "all", collections: "" },
     friend: { kind: "coupon", valueType: "percent", value: 10, minOrder: 0, promoDescription: "", promoUrl: "", promoExpires: false },
     payout: { mode: "manual" },
+    approval: { mode: "auto" },
   };
 }
 
@@ -63,6 +67,7 @@ export function mergeConfig(stored: any): CampaignConfig {
     coupon: { ...d.coupon, ...(stored.coupon ?? {}) },
     friend: { ...d.friend, ...(stored.friend ?? {}) },
     payout: { ...d.payout, ...(stored.payout ?? {}) },
+    approval: { ...d.approval, ...(stored.approval ?? {}) },
   };
 }
 

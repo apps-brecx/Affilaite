@@ -23,6 +23,46 @@ async function getUserEmail(userId: string) {
   return u?.email ?? null;
 }
 
+// Configurable thresholds (admin-tunable later via settings).
+const FRAUD_HIGH_AMOUNT = 500; // a single commission above this looks unusual
+const FRAUD_VELOCITY_WINDOW = 24 * 60 * 60 * 1000; // 24h
+const FRAUD_VELOCITY_COUNT = 5; // this many commissions in the window is suspicious
+
+/**
+ * Lightweight fraud heuristics. Returns a human-readable reason string to flag
+ * the commission for review, or null if it looks clean. Deliberately
+ * conservative: flags for a human to check, never auto-rejects.
+ */
+async function screenForFraud(input: {
+  affiliateId: string;
+  orderEmail?: string | null;
+  amount: number;
+  base: number;
+  isNewCustomer: boolean;
+}): Promise<string | null> {
+  // Unusually large single commission.
+  if (input.amount >= FRAUD_HIGH_AMOUNT) return `High commission amount ($${input.amount.toFixed(2)})`;
+
+  // Velocity: many commissions from this affiliate in a short window.
+  const since = new Date(Date.now() - FRAUD_VELOCITY_WINDOW);
+  const [{ c }] = await db
+    .select({ c: sql<number>`count(*)` })
+    .from(commissions)
+    .where(and(eq(commissions.affiliateId, input.affiliateId), gte(commissions.createdAt, since), sql`${commissions.amount} >= 0`));
+  if (Number(c) >= FRAUD_VELOCITY_COUNT) return `High velocity (${Number(c)} sales in 24h)`;
+
+  // Repeat buyer: the same customer email keeps converting for this affiliate.
+  if (input.orderEmail) {
+    const [{ r }] = await db
+      .select({ r: sql<number>`count(*)` })
+      .from(commissions)
+      .innerJoin(orders, eq(commissions.orderId, orders.id))
+      .where(and(eq(commissions.affiliateId, input.affiliateId), eq(orders.customerEmail, String(input.orderEmail).toLowerCase()), sql`${commissions.amount} >= 0`));
+    if (Number(r) >= 3) return `Repeat buyer (${Number(r)} prior orders from this customer)`;
+  }
+  return null;
+}
+
 /**
  * orders/create + orders/paid → attribute, calculate, and record a pending
  * commission. Safe to run more than once for the same order: the order mirror
@@ -160,6 +200,16 @@ export async function processOrderCreated(order: any) {
   amount = Math.round(amount * 100) / 100;
   if (!(amount > 0)) return; // nothing to pay (e.g. non-monetary custom reward)
 
+  // Fraud screening — flagged commissions are held for manual review and never
+  // auto-approve. Heuristics run on the buyer + this affiliate's recent history.
+  const flag = await screenForFraud({ affiliateId: affiliate.id, orderEmail: order.email, amount, base, isNewCustomer: !!orderRow.isNewCustomer });
+
+  // Approval mode: campaign config wins; else auto (mature after hold window).
+  const approvalMode = campaign ? mergeConfig(campaign.config).approval.mode : "auto";
+  // Manual mode or a fraud flag => hold indefinitely (approvableAt = null) so the
+  // maturation cron never clears it; an admin decides.
+  const approvableAt = flag || approvalMode === "manual" ? null : new Date(Date.now() + holdDays * DAY);
+
   // Idempotent: the partial unique index on commissions(order_id) WHERE
   // amount >= 0 means a second attribution of the same order is a no-op.
   const [created] = await db
@@ -173,7 +223,9 @@ export async function processOrderCreated(order: any) {
       currency: order.currency,
       attributedBy,
       status: "pending",
-      approvableAt: new Date(Date.now() + holdDays * DAY),
+      approvableAt,
+      flagged: !!flag,
+      flagReason: flag,
     })
     .onConflictDoNothing()
     .returning({ id: commissions.id });

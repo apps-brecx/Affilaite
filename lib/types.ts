@@ -119,6 +119,8 @@ export interface Commission {
   status: CommissionState;
   orderTotal: number;
   approvableAt: string | null;
+  flagged: boolean;
+  flagReason: string | null;
   createdAt: string;
 }
 

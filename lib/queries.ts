@@ -379,6 +379,8 @@ export async function listCommissions(filter?: CommissionState, affiliateId?: st
     status: r.c.status,
     orderTotal: num(r.order?.total),
     approvableAt: r.c.approvableAt ? new Date(r.c.approvableAt).toISOString() : null,
+    flagged: !!r.c.flagged,
+    flagReason: r.c.flagReason ?? null,
     createdAt: new Date(r.c.createdAt ?? Date.now()).toISOString(),
   }));
 }

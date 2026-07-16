@@ -3,13 +3,17 @@ import { db } from "@/db";
 import { commissions } from "@/db/schema";
 import { and, eq, inArray, lte } from "drizzle-orm";
 
-/** Cron: pending → approved once the hold window has elapsed. */
+/**
+ * Cron: pending → approved once the hold window has elapsed. Flagged
+ * commissions and manual-approval ones (approvableAt IS NULL) are skipped —
+ * they wait for an admin in the review queue.
+ */
 export async function approveMaturedCommissions() {
   if (!db) return { approved: 0 };
   const rows = await db
     .update(commissions)
     .set({ status: "approved" })
-    .where(and(eq(commissions.status, "pending"), lte(commissions.approvableAt, new Date())))
+    .where(and(eq(commissions.status, "pending"), eq(commissions.flagged, false), lte(commissions.approvableAt, new Date())))
     .returning({ id: commissions.id });
   return { approved: rows.length };
 }
