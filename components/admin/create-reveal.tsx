@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
  * Collapses a create form behind a button. The form (children) only shows once
  * the admin clicks "New …", keeping list pages uncluttered.
  */
-export function CreateReveal({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function CreateReveal({ label, children, defaultOpen = false }: { label: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   if (!open) {
     return (
       <Button onClick={() => setOpen(true)}>

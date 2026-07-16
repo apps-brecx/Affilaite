@@ -28,62 +28,53 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
     <div className="space-y-8">
       <PageHeader title="Messages & Groups" description="Message your whole community, a group, or a single affiliate — and manage your groups." />
 
-      <BroadcastComposer audiences={audiences} defaultAffiliate={target ? { id: target.id, name: target.name } : undefined} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Megaphone className="size-4 text-primary" /> Sent &amp; scheduled
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {messages.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">No broadcasts sent yet.</p>
-          )}
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className="flex flex-col gap-3 rounded-lg border border-hairline p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-medium">{m.subject}</p>
-                  {m.sentAt ? (
-                    <Badge variant="success">Sent</Badge>
-                  ) : (
-                    <Badge variant="warning"><Clock className="size-3" /> Scheduled</Badge>
-                  )}
+      {/* Everything behind its own button — nothing open by default */}
+      <div className="flex flex-wrap gap-2">
+        <CreateReveal label="Compose broadcast" defaultOpen={!!target}>
+          <div className="pt-2">
+            <BroadcastComposer audiences={audiences} defaultAffiliate={target ? { id: target.id, name: target.name } : undefined} />
+          </div>
+        </CreateReveal>
+        <CreateReveal label="New group">
+          <div className="max-w-md pt-2"><GroupForm /></div>
+        </CreateReveal>
+        <CreateReveal label="Message history">
+          <Card className="mt-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="size-4 text-primary" /> Sent &amp; scheduled
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {messages.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">No broadcasts sent yet.</p>
+              )}
+              {messages.map((m) => (
+                <div key={m.id} className="flex flex-col gap-3 rounded-lg border border-hairline p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">{m.subject}</p>
+                      {m.sentAt ? <Badge variant="success">Sent</Badge> : <Badge variant="warning"><Clock className="size-3" /> Scheduled</Badge>}
+                    </div>
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{m.body}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-5 text-sm">
+                    <span className="flex items-center gap-1.5 text-muted-foreground"><Users className="size-3.5" /> {m.recipients}</span>
+                    {m.openRate != null && <span className="flex items-center gap-1.5 font-medium text-success"><MailOpen className="size-3.5" /> {m.openRate}%</span>}
+                    <span className="text-muted-foreground">{formatDate(m.sentAt ?? m.scheduledFor)}</span>
+                  </div>
                 </div>
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">{m.body}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-5 text-sm">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Users className="size-3.5" /> {m.recipients}
-                </span>
-                {m.openRate != null && (
-                  <span className="flex items-center gap-1.5 font-medium text-success">
-                    <MailOpen className="size-3.5" /> {m.openRate}%
-                  </span>
-                )}
-                <span className="text-muted-foreground">{formatDate(m.sentAt ?? m.scheduledFor)}</span>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+              ))}
+            </CardContent>
+          </Card>
+        </CreateReveal>
+      </div>
 
-      {/* Groups — merged into this tab */}
+      {/* Groups — the default content of this tab */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <UsersRound className="size-4" /> Groups
-          </h2>
-          <CreateReveal label="New group">
-            <div className="max-w-md pt-2">
-              <GroupForm />
-            </div>
-          </CreateReveal>
-        </div>
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <UsersRound className="size-4" /> Groups
+        </h2>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {groups.length === 0 && (
             <p className="col-span-full rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
