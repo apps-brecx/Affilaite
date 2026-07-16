@@ -28,18 +28,39 @@ export async function sendSms(to: string, body: string): Promise<SmsResult> {
 }
 
 /**
- * The single pluggable seam. Drop your provider's API call in here — e.g. Twilio:
- *
- *   const auth = Buffer.from(`${cfg.apiKey}:${cfg.apiSecret}`).toString("base64");
- *   const res = await fetch(
- *     `https://api.twilio.com/2010-04-01/Accounts/${cfg.apiKey}/Messages.json`,
- *     { method: "POST", headers: { Authorization: `Basic ${auth}`,
- *       "Content-Type": "application/x-www-form-urlencoded" },
- *       body: new URLSearchParams({ To: to, From: cfg.from, Body: body }) });
- *   if (!res.ok) throw new Error(`Twilio ${res.status}: ${await res.text()}`);
+ * The pluggable seam. Twilio is wired below; add other providers as new cases.
  */
 async function deliver(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, body: string): Promise<void> {
-  void to;
-  void body;
-  throw new Error(`SMS provider "${cfg.provider}" is set but no delivery adapter is wired yet.`);
+  const provider = cfg.provider.trim().toLowerCase();
+  if (provider === "twilio") return deliverTwilio(cfg, to, body);
+  throw new Error(`SMS provider "${cfg.provider}" has no delivery adapter.`);
+}
+
+/**
+ * Twilio Messages API. Uses the config's apiKey as the Account SID, apiSecret as
+ * the Auth Token, and `from` as either a sender number (E.164) or a Messaging
+ * Service SID (starts with "MG").
+ */
+async function deliverTwilio(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, body: string): Promise<void> {
+  const accountSid = cfg.apiKey.trim();
+  const authToken = cfg.apiSecret.trim();
+  const from = cfg.from.trim();
+  if (!accountSid || !authToken || !from) {
+    throw new Error("Twilio needs an Account SID, Auth Token, and a From number / Messaging Service SID.");
+  }
+
+  const params = new URLSearchParams({ To: to, Body: body });
+  if (from.startsWith("MG")) params.set("MessagingServiceSid", from);
+  else params.set("From", from);
+
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`, {
+    method: "POST",
+    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Twilio ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+  }
 }

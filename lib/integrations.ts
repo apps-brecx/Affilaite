@@ -116,10 +116,11 @@ export async function smsReady() {
 
 /** Non-secret status snapshot for the Settings UI. */
 export async function integrationsStatus() {
-  const [s, p, e] = await Promise.all([shopifyConfig(), paypalConfig(), emailConfig()]);
+  const [s, p, e, sms] = await Promise.all([shopifyConfig(), paypalConfig(), emailConfig(), smsConfig()]);
   return {
     shopify: { ready: Boolean(s.domain && s.token), domain: s.domain, version: s.version, tokenMask: mask(s.token), secretMask: mask(s.apiSecret) },
-    paypal: { ready: Boolean(p.clientId && p.clientSecret), base: p.base, clientIdMask: mask(p.clientId), clientSecretMask: mask(p.clientSecret) },
+    paypal: { ready: Boolean(p.clientId && p.clientSecret), base: p.base, clientIdMask: mask(p.clientId), clientSecretMask: mask(p.clientSecret), webhookId: p.webhookId },
     email: { ready: Boolean(e.apiKey), from: e.from, keyMask: mask(e.apiKey) },
+    sms: { ready: Boolean(sms.provider), provider: sms.provider, from: sms.from, keyMask: mask(sms.apiKey), secretMask: mask(sms.apiSecret) },
   };
 }
