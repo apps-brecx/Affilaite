@@ -68,6 +68,11 @@ async function deliverTwilio(cfg: Awaited<ReturnType<typeof smsConfig>>, to: str
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Twilio ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+    // 70051 / "required permission ... missing" = the API Key can't send SMS.
+    const permission = /70051|required permission|messages\/create/i.test(detail);
+    const hint = permission
+      ? " — this API Key lacks Messaging permission. Use your Account SID + Auth Token instead (clear the API Key SID field and put your Auth Token in the secret field), or create a Standard API Key with Messaging access."
+      : "";
+    throw new Error(`Twilio ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}${hint}`);
   }
 }
