@@ -77,6 +77,7 @@ export async function paypalConfig() {
     clientId: await secret("int_paypal_client_id", "PAYPAL_CLIENT_ID"),
     clientSecret: await secret("int_paypal_client_secret", "PAYPAL_CLIENT_SECRET"),
     base: await plain("int_paypal_base", "PAYPAL_BASE", "https://api-m.sandbox.paypal.com"),
+    webhookId: await plain("int_paypal_webhook_id", "PAYPAL_WEBHOOK_ID"),
   };
 }
 

@@ -1,4 +1,5 @@
 // db/schema.ts — Affilaite data model (Neon Postgres via Drizzle)
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -10,6 +11,7 @@ import {
   jsonb,
   pgEnum,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["admin", "affiliate"]);
@@ -181,6 +183,11 @@ export const commissions = pgTable(
   (t) => ({
     affIdx: index("comm_aff_idx").on(t.affiliateId),
     statusIdx: index("comm_status_idx").on(t.status),
+    // At most one *positive* commission per order (negative refund adjustments
+    // are exempt so post-payout clawbacks can be netted against later batches).
+    orderPositiveUniq: uniqueIndex("comm_order_positive_uniq")
+      .on(t.orderId)
+      .where(sql`${t.amount} >= 0`),
   }),
 );
 
@@ -189,6 +196,7 @@ export const payoutItems = pgTable("payout_items", {
   payoutId: uuid("payout_id").references(() => payouts.id),
   affiliateId: uuid("affiliate_id").references(() => affiliates.id),
   amount: numeric("amount", { precision: 12, scale: 2 }),
+  currency: text("currency").default("USD"),
   paypalItemId: text("paypal_item_id"),
   transactionStatus: text("transaction_status"),
 });
@@ -312,5 +320,7 @@ export const webhookEvents = pgTable(
     processedAt: timestamp("processed_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ dedupeIdx: index("wh_dedupe_idx").on(t.source, t.externalId) }),
+  // Unique so an insert is the idempotency gate against concurrent Shopify
+  // retries (check-then-insert races otherwise let two deliveries both through).
+  (t) => ({ dedupeIdx: uniqueIndex("wh_dedupe_idx").on(t.source, t.externalId) }),
 );

@@ -39,7 +39,7 @@ export async function shopifyGraphQL<T = any>(query: string, variables?: Record<
 
 /** Register the webhooks this app depends on. Run once during setup. */
 export async function registerWebhooks(callbackUrl: string) {
-  const topics = ["ORDERS_CREATE", "ORDERS_UPDATED", "REFUNDS_CREATE"];
+  const topics = ["ORDERS_CREATE", "ORDERS_PAID", "ORDERS_CANCELLED", "REFUNDS_CREATE"];
   const mutation = `
     mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
       webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {
