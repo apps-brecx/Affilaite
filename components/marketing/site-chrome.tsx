@@ -33,7 +33,7 @@ export function SiteFooter() {
         <div className="flex items-center gap-3">
           <Logo />
         </div>
-        <p>© 2026 Syruvia. Partner program.</p>
+        <p>© 2026 Sipfluence. Partner program.</p>
         <div className="flex gap-6">
           <Link href="/login" className="transition-colors hover:text-foreground">Sign in</Link>
           <Link href="/apply" className="transition-colors hover:text-foreground">Apply</Link>

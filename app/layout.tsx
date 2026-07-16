@@ -25,11 +25,11 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Sipfluence — Syruvia's Affiliate & Referral Program",
+    default: "Sipfluence — Affiliate & Referral Program",
     template: "%s · Sipfluence",
   },
   description:
-    "Sipfluence is Syruvia's affiliate & referral program — sip it, share it, sweeten the deal. Coupon-first attribution, native PayPal payouts, and a partner portal for our sweetest sippers.",
+    "Sipfluence is our affiliate & referral program — sip it, share it, sweeten the deal. Coupon-first attribution, native PayPal payouts, and a partner portal for our sweetest sippers.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

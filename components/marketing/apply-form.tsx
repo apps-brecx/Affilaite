@@ -54,7 +54,7 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
           </motion.span>
           <h2 className="font-display text-2xl font-semibold tracking-tight">Application received</h2>
           <p className="mx-auto mt-2 max-w-sm text-muted-foreground">
-            Thanks for applying to the Syruvia partner program. We'll review your details and email you
+            Thanks for applying to the Sipfluence partner program. We'll review your details and email you
             once you're approved — then you can sign in and grab your code and link.
           </p>
         </CardContent>
@@ -113,7 +113,7 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
           </div>
           <div className="space-y-1.5">
             <Label>Why are you a great fit? (optional)</Label>
-            <Textarea name="applyNote" placeholder="Tell us about your audience and how you'd promote Syruvia…" />
+            <Textarea name="applyNote" placeholder="Tell us about your audience and how you'd promote Sipfluence…" />
           </div>
           <div className="rounded-xl border border-hairline bg-muted/30 p-4">
             <PhoneVerify onVerified={setVerifiedPhone} />
@@ -135,7 +135,7 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             )}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            By applying you agree to the Syruvia partner terms.
+            By applying you agree to the Sipfluence partner terms.
           </p>
         </form>
       </CardContent>

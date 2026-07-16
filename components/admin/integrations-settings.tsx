@@ -225,7 +225,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         fields={() => ({ from, apiKey })}
       >
         <Field label="API key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={secretPlaceholder(status.email.keyMask) || "re_…"} className="font-mono" />
-        <Field label="From address" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Syruvia <affiliates@yourbrand.com>" />
+        <Field label="From address" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Sipfluence <affiliates@yourbrand.com>" />
         <InlineTester inputType="email" placeholder="you@email.com" buttonLabel="Send test" action={testEmail} />
       </IntegrationCard>
 

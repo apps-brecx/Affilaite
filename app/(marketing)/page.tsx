@@ -48,7 +48,7 @@ const FEATURES = [
 
 const STEPS = [
   { n: "01", title: "Apply", body: "Tell us about your audience. We review applications within 48 hours." },
-  { n: "02", title: "Share", body: "Post your Syruvia code or link. Every sale is tracked to you automatically." },
+  { n: "02", title: "Share", body: "Post your Sipfluence code or link. Every sale is tracked to you automatically." },
   { n: "03", title: "Get paid", body: "Approved commissions are paid straight to your PayPal — one clean loop." },
 ];
 
@@ -62,12 +62,12 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-4 py-24 text-center sm:px-6 sm:py-32">
           <Reveal>
             <Badge variant="gold" className="mx-auto mb-6 px-3 py-1">
-              <Sparkles className="size-3.5" /> The Syruvia Partner Program
+              <Sparkles className="size-3.5" /> The Sipfluence Partner Program
             </Badge>
           </Reveal>
           <Reveal delay={0.05}>
             <h1 className="mx-auto max-w-4xl font-display text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-              Partner with Syruvia.{" "}
+              Partner with Sipfluence.{" "}
               <span className="text-gradient-gold">Earn on every sale.</span>
             </h1>
           </Reveal>
@@ -97,7 +97,7 @@ export default function LandingPage() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-semibold tracking-tight">Built for partners</h2>
           <p className="mt-4 text-muted-foreground">
-            Everything you need to promote Syruvia and get paid — nothing you don't.
+            Everything you need to promote Sipfluence and get paid — nothing you don't.
           </p>
         </Reveal>
 

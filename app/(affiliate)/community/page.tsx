@@ -42,7 +42,7 @@ export default async function CommunityPage() {
     <div className="space-y-8">
       <PageHeader
         title="Community"
-        description="Your group and every message from the Syruvia team — all in one place."
+        description="Your group and every message from the Sipfluence team — all in one place."
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -89,7 +89,7 @@ export default async function CommunityPage() {
             <EmptyState
               icon={Mail}
               title="No messages yet"
-              description="Announcements and messages from the Syruvia team will appear here."
+              description="Announcements and messages from the Sipfluence team will appear here."
             />
           ) : (
             <div className="space-y-6">

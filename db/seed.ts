@@ -18,7 +18,7 @@ async function main() {
   const existingAdmin = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!existingAdmin) {
     const passwordHash = await bcrypt.hash(password, 10);
-    await db.insert(users).values({ email, name: "Syruvia Admin", passwordHash, role: "admin" });
+    await db.insert(users).values({ email, name: "Sipfluence Admin", passwordHash, role: "admin" });
     console.log(`✅ Admin created: ${email}`);
   } else {
     console.log(`Admin already exists: ${email}`);
@@ -27,7 +27,7 @@ async function main() {
   const defaultProgram = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
   if (!defaultProgram) {
     await db.insert(programs).values({
-      name: "Syruvia Core",
+      name: "Sipfluence Core",
       commissionType: "percent",
       commissionValue: "15",
       cookieWindowDays: 30,
@@ -35,7 +35,7 @@ async function main() {
       payoutMinimum: "25",
       isDefault: true,
     });
-    console.log("✅ Default program created: Syruvia Core (15%)");
+    console.log("✅ Default program created: Sipfluence Core (15%)");
   } else {
     console.log("Default program already exists.");
   }

@@ -100,7 +100,7 @@ export async function smsConfig() {
 export async function emailConfig() {
   return {
     apiKey: await secret("int_resend_key", "RESEND_API_KEY"),
-    from: await plain("int_email_from", "EMAIL_FROM", "Syruvia <affiliates@yourbrand.com>"),
+    from: await plain("int_email_from", "EMAIL_FROM", "Sipfluence <affiliates@yourbrand.com>"),
   };
 }
 

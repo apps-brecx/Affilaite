@@ -28,7 +28,7 @@ function TemplateForm({
   const [pending, start] = useTransition();
   const [body, setBody] = useState(
     initial?.body ??
-      "Hi {{name}},\n\nYou've been invited to the Syruvia partner program! Your personal discount code is {{code}}.\n\nSign in here: {{loginUrl}}\nTemporary password: {{tempPassword}}\n\nWelcome aboard — happy sharing!",
+      "Hi {{name}},\n\nYou've been invited to the Sipfluence partner program! Your personal discount code is {{code}}.\n\nSign in here: {{loginUrl}}\nTemporary password: {{tempPassword}}\n\nWelcome aboard — happy sharing!",
   );
   const router = useRouter();
   const toast = useToast();
@@ -56,7 +56,7 @@ function TemplateForm({
         </div>
         <div className="space-y-1.5">
           <Label>Email subject</Label>
-          <Input name="subject" required defaultValue={initial?.subject} placeholder="You're invited to Syruvia 🎉" />
+          <Input name="subject" required defaultValue={initial?.subject} placeholder="You're invited to Sipfluence 🎉" />
         </div>
       </div>
       <div className="space-y-1.5">

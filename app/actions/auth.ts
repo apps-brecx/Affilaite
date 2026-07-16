@@ -37,14 +37,14 @@ export async function requestPasswordReset(input: unknown): Promise<Result> {
   const link = `${APP_URL}/reset-password?token=${token}`;
   const body = `Hi ${user.name ?? "there"},
 
-We received a request to reset your Syruvia partner portal password. Click the link below to choose a new one. This link expires in 1 hour and can be used once.
+We received a request to reset your Sipfluence partner portal password. Click the link below to choose a new one. This link expires in 1 hour and can be used once.
 
 ${link}
 
 If you didn't request this, you can safely ignore this email — your password won't change.`;
 
   try {
-    await sendEmail(user.email, "Reset your Syruvia password", wrapEmail(body));
+    await sendEmail(user.email, "Reset your Sipfluence password", wrapEmail(body));
   } catch (e) {
     console.error("[requestPasswordReset] email failed:", e);
   }

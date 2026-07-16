@@ -27,7 +27,7 @@ export default async function AssetsPage() {
         <EmptyState
           icon={Images}
           title="No creatives yet"
-          description="Brand assets will show up here as soon as the Syruvia team adds them. Check back soon."
+          description="Brand assets will show up here as soon as the Sipfluence team adds them. Check back soon."
         />
       )}
 

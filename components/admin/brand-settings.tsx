@@ -59,7 +59,7 @@ export function BrandSettingsCard({ brand }: { brand: BrandSettings }) {
           </p>
           <div className="space-y-1.5">
             <Label>Brand name (wordmark)</Label>
-            <Input value={b.logoText} onChange={(e) => set({ logoText: e.target.value })} placeholder="Syruvia" />
+            <Input value={b.logoText} onChange={(e) => set({ logoText: e.target.value })} placeholder="Sipfluence" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <ColorField label="Primary color" value={b.primaryColor} onChange={(v) => set({ primaryColor: v })} />
@@ -91,7 +91,7 @@ export function BrandSettingsCard({ brand }: { brand: BrandSettings }) {
                 <span className="flex size-6 items-center justify-center rounded-md text-xs font-bold text-white" style={{ background: b.primaryColor }}>
                   {(b.logoText || "S").charAt(0)}
                 </span>
-                {b.logoText || "Syruvia"}
+                {b.logoText || "Sipfluence"}
               </span>
               <span className="text-xs" style={{ color: b.accentColor }}>Partner program</span>
             </div>

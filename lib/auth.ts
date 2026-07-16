@@ -46,7 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const passwordHash = await bcrypt.hash(password, 10);
           const [created] = await db
             .insert(users)
-            .values({ email, name: "Syruvia Admin", passwordHash, role: "admin" })
+            .values({ email, name: "Sipfluence Admin", passwordHash, role: "admin" })
             .returning();
           user = created;
 
@@ -54,7 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const hasDefault = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
           if (!hasDefault) {
             await db.insert(programs).values({
-              name: "Syruvia Core",
+              name: "Sipfluence Core",
               commissionType: "percent",
               commissionValue: "15",
               cookieWindowDays: 30,
@@ -69,9 +69,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!hasTemplate) {
             await db.insert(inviteTemplates).values({
               name: "Warm welcome",
-              subject: "You're invited to the Syruvia partner program 🎉",
+              subject: "You're invited to the Sipfluence partner program 🎉",
               body:
-                "Hi {{name}},\n\nYou've been invited to join the Syruvia partner program! Your personal discount code is {{code}} — share it and earn on every sale.\n\nSign in here: {{loginUrl}}\nTemporary password: {{tempPassword}} (change it after your first login)\n\nWelcome aboard!",
+                "Hi {{name}},\n\nYou've been invited to join the Sipfluence partner program! Your personal discount code is {{code}} — share it and earn on every sale.\n\nSign in here: {{loginUrl}}\nTemporary password: {{tempPassword}} (change it after your first login)\n\nWelcome aboard!",
               isDefault: true,
             });
           }
