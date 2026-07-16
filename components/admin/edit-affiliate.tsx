@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Loader2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { updateAffiliateInfo } from "@/app/actions/admin";
 import type { Affiliate } from "@/lib/types";
@@ -31,7 +31,12 @@ export function EditAffiliateInfo({ affiliate }: { affiliate: Affiliate }) {
         name: String(fd.get("name") ?? ""),
         email: String(fd.get("email") ?? ""),
         phone: String(fd.get("phone") ?? ""),
-        address: String(fd.get("address") ?? ""),
+        addressLine1: String(fd.get("addressLine1") ?? ""),
+        addressLine2: String(fd.get("addressLine2") ?? ""),
+        city: String(fd.get("city") ?? ""),
+        region: String(fd.get("region") ?? ""),
+        postalCode: String(fd.get("postalCode") ?? ""),
+        country: String(fd.get("country") ?? ""),
         paypalEmail: String(fd.get("paypalEmail") ?? ""),
         companyName: String(fd.get("companyName") ?? ""),
       });
@@ -51,7 +56,12 @@ export function EditAffiliateInfo({ affiliate }: { affiliate: Affiliate }) {
         <div className="space-y-1"><Label>Mobile number</Label><Input name="phone" type="tel" defaultValue={affiliate.phone ?? ""} placeholder="+1 555 123 4567" /></div>
         <div className="space-y-1"><Label>PayPal email</Label><Input name="paypalEmail" type="email" defaultValue={affiliate.paypalEmail ?? ""} placeholder="Optional" /></div>
         <div className="space-y-1"><Label>Company</Label><Input name="companyName" defaultValue={affiliate.companyName ?? ""} placeholder="Optional" /></div>
-        <div className="space-y-1 sm:col-span-2"><Label>Shipping address (samples)</Label><Textarea name="address" rows={2} defaultValue={affiliate.address ?? ""} placeholder="Street, city, state, ZIP, country" /></div>
+        <div className="space-y-1 sm:col-span-2"><Label>Street address</Label><Input name="addressLine1" defaultValue={affiliate.addressLine1 ?? ""} placeholder="123 Main St" /></div>
+        <div className="space-y-1 sm:col-span-2"><Label>Apt / suite</Label><Input name="addressLine2" defaultValue={affiliate.addressLine2 ?? ""} placeholder="Optional" /></div>
+        <div className="space-y-1"><Label>City</Label><Input name="city" defaultValue={affiliate.city ?? ""} /></div>
+        <div className="space-y-1"><Label>State / province</Label><Input name="region" defaultValue={affiliate.region ?? ""} /></div>
+        <div className="space-y-1"><Label>ZIP / postal code</Label><Input name="postalCode" defaultValue={affiliate.postalCode ?? ""} /></div>
+        <div className="space-y-1"><Label>Country</Label><Input name="country" defaultValue={affiliate.country ?? ""} /></div>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={pending}>

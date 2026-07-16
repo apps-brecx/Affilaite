@@ -32,7 +32,12 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
       audienceSize: String(fd.get("audienceSize") ?? ""),
       handle: String(fd.get("handle") ?? ""),
       applyNote: String(fd.get("applyNote") ?? ""),
-      address: String(fd.get("address") ?? ""),
+      addressLine1: String(fd.get("addressLine1") ?? ""),
+      addressLine2: String(fd.get("addressLine2") ?? ""),
+      city: String(fd.get("city") ?? ""),
+      region: String(fd.get("region") ?? ""),
+      postalCode: String(fd.get("postalCode") ?? ""),
+      country: String(fd.get("country") ?? ""),
       phone: verifiedPhone ?? "",
     };
     start(async () => {
@@ -116,10 +121,38 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             <Label>Why are you a great fit? (optional)</Label>
             <Textarea name="applyNote" placeholder="Tell us about your audience and how you'd promote Sipfluence…" />
           </div>
-          <div className="space-y-1.5">
-            <Label>Shipping address for samples (optional)</Label>
-            <Textarea name="address" rows={2} placeholder="Street, city, state, ZIP, country — add this if you'd like to receive product samples" />
-          </div>
+          <fieldset className="space-y-3 rounded-xl border border-hairline p-4">
+            <legend className="px-1 text-sm font-medium">Shipping address for samples (optional)</legend>
+            <p className="-mt-1 text-xs text-muted-foreground">Add this if you'd like to receive product samples. You can also fill it in later.</p>
+            <div className="space-y-1.5">
+              <Label>Street address</Label>
+              <Input name="addressLine1" placeholder="123 Main St" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Apt / suite (optional)</Label>
+              <Input name="addressLine2" placeholder="Apt 4B" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Input name="city" placeholder="City" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>State / province</Label>
+                <Input name="region" placeholder="State" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>ZIP / postal code</Label>
+                <Input name="postalCode" placeholder="ZIP" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Country</Label>
+                <Input name="country" placeholder="Country" />
+              </div>
+            </div>
+          </fieldset>
           <div className="rounded-xl border border-hairline bg-muted/30 p-4">
             <PhoneVerify onVerified={setVerifiedPhone} />
             <p className="mt-2 text-xs text-muted-foreground">

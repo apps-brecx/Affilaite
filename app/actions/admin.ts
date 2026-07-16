@@ -35,6 +35,7 @@ import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
 import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeAddress, composeAddress } from "@/lib/address";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
@@ -155,7 +156,12 @@ export async function updateAffiliateInfo(id: string, input: unknown): Promise<A
       name: z.string().min(1, "Enter a name"),
       email: z.string().email("Enter a valid email"),
       phone: z.string().optional(),
-      address: z.string().optional(),
+      addressLine1: z.string().optional(),
+      addressLine2: z.string().optional(),
+      city: z.string().optional(),
+      region: z.string().optional(),
+      postalCode: z.string().optional(),
+      country: z.string().optional(),
       paypalEmail: z.string().email().optional().or(z.literal("")),
       companyName: z.string().optional(),
     })
@@ -174,13 +180,22 @@ export async function updateAffiliateInfo(id: string, input: unknown): Promise<A
   if (d.phone && d.phone.trim() && !phone) return { ok: false, message: "Enter a valid phone number." };
   const phoneChanged = (phone ?? null) !== (aff.phone ?? null);
 
+  const addr = normalizeAddress(d);
+  const composed = composeAddress(addr);
+
   await db.update(users).set({ name: d.name, email: newEmail }).where(eq(users.id, aff.userId));
   await db
     .update(affiliates)
     .set({
       phone,
       ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
-      address: d.address?.trim() || null,
+      address: composed || null,
+      addressLine1: addr.line1 || null,
+      addressLine2: addr.line2 || null,
+      city: addr.city || null,
+      region: addr.region || null,
+      postalCode: addr.postalCode || null,
+      country: addr.country || null,
       paypalEmail: d.paypalEmail?.trim().toLowerCase() || null,
       companyName: d.companyName?.trim() || null,
     })

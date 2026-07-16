@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Instagram, Globe, Loader2, Phone, Mail, MapPin } from "lucide-react";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/toast";
@@ -21,7 +21,12 @@ export function ProfileForm({ me }: { me: Affiliate }) {
         name: String(fd.get("name") ?? ""),
         email: String(fd.get("email") ?? ""),
         phone: String(fd.get("phone") ?? ""),
-        address: String(fd.get("address") ?? ""),
+        addressLine1: String(fd.get("addressLine1") ?? ""),
+        addressLine2: String(fd.get("addressLine2") ?? ""),
+        city: String(fd.get("city") ?? ""),
+        region: String(fd.get("region") ?? ""),
+        postalCode: String(fd.get("postalCode") ?? ""),
+        country: String(fd.get("country") ?? ""),
         companyName: String(fd.get("companyName") ?? ""),
         instagram: String(fd.get("instagram") ?? ""),
         website: String(fd.get("website") ?? ""),
@@ -62,14 +67,40 @@ export function ProfileForm({ me }: { me: Affiliate }) {
           <Label>Company (optional)</Label>
           <Input name="companyName" defaultValue={me.companyName ?? ""} />
         </div>
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label>Shipping address (for samples)</Label>
-          <div className="relative">
-            <MapPin className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-            <Textarea name="address" className="pl-9" rows={2} defaultValue={me.address ?? ""} placeholder="Street, city, state, ZIP, country" />
+        <fieldset className="space-y-3 rounded-xl border border-hairline p-4 sm:col-span-2">
+          <legend className="flex items-center gap-1.5 px-1 text-sm font-medium">
+            <MapPin className="size-4 text-muted-foreground" /> Shipping address (for samples)
+          </legend>
+          <div className="space-y-1.5">
+            <Label>Street address</Label>
+            <Input name="addressLine1" defaultValue={me.addressLine1 ?? ""} placeholder="123 Main St" />
           </div>
-          <p className="text-[11px] text-muted-foreground">Add this if you&apos;d like to receive product samples (coming soon).</p>
-        </div>
+          <div className="space-y-1.5">
+            <Label>Apt / suite (optional)</Label>
+            <Input name="addressLine2" defaultValue={me.addressLine2 ?? ""} placeholder="Apt 4B" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>City</Label>
+              <Input name="city" defaultValue={me.city ?? ""} placeholder="City" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>State / province</Label>
+              <Input name="region" defaultValue={me.region ?? ""} placeholder="State" />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>ZIP / postal code</Label>
+              <Input name="postalCode" defaultValue={me.postalCode ?? ""} placeholder="ZIP" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Country</Label>
+              <Input name="country" defaultValue={me.country ?? ""} placeholder="Country" />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Add this if you&apos;d like to receive product samples.</p>
+        </fieldset>
         <div className="space-y-1.5">
           <Label>Instagram</Label>
           <div className="relative">

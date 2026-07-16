@@ -115,8 +115,15 @@ export const affiliates = pgTable(
     payoutMethod: payoutMethod("payout_method").notNull().default("venmo"),
     phone: text("phone"),
     phoneVerifiedAt: timestamp("phone_verified_at"),
-    // Shipping address for product samples (opt-in; sample program comes later).
+    // Shipping address for product samples (opt-in). `address` holds a composed
+    // single-line copy for display/Shopify; the structured parts back the forms.
     address: text("address"),
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    city: text("city"),
+    region: text("region"),
+    postalCode: text("postal_code"),
+    country: text("country"),
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),

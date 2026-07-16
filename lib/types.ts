@@ -65,7 +65,13 @@ export interface Affiliate {
   payoutMethod: "paypal" | "venmo";
   phone: string | null;
   phoneVerified: boolean;
-  address: string | null;
+  address: string | null; // composed single line (display / Shopify)
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  country: string | null;
   companyName: string | null;
   programId: string;
   programName: string;

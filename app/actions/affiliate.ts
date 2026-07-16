@@ -9,6 +9,7 @@ import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCod
 import { auth } from "@/lib/auth";
 import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
+import { normalizeAddress, composeAddress } from "@/lib/address";
 import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
 import { shopifyReady } from "@/lib/integrations";
 import { sendEmailSafe } from "@/lib/email";
@@ -55,67 +56,86 @@ const applySchema = z.object({
   applyNote: z.string().optional(),
   paypalEmail: z.string().email("Enter a valid PayPal email").optional().or(z.literal("")),
   phone: z.string().optional(),
-  address: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  region: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
 });
 
 export async function applyAsAffiliate(input: unknown): Promise<ActionResult & { affiliateId?: string }> {
   if (!db) return { ok: false, message: "Database not configured." };
-  if (!rateLimit(`apply:${await clientIp()}`, 5, 10 * 60_000).ok) {
-    return { ok: false, message: "Too many attempts — please try again in a few minutes." };
+  try {
+    if (!rateLimit(`apply:${await clientIp()}`, 5, 10 * 60_000).ok) {
+      return { ok: false, message: "Too many attempts — please try again in a few minutes." };
+    }
+    const parsed = applySchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
+    const data = parsed.data;
+
+    // Phone verification (Venmo payouts pay to this number). Admin-toggleable.
+    const phone = data.phone ? normalizePhone(data.phone) : null;
+    const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
+    if (await phoneVerificationRequired()) {
+      if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
+      if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
+    }
+
+    const existing = await db.query.users.findFirst({ where: eq(users.email, data.email.toLowerCase()) });
+    if (existing) return { ok: false, message: "An account with this email already exists." };
+
+    const addr = normalizeAddress(data);
+    const composed = composeAddress(addr);
+
+    const passwordHash = await bcrypt.hash(data.password, 10);
+    const [user] = await db
+      .insert(users)
+      .values({ email: data.email.toLowerCase(), name: data.name, passwordHash, role: "affiliate" })
+      .returning();
+
+    const defaultProgram = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+    const refCode = await uniqueRefCode(slugCode(data.name));
+    const socialLinks: Record<string, string> = data.handle ? { handle: data.handle } : {};
+
+    const [aff] = await db
+      .insert(affiliates)
+      .values({
+        userId: user.id,
+        status: "pending",
+        refCode,
+        paypalEmail: data.paypalEmail || null,
+        phone: phone ?? null,
+        phoneVerifiedAt: verified ? new Date() : null,
+        address: composed || null,
+        addressLine1: addr.line1 || null,
+        addressLine2: addr.line2 || null,
+        city: addr.city || null,
+        region: addr.region || null,
+        postalCode: addr.postalCode || null,
+        country: addr.country || null,
+        companyName: data.companyName || null,
+        channel: data.channel || null,
+        audienceSize: data.audienceSize || null,
+        applyNote: data.applyNote || null,
+        programId: defaultProgram?.id ?? null,
+        socialLinks,
+      })
+      .returning();
+
+    await sendEmailSafe(
+      data.email,
+      "We got your application 🎉",
+      `Hi ${data.name},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.`,
+    );
+
+    revalidatePath("/admin/affiliates");
+    revalidatePath("/admin");
+    return { ok: true, message: "Application received", affiliateId: aff.id };
+  } catch (e: any) {
+    console.error("[applyAsAffiliate]", e);
+    return { ok: false, message: "Something went wrong submitting your application. Please try again." };
   }
-  const parsed = applySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
-  const data = parsed.data;
-
-  // Phone verification (Venmo payouts pay to this number). Admin-toggleable.
-  const phone = data.phone ? normalizePhone(data.phone) : null;
-  const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
-  if (await phoneVerificationRequired()) {
-    if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
-    if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
-  }
-
-  const existing = await db.query.users.findFirst({ where: eq(users.email, data.email.toLowerCase()) });
-  if (existing) return { ok: false, message: "An account with this email already exists." };
-
-  const passwordHash = await bcrypt.hash(data.password, 10);
-  const [user] = await db
-    .insert(users)
-    .values({ email: data.email.toLowerCase(), name: data.name, passwordHash, role: "affiliate" })
-    .returning();
-
-  const defaultProgram = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
-  const refCode = await uniqueRefCode(slugCode(data.name));
-  const socialLinks: Record<string, string> = data.handle ? { handle: data.handle } : {};
-
-  const [aff] = await db
-    .insert(affiliates)
-    .values({
-      userId: user.id,
-      status: "pending",
-      refCode,
-      paypalEmail: data.paypalEmail || null,
-      phone: phone ?? null,
-      phoneVerifiedAt: verified ? new Date() : null,
-      address: data.address?.trim() || null,
-      companyName: data.companyName || null,
-      channel: data.channel || null,
-      audienceSize: data.audienceSize || null,
-      applyNote: data.applyNote || null,
-      programId: defaultProgram?.id ?? null,
-      socialLinks,
-    })
-    .returning();
-
-  await sendEmailSafe(
-    data.email,
-    "We got your application 🎉",
-    `Hi ${data.name},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.`,
-  );
-
-  revalidatePath("/admin/affiliates");
-  revalidatePath("/admin");
-  return { ok: true, message: "Application received", affiliateId: aff.id };
 }
 
 const joinSchema = z.object({
@@ -262,7 +282,12 @@ const profileSchema = z.object({
   name: z.string().min(2, "Enter your name"),
   email: z.string().email("Enter a valid email"),
   phone: z.string().optional(),
-  address: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  region: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
   companyName: z.string().optional(),
   instagram: z.string().optional(),
   website: z.string().optional(),
@@ -276,7 +301,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!userId || !affiliateId) return { ok: false, message: "Not signed in." };
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
-  const { name, email, phone, address, companyName, instagram, website } = parsed.data;
+  const { name, email, phone, companyName, instagram, website } = parsed.data;
 
   const newEmail = email.toLowerCase().trim();
   // Email is the login — enforce uniqueness before changing it.
@@ -289,13 +314,22 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   // Changing the number means it's no longer the verified one.
   const phoneChanged = (normalizedPhone ?? null) !== (current?.phone ?? null);
 
+  const addr = normalizeAddress(parsed.data);
+  const composed = composeAddress(addr);
+
   await db.update(users).set({ name, email: newEmail }).where(eq(users.id, userId));
   await db
     .update(affiliates)
     .set({
       phone: normalizedPhone,
       ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
-      address: address?.trim() || null,
+      address: composed || null,
+      addressLine1: addr.line1 || null,
+      addressLine2: addr.line2 || null,
+      city: addr.city || null,
+      region: addr.region || null,
+      postalCode: addr.postalCode || null,
+      country: addr.country || null,
       companyName: companyName || null,
       socialLinks: { instagram: instagram ?? "", website: website ?? "" },
     })
