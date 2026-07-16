@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CopyButton } from "@/components/ui/copy-button";
 import { CatalogBrowser } from "@/components/affiliate/catalog-browser";
+import { PromoBanner } from "@/components/ui/promo-banner";
 import { requireAffiliate } from "@/lib/session";
-import { getPromotionsForAffiliate, getDefaultDestination } from "@/lib/queries";
+import { getPromotionsForAffiliate, getDefaultDestination, getBanner } from "@/lib/queries";
 import {
   getStoreProducts,
   getCatalogConfig,
@@ -22,13 +23,14 @@ export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
   const me = await requireAffiliate();
-  const [promos, catalog, config, collectionsRaw, collectionConfig, website] = await Promise.all([
+  const [promos, catalog, config, collectionsRaw, collectionConfig, website, banner] = await Promise.all([
     getPromotionsForAffiliate(me),
     getStoreProducts(100),
     getCatalogConfig(),
     getStoreCollections(100),
     getCollectionConfig(),
     getDefaultDestination(),
+    getBanner("promotions"),
   ]);
 
   const visibleProducts = applyCatalogConfig(catalog.products, config).map((p) => ({
@@ -58,6 +60,8 @@ export default async function PromotionsPage() {
           </a>
         </Button>
       </PageHeader>
+
+      <PromoBanner banner={banner} />
 
       {/* Active promotions */}
       <section className="space-y-3">

@@ -3,8 +3,10 @@ import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SampleActions } from "@/components/admin/sample-actions";
+import { SamplesSettings } from "@/components/admin/samples-settings";
 import { requireAdmin } from "@/lib/session";
-import { listSampleRequests } from "@/lib/queries";
+import { listSampleRequests, getBanner } from "@/lib/queries";
+import { getStoreProducts, getSamplesConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -18,9 +20,15 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function AdminSamplesPage() {
   await requireAdmin();
-  const requests = await listSampleRequests();
+  const [requests, catalog, samplesConfig, banner] = await Promise.all([
+    listSampleRequests(),
+    getStoreProducts(100),
+    getSamplesConfig(),
+    getBanner("samples"),
+  ]);
   const open = requests.filter((r) => r.status === "requested");
   const rest = requests.filter((r) => r.status !== "requested");
+  const catalogForSettings = catalog.products.map((p) => ({ id: p.id, title: p.title, image: p.image, available: p.available }));
 
   const Row = ({ r }: { r: (typeof requests)[number] }) => {
     const s = STATUS[r.status] ?? STATUS.requested;
@@ -79,6 +87,13 @@ export default async function AdminSamplesPage() {
       <PageHeader
         title="Sample requests"
         description="Review affiliate sample requests. Approving creates a Shopify draft order (when connected) so you can fulfill and ship."
+      />
+
+      <SamplesSettings
+        products={catalogForSettings}
+        order={samplesConfig.order}
+        shown={samplesConfig.shown}
+        banner={banner}
       />
 
       <Card>

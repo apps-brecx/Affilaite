@@ -167,6 +167,8 @@ async function readConfig(key: string): Promise<CatalogConfig> {
 
 export const getCatalogConfig = () => readConfig("catalog_config");
 export const getCollectionConfig = () => readConfig("collection_config");
+// Samples have their own curation, independent of the promotions catalog.
+export const getSamplesConfig = () => readConfig("samples_catalog_config");
 
 /** Apply the admin's curation: only show allowlisted items, in the saved order. */
 export function applyConfig<T extends { id: string }>(items: T[], config: CatalogConfig): T[] {

@@ -11,6 +11,8 @@ import { EarningsArea } from "@/components/charts/charts";
 import { AffiliateActions, ReassignProgram } from "@/components/admin/affiliate-actions";
 import { AffiliateCampaigns, EditCode } from "@/components/admin/affiliate-membership";
 import { EditAffiliateInfo } from "@/components/admin/edit-affiliate";
+import { SamplesBanToggle } from "@/components/admin/samples-ban-toggle";
+import { Badge } from "@/components/ui/badge";
 import {
   getAffiliate,
   getAffiliateCommissions,
@@ -18,9 +20,10 @@ import {
   listPrograms,
   listCampaigns,
   getAffiliateCampaignIds,
+  getMySampleRequests,
 } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Rocket } from "lucide-react";
+import { Rocket, Gift } from "lucide-react";
 
 export default async function AffiliateDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +34,11 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
   const programs = await listPrograms();
   const campaigns = await listCampaigns();
   const campaignIds = await getAffiliateCampaignIds(a.id);
+  const samples = await getMySampleRequests(a.id);
+
+  const sampleStatus: Record<string, "default" | "success" | "warning" | "danger"> = {
+    requested: "warning", approved: "success", shipped: "success", rejected: "danger",
+  };
 
   return (
     <div className="space-y-8">
@@ -106,9 +114,44 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
               <p className="text-xs text-muted-foreground">Reassign program</p>
               <ReassignProgram id={a.id} programId={a.programId} programs={programs.map((p) => ({ id: p.id, name: p.name }))} />
             </div>
+            <div className="flex items-center justify-between border-t border-hairline pt-3">
+              <span className="text-xs text-muted-foreground">Samples {a.samplesBanned ? "· banned" : ""}</span>
+              <SamplesBanToggle affiliateId={a.id} banned={a.samplesBanned} />
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Sample requests */}
+      {samples.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Gift className="size-4 text-primary" /> Sample requests</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {samples.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg border border-hairline p-3">
+                <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                  {s.productImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.productImage} alt="" className="size-full object-cover" />
+                  ) : (
+                    <Gift className="size-4 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{s.productTitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(s.createdAt)}
+                    {s.trackingNumber ? ` · ${s.carrier ? s.carrier + " " : ""}${s.trackingNumber}` : ""}
+                  </p>
+                </div>
+                <Badge variant={sampleStatus[s.status] ?? "warning"} className="shrink-0 capitalize">{s.status}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

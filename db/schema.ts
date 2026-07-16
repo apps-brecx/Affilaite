@@ -124,6 +124,8 @@ export const affiliates = pgTable(
     region: text("region"),
     postalCode: text("postal_code"),
     country: text("country"),
+    // Admin can bar an affiliate from requesting product samples (abuse control).
+    samplesBanned: boolean("samples_banned").notNull().default(false),
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),
@@ -299,6 +301,11 @@ export const sampleRequests = pgTable(
     status: sampleStatus("status").notNull().default("requested"),
     shopifyOrderId: text("shopify_order_id"), // draft order id once created
     adminNote: text("admin_note"),
+    // Fulfillment / shipping (from Shopify or entered by an admin on ship).
+    carrier: text("carrier"),
+    trackingNumber: text("tracking_number"),
+    trackingUrl: text("tracking_url"),
+    shippedAt: timestamp("shipped_at"),
     decidedAt: timestamp("decided_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },

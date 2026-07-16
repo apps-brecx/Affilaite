@@ -112,6 +112,7 @@ function mapAffiliate(row: any, stats: any, clickCount: Map<string, number>): Af
     region: row.aff.region ?? null,
     postalCode: row.aff.postalCode ?? null,
     country: row.aff.country ?? null,
+    samplesBanned: !!row.aff.samplesBanned,
     companyName: row.aff.companyName,
     programId: row.aff.programId ?? "",
     programName: row.program?.name ?? "—",
@@ -273,6 +274,35 @@ export async function getSetting(key: string, fallback = ""): Promise<string> {
 
 export async function getDefaultDestination(): Promise<string> {
   return getSetting("default_destination_url", DEFAULT_DESTINATION_FALLBACK);
+}
+
+export interface Banner {
+  enabled: boolean;
+  title: string;
+  body: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  imageUrl: string;
+}
+
+/** A promo banner for a page ("samples" | "promotions"). Null when not set/off. */
+export async function getBanner(placement: "samples" | "promotions"): Promise<Banner | null> {
+  const raw = await getSetting(`banner_${placement}`, "");
+  if (!raw) return null;
+  try {
+    const b = JSON.parse(raw) as Partial<Banner>;
+    if (!b.enabled || (!b.title && !b.body && !b.imageUrl)) return null;
+    return {
+      enabled: true,
+      title: b.title ?? "",
+      body: b.body ?? "",
+      ctaLabel: b.ctaLabel ?? "",
+      ctaUrl: b.ctaUrl ?? "",
+      imageUrl: b.imageUrl ?? "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getBrand(): Promise<BrandSettings> {
@@ -831,6 +861,10 @@ function mapSample(r: any, user: any): SampleRequest {
     address: r.addressSnapshot ?? null,
     status: r.status,
     shopifyOrderId: r.shopifyOrderId ?? null,
+    carrier: r.carrier ?? null,
+    trackingNumber: r.trackingNumber ?? null,
+    trackingUrl: r.trackingUrl ?? null,
+    shippedAt: r.shippedAt ? new Date(r.shippedAt).toISOString() : null,
     createdAt: (r.createdAt ?? new Date()).toISOString?.() ?? String(r.createdAt),
     decidedAt: r.decidedAt ? new Date(r.decidedAt).toISOString() : null,
   };

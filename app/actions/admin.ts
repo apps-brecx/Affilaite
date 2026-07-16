@@ -1332,6 +1332,50 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
   return { ok: true, message: "Catalog updated." };
 }
 
+/** Which products (and their order) affiliates can request as samples. */
+export async function saveSamplesConfig(input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid samples settings." };
+  await writeSetting("samples_catalog_config", JSON.stringify(parsed.data));
+  revalidatePath("/samples");
+  revalidatePath("/admin/samples");
+  return { ok: true, message: "Sample catalog updated." };
+}
+
+/** Save (or clear) the promo banner shown on the samples or promotions page. */
+export async function saveBanner(placement: "samples" | "promotions", input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  if (placement !== "samples" && placement !== "promotions") return { ok: false, message: "Unknown banner." };
+  const parsed = z
+    .object({
+      enabled: z.coerce.boolean().default(false),
+      title: z.string().max(120).optional().default(""),
+      body: z.string().max(400).optional().default(""),
+      ctaLabel: z.string().max(40).optional().default(""),
+      ctaUrl: z.string().max(500).optional().default(""),
+      imageUrl: z.string().max(1000).optional().default(""),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid banner." };
+  await writeSetting(`banner_${placement}`, JSON.stringify(parsed.data));
+  revalidatePath(placement === "samples" ? "/samples" : "/promotions");
+  revalidatePath(`/admin/${placement}`);
+  return { ok: true, message: parsed.data.enabled ? "Banner saved." : "Banner hidden." };
+}
+
+/** Ban / unban an affiliate from requesting product samples. */
+export async function setSamplesBanned(affiliateId: string, banned: boolean): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  await db.update(affiliates).set({ samplesBanned: banned }).where(eq(affiliates.id, affiliateId));
+  revalidatePath(`/admin/affiliates/${affiliateId}`);
+  revalidatePath("/admin/samples");
+  return { ok: true, message: banned ? "Affiliate can no longer request samples." : "Sample requests re-enabled." };
+}
+
 /** Mark all current Shopify products & collections as "seen" (clears the new-item dot). */
 export async function markCatalogSeen(): Promise<void> {
   await assertAdmin();
@@ -1525,7 +1569,11 @@ export async function updateAffiliateCode(affiliateId: string, rawCode: string):
 
 /** Approve / reject / mark-shipped a sample request. Approve tries to create a
  *  Shopify draft order (best-effort) to the affiliate's address. */
-export async function decideSampleRequest(id: string, action: "approve" | "reject" | "ship"): Promise<ActionResult> {
+export async function decideSampleRequest(
+  id: string,
+  action: "approve" | "reject" | "ship",
+  tracking?: { carrier?: string; trackingNumber?: string; trackingUrl?: string },
+): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const req = await db.query.sampleRequests.findFirst({ where: eq(sampleRequests.id, id) });
@@ -1540,8 +1588,15 @@ export async function decideSampleRequest(id: string, action: "approve" | "rejec
   }
 
   if (action === "ship") {
-    await db.update(sampleRequests).set({ status: "shipped" }).where(eq(sampleRequests.id, id));
-    await notify(req.affiliateId, "samples", "Your sample shipped 📦", `Your ${req.productTitle ?? "sample"} is on its way!`, "/samples");
+    const carrier = tracking?.carrier?.trim() || null;
+    const trackingNumber = tracking?.trackingNumber?.trim() || null;
+    const trackingUrl = tracking?.trackingUrl?.trim() || null;
+    await db
+      .update(sampleRequests)
+      .set({ status: "shipped", carrier, trackingNumber, trackingUrl, shippedAt: new Date() })
+      .where(eq(sampleRequests.id, id));
+    const track = trackingNumber ? ` Tracking: ${carrier ? carrier + " " : ""}${trackingNumber}.` : "";
+    await notify(req.affiliateId, "samples", "Your sample shipped 📦", `Your ${req.productTitle ?? "sample"} is on its way!${track}`, "/samples");
     revalidatePath("/admin/samples");
     revalidatePath("/samples");
     return { ok: true, message: "Marked as shipped." };

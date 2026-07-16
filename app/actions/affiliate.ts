@@ -361,6 +361,9 @@ export async function requestSample(input: unknown): Promise<ActionResult> {
 
   const me = await getAffiliate(affiliateId);
   if (!me) return { ok: false, message: "Affiliate not found." };
+  if (me.samplesBanned) {
+    return { ok: false, message: "Sample requests are disabled on your account. Contact the team if you think this is a mistake." };
+  }
   if (!me.address || !me.address.trim()) {
     return { ok: false, message: "Add a shipping address in Settings before requesting samples." };
   }

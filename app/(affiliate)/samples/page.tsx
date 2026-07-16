@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SampleCatalog } from "@/components/affiliate/sample-catalog";
+import { PromoBanner } from "@/components/ui/promo-banner";
 import { requireAffiliate } from "@/lib/session";
-import { getMySampleRequests } from "@/lib/queries";
-import { getStoreProducts, getCatalogConfig, applyCatalogConfig } from "@/lib/products";
+import { getMySampleRequests, getBanner } from "@/lib/queries";
+import { getStoreProducts, getSamplesConfig, applyConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -21,18 +22,22 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function SamplesPage() {
   const me = await requireAffiliate();
-  const [catalog, config, mine] = await Promise.all([
+  const [catalog, config, mine, banner] = await Promise.all([
     getStoreProducts(100),
-    getCatalogConfig(),
+    getSamplesConfig(),
     getMySampleRequests(me.id),
+    getBanner("samples"),
   ]);
 
-  const shown = applyCatalogConfig(catalog.products, config);
+  // Curated + ordered, then out-of-stock items sink to the bottom.
+  const curated = applyConfig(catalog.products, config);
+  const shown = [...curated].sort((a, b) => Number(a.available === false) - Number(b.available === false));
   const openProductIds = mine
     .filter((r) => (r.status === "requested" || r.status === "approved") && r.productId)
     .map((r) => r.productId as string);
 
   const hasAddress = !!me.address && me.address.trim().length > 0;
+  const banned = me.samplesBanned;
 
   return (
     <div className="space-y-8">
@@ -41,7 +46,23 @@ export default async function SamplesPage() {
         description="Get the products in your hands so you can create authentic content. Request a sample and we'll ship it to you after a quick review."
       />
 
-      {!hasAddress && (
+      <PromoBanner banner={banner} />
+
+      {banned && (
+        <Card className="border-danger/30 bg-danger-soft/30">
+          <CardContent className="flex items-start gap-3 p-5">
+            <X className="mt-0.5 size-5 shrink-0 text-danger" />
+            <div>
+              <p className="font-medium">Sample requests are disabled</p>
+              <p className="text-sm text-muted-foreground">
+                Your account can't request samples right now. Reach out to the team if you think this is a mistake.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!banned && !hasAddress && (
         <Card className="border-warning/30 bg-warning-soft/30">
           <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -88,6 +109,16 @@ export default async function SamplesPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{r.productTitle}</p>
                     <p className="text-xs text-muted-foreground">Requested {formatDate(r.createdAt)}</p>
+                    {r.status === "shipped" && r.trackingNumber && (
+                      <p className="mt-0.5 text-xs">
+                        <span className="text-muted-foreground">{r.carrier ? `${r.carrier} · ` : ""}Tracking {r.trackingNumber}</span>
+                        {r.trackingUrl && (
+                          <a href={r.trackingUrl} target="_blank" rel="noopener noreferrer" className="ml-1.5 font-medium text-primary hover:underline">
+                            Track
+                          </a>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <Badge variant={s.variant} className="shrink-0">
                     <Icon className="size-3" /> {s.label}
@@ -114,11 +145,11 @@ export default async function SamplesPage() {
                 : "The sample catalog appears here once the store is connected. Check back soon."
             }
           />
-        ) : hasAddress ? (
+        ) : hasAddress && !banned ? (
           <SampleCatalog products={shown} openProductIds={openProductIds} />
         ) : (
           <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
-            Add a shipping address above to request any of these products.
+            {banned ? "Sample requests are disabled on your account." : "Add a shipping address above to request any of these products."}
           </p>
         )}
       </section>

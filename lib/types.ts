@@ -72,6 +72,7 @@ export interface Affiliate {
   region: string | null;
   postalCode: string | null;
   country: string | null;
+  samplesBanned: boolean;
   companyName: string | null;
   programId: string;
   programName: string;
@@ -216,6 +217,10 @@ export interface SampleRequest {
   address: string | null;
   status: "requested" | "approved" | "rejected" | "shipped";
   shopifyOrderId: string | null;
+  carrier: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  shippedAt: string | null;
   createdAt: string;
   decidedAt: string | null;
 }
