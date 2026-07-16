@@ -1174,9 +1174,16 @@ export async function saveIntegration(service: string, fields: Record<string, st
     if (fields.accountSid !== undefined) await writeSetting("int_sms_account_sid", fields.accountSid.trim());
     if (fields.from !== undefined) await writeSetting("int_sms_from", fields.from.trim());
     // Explicit clear lets an admin drop a bad API Key and fall back to Auth Token.
-    if (fields.clearApiKey === "1") await writeSetting("int_sms_key", "");
-    else await writeSecret("int_sms_key", fields.apiKey ?? "");
-    await writeSecret("int_sms_secret", fields.apiSecret ?? "");
+    if (fields.clearApiKey === "1") {
+      await writeSetting("int_sms_key", "");
+      // The old API-Key secret is useless without its key — replace it with the
+      // supplied Auth Token, or clear it so a stale wrong secret can't linger.
+      if (fields.apiSecret && fields.apiSecret.trim()) await writeSecret("int_sms_secret", fields.apiSecret.trim());
+      else await writeSetting("int_sms_secret", "");
+    } else {
+      await writeSecret("int_sms_key", fields.apiKey ?? "");
+      await writeSecret("int_sms_secret", fields.apiSecret ?? "");
+    }
   } else {
     return { ok: false, message: "Unknown integration." };
   }
