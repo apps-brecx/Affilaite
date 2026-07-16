@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PaypalForm } from "@/components/affiliate/paypal-form";
+import { VenmoForm } from "@/components/affiliate/venmo-form";
 import { getAffiliateSummary, listPayouts } from "@/lib/queries";
 import { requireAffiliate } from "@/lib/session";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -23,7 +23,7 @@ export default async function PayoutsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Payouts" description="Your earnings, paid straight to PayPal — no middlemen, no hidden fees." />
+      <PageHeader title="Payouts" description="Your earnings, paid straight to your Venmo — no middlemen, no hidden fees." />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Balance */}
@@ -73,10 +73,10 @@ export default async function PayoutsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PaypalForm defaultEmail={me.paypalEmail ?? ""} />
+            <VenmoForm defaultPhone={me.phone ?? ""} verified={me.phoneVerified} />
             <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
-              Your details are stored securely and never shared. Payouts are sent in secure PayPal batches.
+              Your details are stored securely and never shared. Commissions are sent to your Venmo.
             </div>
           </CardContent>
         </Card>
@@ -87,7 +87,7 @@ export default async function PayoutsPage() {
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle>Payout history</CardTitle>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CircleDollarSign className="size-3.5" /> Paid via PayPal
+            <CircleDollarSign className="size-3.5" /> Paid via Venmo
           </span>
         </CardHeader>
         <CardContent className={myPayouts.length ? "px-0 pb-2" : ""}>

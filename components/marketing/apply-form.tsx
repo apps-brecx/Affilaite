@@ -7,15 +7,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { PhoneVerify } from "@/components/marketing/phone-verify";
 import { applyAsAffiliate } from "@/app/actions/affiliate";
 
-export function ApplyForm() {
+export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
   const [done, setDone] = useState(false);
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const toast = useToast();
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (requirePhone && !verifiedPhone) {
+      toast("Please verify your mobile number first.", "error");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const input = {
       name: String(fd.get("name") ?? ""),
@@ -26,7 +32,7 @@ export function ApplyForm() {
       audienceSize: String(fd.get("audienceSize") ?? ""),
       handle: String(fd.get("handle") ?? ""),
       applyNote: String(fd.get("applyNote") ?? ""),
-      paypalEmail: String(fd.get("paypalEmail") ?? ""),
+      phone: verifiedPhone ?? "",
     };
     start(async () => {
       const res = await applyAsAffiliate(input);
@@ -109,12 +115,15 @@ export function ApplyForm() {
             <Label>Why are you a great fit? (optional)</Label>
             <Textarea name="applyNote" placeholder="Tell us about your audience and how you'd promote Syruvia…" />
           </div>
-          <div className="space-y-1.5">
-            <Label>PayPal email (for payouts)</Label>
-            <Input name="paypalEmail" type="email" placeholder="you@paypal.com" />
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+            <PhoneVerify onVerified={setVerifiedPhone} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              We pay commissions via Venmo to this number, and use it to keep your account secure.
+              {requirePhone && " Verification is required to apply."}
+            </p>
           </div>
 
-          <Button type="submit" className="w-full" size="lg" disabled={pending}>
+          <Button type="submit" className="w-full" size="lg" disabled={pending || (requirePhone && !verifiedPhone)}>
             {pending ? (
               <>
                 <Loader2 className="size-4 animate-spin" /> Submitting…

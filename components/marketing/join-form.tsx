@@ -8,23 +8,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { PhoneVerify } from "@/components/marketing/phone-verify";
 import { joinCampaign } from "@/app/actions/affiliate";
 
 export function JoinForm({
   slug,
   instantAccess,
   approvedMessage,
+  requirePhone = true,
 }: {
   slug: string;
   instantAccess: boolean;
   approvedMessage?: string;
+  requirePhone?: boolean;
 }) {
   const [done, setDone] = useState<null | { instant: boolean }>(null);
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const toast = useToast();
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (requirePhone && !verifiedPhone) {
+      toast("Please verify your mobile number first.", "error");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     start(async () => {
       const res = await joinCampaign({
@@ -32,6 +40,7 @@ export function JoinForm({
         name: String(fd.get("name") ?? ""),
         email: String(fd.get("email") ?? ""),
         password: String(fd.get("password") ?? ""),
+        phone: verifiedPhone ?? "",
       });
       if (res.ok) setDone({ instant: Boolean(res.instant) });
       else toast(res.message, "error");
@@ -83,7 +92,13 @@ export function JoinForm({
             <Label>Create a password</Label>
             <Input name="password" type="password" required minLength={6} placeholder="••••••••" />
           </div>
-          <Button type="submit" className="w-full" size="lg" disabled={pending}>
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+            <PhoneVerify onVerified={setVerifiedPhone} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Commissions are paid via Venmo to this number.{requirePhone && " Verification is required to join."}
+            </p>
+          </div>
+          <Button type="submit" className="w-full" size="lg" disabled={pending || (requirePhone && !verifiedPhone)}>
             {pending ? (
               <><Loader2 className="size-4 animate-spin" /> Joining…</>
             ) : (

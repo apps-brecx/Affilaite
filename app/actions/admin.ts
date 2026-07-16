@@ -532,7 +532,14 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
 
   const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
   if (!aff) return { ok: false, message: "Affiliate not found." };
-  if (!aff.paypalEmail) return { ok: false, message: "This affiliate has no PayPal email on file." };
+  const method = aff.payoutMethod;
+  const receiver = method === "venmo" ? aff.phone : aff.paypalEmail;
+  if (!receiver) {
+    return {
+      ok: false,
+      message: method === "venmo" ? "This affiliate has no verified Venmo phone on file." : "This affiliate has no PayPal email on file.",
+    };
+  }
   // Never fake a payout: if PayPal isn't connected, no money can move.
   if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
 
@@ -549,7 +556,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
 
   try {
     const res = await createPayoutBatch(senderBatchId, [
-      { senderItemId: item.id, amount: amount.toFixed(2), email: aff.paypalEmail, currency: "USD" },
+      { senderItemId: item.id, amount: amount.toFixed(2), receiver, method, currency: "USD" },
     ]);
     await db.update(payouts).set({ paypalBatchId: res.payoutBatchId }).where(eq(payouts.id, batch.id));
   } catch (e) {
@@ -576,11 +583,14 @@ export async function runPayout(): Promise<ActionResult> {
   // touch any commission so nothing is ever marked paid without being sent.
   if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
 
-  // Which approved affiliates clear their program minimum and have a PayPal email?
+  // Which approved affiliates clear their program minimum and have a usable
+  // payout destination (Venmo phone or PayPal email, per their chosen method)?
   const rows = await db
     .select({
       affiliateId: affiliates.id,
       paypalEmail: affiliates.paypalEmail,
+      phone: affiliates.phone,
+      method: affiliates.payoutMethod,
       minimum: programs.payoutMinimum,
       total: sql<string>`coalesce(sum(${commissions.amount}),0)`,
     })
@@ -588,12 +598,18 @@ export async function runPayout(): Promise<ActionResult> {
     .innerJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
     .leftJoin(programs, eq(affiliates.programId, programs.id))
     .where(and(eq(commissions.status, "approved"), isNull(commissions.payoutId), eq(affiliates.status, "approved")))
-    .groupBy(affiliates.id, affiliates.paypalEmail, programs.payoutMinimum);
+    .groupBy(affiliates.id, affiliates.paypalEmail, affiliates.phone, affiliates.payoutMethod, programs.payoutMinimum);
 
-  const payable = rows.filter((r) => r.paypalEmail && Number(r.total) >= Number(r.minimum ?? 0) && Number(r.total) > 0);
+  const receiverOf = (r: { method: "paypal" | "venmo"; phone: string | null; paypalEmail: string | null }) =>
+    r.method === "venmo" ? r.phone : r.paypalEmail;
+  const payable = rows.filter(
+    (r) => receiverOf(r) && Number(r.total) >= Number(r.minimum ?? 0) && Number(r.total) > 0,
+  );
   if (payable.length === 0) return { ok: false, message: "Nothing payable right now." };
 
-  const emailFor = new Map(payable.map((r) => [r.affiliateId, r.paypalEmail!] as const));
+  const methodFor = new Map(
+    payable.map((r) => [r.affiliateId, { method: r.method, receiver: receiverOf(r)! }] as const),
+  );
   const payableIds = payable.map((r) => r.affiliateId);
   const batchId = crypto.randomUUID();
   const senderBatchId = `AFF-${batchId}`; // deterministic per batch (no Date.now)
@@ -601,7 +617,7 @@ export async function runPayout(): Promise<ActionResult> {
   // One transaction claims the exact commission rows this batch will pay by
   // stamping payoutId. A concurrent/double-clicked run finds them already
   // claimed (payoutId IS NULL no longer matches) and pays nothing twice.
-  type Recipient = { senderItemId: string; amount: string; email: string; currency: string; affiliateId: string };
+  type Recipient = { senderItemId: string; amount: string; receiver: string; method: "paypal" | "venmo"; currency: string; affiliateId: string };
   let recipients: Recipient[] = [];
   let claimedTotal = 0;
   try {
@@ -658,7 +674,8 @@ export async function runPayout(): Promise<ActionResult> {
             transactionStatus: "PENDING",
           })
           .returning({ id: payoutItems.id });
-        recs.push({ senderItemId: item.id, amount, email: emailFor.get(g.affiliateId)!, currency: g.currency, affiliateId: g.affiliateId });
+        const m = methodFor.get(g.affiliateId)!;
+        recs.push({ senderItemId: item.id, amount, receiver: m.receiver, method: m.method, currency: g.currency, affiliateId: g.affiliateId });
         grand += g.total;
       }
 

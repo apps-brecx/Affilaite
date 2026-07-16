@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getEarningsSeries } from "@/lib/queries";
+import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import type { TimePoint } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -48,6 +49,7 @@ const applySchema = z.object({
   handle: z.string().optional(),
   applyNote: z.string().optional(),
   paypalEmail: z.string().email("Enter a valid PayPal email").optional().or(z.literal("")),
+  phone: z.string().optional(),
 });
 
 export async function applyAsAffiliate(input: unknown): Promise<ActionResult & { affiliateId?: string }> {
@@ -55,6 +57,14 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
   const parsed = applySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
   const data = parsed.data;
+
+  // Phone verification (Venmo payouts pay to this number). Admin-toggleable.
+  const phone = data.phone ? normalizePhone(data.phone) : null;
+  const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
+  if (await phoneVerificationRequired()) {
+    if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
+    if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
+  }
 
   const existing = await db.query.users.findFirst({ where: eq(users.email, data.email.toLowerCase()) });
   if (existing) return { ok: false, message: "An account with this email already exists." };
@@ -76,6 +86,8 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
       status: "pending",
       refCode,
       paypalEmail: data.paypalEmail || null,
+      phone: phone ?? null,
+      phoneVerifiedAt: verified ? new Date() : null,
       companyName: data.companyName || null,
       channel: data.channel || null,
       audienceSize: data.audienceSize || null,
@@ -95,6 +107,7 @@ const joinSchema = z.object({
   name: z.string().min(2, "Please enter your name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  phone: z.string().optional(),
 });
 
 /** Public campaign signup. Behavior depends on the campaign's access type. */
@@ -108,6 +121,13 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
   if (!campaign) return { ok: false, message: "Campaign not found." };
   if (campaign.access === "invite") return { ok: false, message: "This campaign is invite-only." };
   if (campaign.status !== "active") return { ok: false, message: "This campaign isn't accepting signups right now." };
+
+  const phone = data.phone ? normalizePhone(data.phone) : null;
+  const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
+  if (await phoneVerificationRequired()) {
+    if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
+    if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
+  }
 
   const email = data.email.toLowerCase();
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
@@ -127,6 +147,8 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
       userId: user.id,
       status: instant ? "approved" : "pending",
       refCode,
+      phone: phone ?? null,
+      phoneVerifiedAt: verified ? new Date() : null,
       programId: program?.id ?? null,
     })
     .returning();
@@ -152,6 +174,25 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
       ? "You're in! Sign in to grab your code and link."
       : "Application received — we'll review it and email you once you're approved.",
   };
+}
+
+/** Save a verified Venmo payout phone. Requires the number to be verified first. */
+export async function updatePayoutPhone(phoneRaw: string): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false, message: "Enter a valid phone number." };
+  if (!(await isPhoneRecentlyVerified(phone))) {
+    return { ok: false, message: "Verify this number with the code we texted before saving." };
+  }
+  await db
+    .update(affiliates)
+    .set({ phone, phoneVerifiedAt: new Date(), payoutMethod: "venmo" })
+    .where(eq(affiliates.id, affiliateId));
+  revalidatePath("/payouts");
+  return { ok: true, message: "Venmo payout number saved." };
 }
 
 export async function updatePaypalEmail(email: string): Promise<ActionResult> {
