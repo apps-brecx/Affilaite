@@ -21,6 +21,7 @@ import {
   campaigns,
   affiliateCampaigns,
   appSettings,
+  sampleRequests,
 } from "@/db/schema";
 import type {
   Affiliate,
@@ -36,6 +37,7 @@ import type {
   AdminKpis,
   CommissionState,
   Campaign,
+  SampleRequest,
 } from "./types";
 import { mergeConfig, mergeBrand, type BrandSettings } from "./campaign-config";
 
@@ -756,4 +758,52 @@ export function affiliateSummary(a: Affiliate) {
     nextPayoutDate: null as string | null,
     payoutMinimum: a.payoutMinimum,
   };
+}
+
+// ---------- Sample requests ----------
+
+function mapSample(r: any, user: any): SampleRequest {
+  return {
+    id: r.id,
+    affiliateId: r.affiliateId,
+    affiliateName: user?.name ?? user?.email ?? "Unknown",
+    affiliateEmail: user?.email ?? "",
+    productId: r.productId ?? null,
+    productTitle: r.productTitle ?? "Sample",
+    productImage: r.productImage ?? null,
+    productUrl: r.productUrl ?? null,
+    note: r.note ?? null,
+    address: r.addressSnapshot ?? null,
+    status: r.status,
+    shopifyOrderId: r.shopifyOrderId ?? null,
+    createdAt: (r.createdAt ?? new Date()).toISOString?.() ?? String(r.createdAt),
+    decidedAt: r.decidedAt ? new Date(r.decidedAt).toISOString() : null,
+  };
+}
+
+export async function listSampleRequests(): Promise<SampleRequest[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({ s: sampleRequests, user: users })
+    .from(sampleRequests)
+    .leftJoin(affiliates, eq(sampleRequests.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .orderBy(desc(sampleRequests.createdAt));
+  return rows.map((r) => mapSample(r.s, r.user));
+}
+
+export async function getMySampleRequests(affiliateId: string): Promise<SampleRequest[]> {
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(sampleRequests)
+    .where(eq(sampleRequests.affiliateId, affiliateId))
+    .orderBy(desc(sampleRequests.createdAt));
+  return rows.map((r) => mapSample(r, null));
+}
+
+export async function pendingSampleCount(): Promise<number> {
+  if (!db) return 0;
+  const [r] = await db.select({ c: sql<number>`count(*)` }).from(sampleRequests).where(eq(sampleRequests.status, "requested"));
+  return Number(r?.c ?? 0);
 }

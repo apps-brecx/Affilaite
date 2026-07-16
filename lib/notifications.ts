@@ -10,7 +10,8 @@ export type NotifSection =
   | "performance"
   | "payouts"
   | "assets"
-  | "community";
+  | "community"
+  | "samples";
 
 /** Which portal route each notification section maps to. */
 export const SECTION_HREF: Record<NotifSection, string> = {
@@ -21,6 +22,7 @@ export const SECTION_HREF: Record<NotifSection, string> = {
   payouts: "/payouts",
   assets: "/assets",
   community: "/community",
+  samples: "/samples",
 };
 
 const HREF_SECTION = Object.fromEntries(

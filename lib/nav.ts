@@ -16,6 +16,7 @@ export type IconName =
   | "promotions"
   | "messages"
   | "campaigns"
+  | "samples"
   | "general"
   | "integrations"
   | "payments"
@@ -50,6 +51,7 @@ export const affiliateNav: NavSection[] = [
   {
     title: "Resources",
     items: [
+      { label: "Samples", href: "/samples", icon: "samples" },
       { label: "Assets", href: "/assets", icon: "assets" },
       { label: "Community", href: "/community", icon: "groups" },
       { label: "Notifications", href: "/notifications", icon: "notifications" },
@@ -68,6 +70,7 @@ export const adminNav: NavSection[] = [
     items: [
       { label: "Affiliates", href: "/admin/affiliates", icon: "affiliates" },
       { label: "Groups", href: "/admin/groups", icon: "groups" },
+      { label: "Samples", href: "/admin/samples", icon: "samples" },
       { label: "Messages", href: "/admin/messages", icon: "messages" },
     ],
   },

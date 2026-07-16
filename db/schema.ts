@@ -39,6 +39,7 @@ export const payoutMethod = pgEnum("payout_method", ["paypal", "venmo"]);
 export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
 export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
 export const campaignAccess = pgEnum("campaign_access", ["instant", "approval", "invite"]);
+export const sampleStatus = pgEnum("sample_status", ["requested", "approved", "rejected", "shipped"]);
 
 // --- Users (admin + affiliates share auth, differ by role) ---
 export const users = pgTable("users", {
@@ -271,6 +272,27 @@ export const promotions = pgTable("promotions", {
   productImage: text("product_image"),
   productUrl: text("product_url"),
 });
+
+// --- Sample requests (affiliates ask for product samples; admin approves) ---
+export const sampleRequests = pgTable(
+  "sample_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    productId: text("product_id"), // Shopify product GID (nullable for a freeform ask)
+    productTitle: text("product_title"),
+    productImage: text("product_image"),
+    productUrl: text("product_url"),
+    note: text("note"), // affiliate's message
+    addressSnapshot: text("address_snapshot"), // shipping address at request time
+    status: sampleStatus("status").notNull().default("requested"),
+    shopifyOrderId: text("shopify_order_id"), // draft order id once created
+    adminNote: text("admin_note"),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ sampleAffIdx: index("sample_aff_idx").on(t.affiliateId), sampleStatusIdx: index("sample_status_idx").on(t.status) }),
+);
 
 // --- Creative assets ---
 export const assets = pgTable("assets", {

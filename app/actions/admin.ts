@@ -21,6 +21,7 @@ import {
   campaigns,
   affiliateCampaigns,
   appSettings,
+  sampleRequests,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import {
@@ -37,6 +38,7 @@ import { normalizePhone } from "@/lib/phone";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
+import { createSampleDraftOrder } from "@/lib/samples";
 import { getEarningsSeries } from "@/lib/queries";
 import { getCatalogItemIds } from "@/lib/products";
 import { notify } from "@/lib/notifications";
@@ -1443,4 +1445,54 @@ export async function updateAffiliateCode(affiliateId: string, rawCode: string):
   await db.update(affiliates).set({ refCode: code }).where(eq(affiliates.id, affiliateId)).catch(() => {});
   revalidatePath(`/admin/affiliates/${affiliateId}`);
   return { ok: true, message: `Code updated to ${code}.` };
+}
+
+// ---------- Sample requests ----------
+
+/** Approve / reject / mark-shipped a sample request. Approve tries to create a
+ *  Shopify draft order (best-effort) to the affiliate's address. */
+export async function decideSampleRequest(id: string, action: "approve" | "reject" | "ship"): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const req = await db.query.sampleRequests.findFirst({ where: eq(sampleRequests.id, id) });
+  if (!req) return { ok: false, message: "Request not found." };
+
+  if (action === "reject") {
+    await db.update(sampleRequests).set({ status: "rejected", decidedAt: new Date() }).where(eq(sampleRequests.id, id));
+    await notify(req.affiliateId, "samples", "Sample request update", `Your ${req.productTitle ?? "sample"} request wasn't approved this time.`, "/samples");
+    revalidatePath("/admin/samples");
+    revalidatePath("/samples");
+    return { ok: true, message: "Request rejected." };
+  }
+
+  if (action === "ship") {
+    await db.update(sampleRequests).set({ status: "shipped" }).where(eq(sampleRequests.id, id));
+    await notify(req.affiliateId, "samples", "Your sample shipped 📦", `Your ${req.productTitle ?? "sample"} is on its way!`, "/samples");
+    revalidatePath("/admin/samples");
+    revalidatePath("/samples");
+    return { ok: true, message: "Marked as shipped." };
+  }
+
+  // approve
+  let shopifyOrderId: string | null = null;
+  let shopifyNote = "";
+  if (await shopifyReady()) {
+    try {
+      const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, req.affiliateId) });
+      const user = aff ? await db.query.users.findFirst({ where: eq(users.id, aff.userId) }) : null;
+      shopifyOrderId = await createSampleDraftOrder({
+        productTitle: req.productTitle ?? "Product sample",
+        affiliateName: user?.name ?? user?.email ?? "affiliate",
+        address: req.addressSnapshot ?? null,
+      });
+    } catch (e: any) {
+      shopifyNote = ` (Shopify draft order failed: ${e?.message ?? "error"})`;
+      console.error("[decideSampleRequest] shopify:", e);
+    }
+  }
+  await db.update(sampleRequests).set({ status: "approved", shopifyOrderId, decidedAt: new Date() }).where(eq(sampleRequests.id, id));
+  await notify(req.affiliateId, "samples", "Sample approved 🎁", `Your ${req.productTitle ?? "sample"} request was approved — we'll ship it soon.`, "/samples");
+  revalidatePath("/admin/samples");
+  revalidatePath("/samples");
+  return { ok: true, message: shopifyOrderId ? "Approved — Shopify draft order created." : `Approved.${shopifyNote}` };
 }

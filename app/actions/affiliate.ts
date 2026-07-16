@@ -2,12 +2,12 @@
 
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes } from "@/db/schema";
+import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes, sampleRequests } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { getEarningsSeries } from "@/lib/queries";
+import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
 import { shopifyReady } from "@/lib/integrations";
@@ -303,4 +303,55 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   revalidatePath("/settings");
   revalidatePath("/payouts");
   return { ok: true, message: "Profile updated." };
+}
+
+const sampleSchema = z.object({
+  productId: z.string().optional(),
+  productTitle: z.string().min(1, "Pick a product to request"),
+  productImage: z.string().optional(),
+  productUrl: z.string().optional(),
+  note: z.string().optional(),
+});
+
+/** Affiliate requests a product sample (ships to their address on file). */
+export async function requestSample(input: unknown): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const parsed = sampleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+
+  const me = await getAffiliate(affiliateId);
+  if (!me) return { ok: false, message: "Affiliate not found." };
+  if (!me.address || !me.address.trim()) {
+    return { ok: false, message: "Add a shipping address in Settings before requesting samples." };
+  }
+
+  // Don't let the same product pile up while a request is still open.
+  if (d.productId) {
+    const open = await db.query.sampleRequests.findFirst({
+      where: and(
+        eq(sampleRequests.affiliateId, affiliateId),
+        eq(sampleRequests.productId, d.productId),
+        inArray(sampleRequests.status, ["requested", "approved"]),
+      ),
+    });
+    if (open) return { ok: false, message: "You already have an open request for that product." };
+  }
+
+  await db.insert(sampleRequests).values({
+    affiliateId,
+    productId: d.productId || null,
+    productTitle: d.productTitle,
+    productImage: d.productImage || null,
+    productUrl: d.productUrl || null,
+    note: d.note || null,
+    addressSnapshot: me.address,
+    status: "requested",
+  });
+  revalidatePath("/samples");
+  revalidatePath("/admin/samples");
+  return { ok: true, message: "Sample requested — we'll review it shortly." };
 }

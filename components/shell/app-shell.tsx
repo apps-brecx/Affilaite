@@ -30,6 +30,7 @@ import {
   Mail,
   UserCircle,
   Bell,
+  Gift,
   type LucideIcon,
 } from "lucide-react";
 import { LogOut } from "lucide-react";
@@ -56,6 +57,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   promotions: BadgePercent,
   messages: Megaphone,
   campaigns: Rocket,
+  samples: Gift,
   general: SlidersHorizontal,
   integrations: Blocks,
   payments: CreditCard,

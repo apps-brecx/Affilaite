@@ -190,3 +190,20 @@ export interface AdminKpis {
   payableNow: number;
   awaitingApproval: number;
 }
+
+export interface SampleRequest {
+  id: string;
+  affiliateId: string;
+  affiliateName: string;
+  affiliateEmail: string;
+  productId: string | null;
+  productTitle: string;
+  productImage: string | null;
+  productUrl: string | null;
+  note: string | null;
+  address: string | null;
+  status: "requested" | "approved" | "rejected" | "shipped";
+  shopifyOrderId: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
