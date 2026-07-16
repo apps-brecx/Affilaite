@@ -1,8 +1,8 @@
 import { User, Bell } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { ProfileForm } from "@/components/affiliate/profile-form";
+import { NotificationPrefs } from "@/components/affiliate/notification-prefs";
 import { requireAffiliate } from "@/lib/session";
 
 export const metadata = { title: "Settings" };
@@ -31,11 +31,8 @@ export default async function SettingsPage() {
               <Bell className="size-4 text-primary" /> Notifications
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <Switch defaultChecked label="New commission" description="When a sale is attributed to you" />
-            <Switch defaultChecked label="Payout sent" description="When money is on its way" />
-            <Switch defaultChecked label="Program updates" description="Bonuses, promos & news" />
-            <Switch label="Weekly digest" description="A Monday recap of your week" />
+          <CardContent>
+            <NotificationPrefs prefs={me.notificationPrefs} />
           </CardContent>
         </Card>
       </div>

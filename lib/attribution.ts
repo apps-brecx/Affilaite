@@ -193,7 +193,8 @@ export async function processOrderCreated(order: any) {
     .select({ count: sql<number>`count(*)` })
     .from(commissions)
     .where(and(eq(commissions.affiliateId, affiliate.id), sql`${commissions.amount} >= 0`));
-  if (Number(count) === 1 && affiliate.userId) {
+  const prefs = (affiliate.notificationPrefs as Record<string, boolean>) ?? {};
+  if (Number(count) === 1 && affiliate.userId && prefs.newCommission !== false) {
     const email = await getUserEmail(affiliate.userId);
     if (email) {
       await sendEmailSafe(

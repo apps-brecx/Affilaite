@@ -346,7 +346,7 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
       : eq(affiliates.status, "approved");
 
   const recipients = await db
-    .select({ id: affiliates.id, email: users.email, name: users.name })
+    .select({ id: affiliates.id, email: users.email, name: users.name, prefs: affiliates.notificationPrefs })
     .from(affiliates)
     .leftJoin(users, eq(affiliates.userId, users.id))
     .where(where);
@@ -364,12 +364,16 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
     body,
     channel: "email",
     audience: groupIds?.length ? { groupIds } : { status: status ?? ["approved"] },
+    recipientCount: recipients.length,
     sentAt: new Date(),
   });
 
   if (await emailReady()) {
+    // In-app notification goes to everyone; email respects the "Program updates" opt-out.
     await sendEmails(
-      recipients.filter((r) => r.email).map((r) => ({ email: r.email!, name: r.name ?? undefined })),
+      recipients
+        .filter((r) => r.email && (r.prefs as Record<string, boolean> | null)?.programUpdates !== false)
+        .map((r) => ({ email: r.email!, name: r.name ?? undefined })),
       subject,
       body,
     );
@@ -602,7 +606,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
     "/payouts",
   );
   const payoutUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
-  if (payoutUser?.email) {
+  if (payoutUser?.email && (aff.notificationPrefs as Record<string, boolean> | null)?.payoutSent !== false) {
     await sendEmailSafe(payoutUser.email, "Your payout is on its way 💸", `A payout of $${amount.toFixed(2)} is on its way to you. Thanks for driving sales!`);
   }
   revalAdmin();
@@ -747,11 +751,14 @@ export async function runPayout(): Promise<ActionResult> {
   const recAffs = await db.query.affiliates.findMany({ where: inArray(affiliates.id, recAffIds) });
   const recUsers = recAffs.length ? await db.query.users.findMany({ where: inArray(users.id, recAffs.map((a) => a.userId)) }) : [];
   const emailByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.email ?? null]));
+  const prefsByAff = new Map(recAffs.map((a) => [a.id, (a.notificationPrefs as Record<string, boolean>) ?? {}]));
   for (const affiliateId of recAffIds) {
     await notify(affiliateId, "payouts", "Payout sent 💸", "Your commission is on its way to you.", "/payouts");
     const total = recipients.filter((r) => r.affiliateId === affiliateId).reduce((s, r) => s + Number(r.amount), 0);
     const email = emailByAff.get(affiliateId);
-    if (email) await sendEmailSafe(email, "Your payout is on its way 💸", `Good news — a payout of ${total.toFixed(2)} is on its way to you. Thanks for driving sales!`);
+    if (email && prefsByAff.get(affiliateId)?.payoutSent !== false) {
+      await sendEmailSafe(email, "Your payout is on its way 💸", `Good news — a payout of ${total.toFixed(2)} is on its way to you. Thanks for driving sales!`);
+    }
   }
 
   revalAdmin();

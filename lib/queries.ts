@@ -1,7 +1,7 @@
 // lib/queries.ts — the data-access seam. Real Drizzle queries against Postgres.
 // Everything reflects the database; when there's no data, callers get empty
 // results and the UI shows honest empty states. No fabricated numbers.
-import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { db, isDbConfigured } from "@/db";
 import {
   affiliates,
@@ -105,6 +105,8 @@ function mapAffiliate(row: any, stats: any, clickCount: Map<string, number>): Af
     companyName: row.aff.companyName,
     programId: row.aff.programId ?? "",
     programName: row.program?.name ?? "—",
+    payoutMinimum: num(row.program?.payoutMinimum),
+    notificationPrefs: (row.aff.notificationPrefs as Record<string, boolean>) ?? {},
     groupId: row.aff.groupId,
     groupName: row.group?.name ?? null,
     socialLinks: row.aff.socialLinks ?? {},
@@ -494,7 +496,7 @@ export async function listMessages(): Promise<Message[]> {
     body: m.body ?? "",
     channel: (m.channel as "email" | "sms") ?? "email",
     audienceLabel: labelAudience(m.audience),
-    recipients: 0,
+    recipients: m.recipientCount ?? 0,
     openRate: null,
     scheduledFor: m.scheduledFor ? new Date(m.scheduledFor).toISOString() : null,
     sentAt: m.sentAt ? new Date(m.sentAt).toISOString() : null,
@@ -674,17 +676,30 @@ export async function getAdminKpis(): Promise<AdminKpis> {
     };
   }
   const since = new Date(Date.now() - 30 * DAY);
+  const prevSince = new Date(Date.now() - 60 * DAY);
+  const pct = (a: number, b: number) => (b > 0 ? Math.round(((a - b) / b) * 100) : a > 0 ? 100 : 0);
 
   const [rev] = await db
     .select({ total: sql<string>`coalesce(sum(${orders.subtotal}),0)` })
     .from(orders)
     .innerJoin(commissions, eq(commissions.orderId, orders.id))
     .where(gte(orders.createdAt, since));
+  // Prior 30-day window (30–60 days ago), to compute a real trend.
+  const [revPrev] = await db
+    .select({ total: sql<string>`coalesce(sum(${orders.subtotal}),0)` })
+    .from(orders)
+    .innerJoin(commissions, eq(commissions.orderId, orders.id))
+    .where(and(gte(orders.createdAt, prevSince), lt(orders.createdAt, since)));
 
   const [active] = await db
     .select({ cnt: sql<number>`count(*)` })
     .from(affiliates)
     .where(eq(affiliates.status, "approved"));
+  // Approved affiliates that existed 30 days ago, to show growth.
+  const [activePrior] = await db
+    .select({ cnt: sql<number>`count(*)` })
+    .from(affiliates)
+    .where(and(eq(affiliates.status, "approved"), lt(affiliates.createdAt, since)));
 
   const [pend] = await db
     .select({ total: sql<string>`coalesce(sum(${commissions.amount}),0)`, cnt: sql<number>`count(*)` })
@@ -703,17 +718,27 @@ export async function getAdminKpis(): Promise<AdminKpis> {
     .where(eq(orders.financialStatus, "refunded"));
   const refundRate = Number(ordCount?.cnt ?? 0) > 0 ? (Number(refCount?.cnt) / Number(ordCount.cnt)) * 100 : 0;
 
+  // Windowed refund rate so the trend reflects the last 30 days vs the prior 30.
+  const windowRate = async (start: Date, end?: Date) => {
+    const cond = end ? and(gte(orders.createdAt, start), lt(orders.createdAt, end)) : gte(orders.createdAt, start);
+    const [o] = await db.select({ cnt: sql<number>`count(*)` }).from(orders).where(cond);
+    const [r] = await db.select({ cnt: sql<number>`count(*)` }).from(orders).where(and(cond, eq(orders.financialStatus, "refunded")));
+    const oc = Number(o?.cnt ?? 0);
+    return oc > 0 ? (Number(r?.cnt ?? 0) / oc) * 100 : 0;
+  };
+  const refundRateDelta = Math.round(((await windowRate(since)) - (await windowRate(prevSince, since))) * 10) / 10;
+
   const payable = await getPayableBatch();
 
   return {
     affiliateRevenue: num(rev?.total),
-    affiliateRevenueDelta: 0,
+    affiliateRevenueDelta: pct(num(rev?.total), num(revPrev?.total)),
     activeAffiliates: Number(active?.cnt ?? 0),
-    activeAffiliatesDelta: 0,
+    activeAffiliatesDelta: pct(Number(active?.cnt ?? 0), Number(activePrior?.cnt ?? 0)),
     pendingCommissions: num(pend?.total),
     pendingCommissionsCount: Number(pend?.cnt ?? 0),
     refundRate: Math.round(refundRate * 10) / 10,
-    refundRateDelta: 0,
+    refundRateDelta,
     payableNow: payable.reduce((s, p) => s + p.amount, 0),
     awaitingApproval: Number(awaiting?.cnt ?? 0),
   };
@@ -728,6 +753,6 @@ export function affiliateSummary(a: Affiliate) {
     paidLifetime: a.paidEarnings,
     thisMonth: a.approvedEarnings + a.pendingEarnings,
     nextPayoutDate: null as string | null,
-    payoutMinimum: 25,
+    payoutMinimum: a.payoutMinimum,
   };
 }

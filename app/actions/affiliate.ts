@@ -229,6 +229,21 @@ export async function updatePayoutPhone(phoneRaw: string): Promise<ActionResult>
   return { ok: true, message: "Venmo payout number saved." };
 }
 
+export const NOTIF_PREF_KEYS = ["newCommission", "payoutSent", "programUpdates"] as const;
+
+/** Persist the affiliate's email notification preferences. */
+export async function updateNotificationPrefs(prefs: Record<string, boolean>): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const clean: Record<string, boolean> = {};
+  for (const k of NOTIF_PREF_KEYS) clean[k] = prefs[k] !== false;
+  await db.update(affiliates).set({ notificationPrefs: clean }).where(eq(affiliates.id, affiliateId));
+  revalidatePath("/settings");
+  return { ok: true, message: "Notification preferences saved." };
+}
+
 export async function updatePaypalEmail(email: string): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
   const session = await auth();

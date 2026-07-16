@@ -68,6 +68,8 @@ export interface Affiliate {
   companyName: string | null;
   programId: string;
   programName: string;
+  payoutMinimum: number;
+  notificationPrefs: Record<string, boolean>;
   groupId: string | null;
   groupName: string | null;
   socialLinks: Record<string, string>;

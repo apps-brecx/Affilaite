@@ -1,4 +1,5 @@
-import { Gift, Ticket, QrCode, Share2, Instagram, Facebook, Twitter, Mail } from "lucide-react";
+import { Gift, Ticket, QrCode, Share2 } from "lucide-react";
+import { ShareButtons } from "@/components/affiliate/share-buttons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -15,13 +16,6 @@ export default async function LinksPage() {
   const destination = await getDefaultDestination();
   const link = buildReferralLink(me.refCode, destination);
   const qr = await qrDataUrl(link);
-
-  const shareTargets = [
-    { icon: Instagram, label: "Instagram" },
-    { icon: Twitter, label: "X" },
-    { icon: Facebook, label: "Facebook" },
-    { icon: Mail, label: "Email" },
-  ];
 
   return (
     <div className="space-y-8">
@@ -69,17 +63,7 @@ export default async function LinksPage() {
               <p className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Share2 className="size-4" /> Share to
               </p>
-              <div className="flex flex-wrap gap-2">
-                {shareTargets.map((s) => (
-                  <button
-                    key={s.label}
-                    className="inline-flex items-center gap-2 rounded-lg border border-hairline bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                  >
-                    <s.icon className="size-4 text-muted-foreground" />
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+              <ShareButtons link={link} code={me.code} />
             </div>
           </div>
 
