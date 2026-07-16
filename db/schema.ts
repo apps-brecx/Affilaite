@@ -140,7 +140,10 @@ export const discountCodes = pgTable(
     active: boolean("active").default(true),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ codeIdx: index("code_idx").on(t.code) }),
+  (t) => ({
+    codeIdx: index("code_idx").on(t.code),
+    dcAffIdx: index("dc_aff_idx").on(t.affiliateId),
+  }),
 );
 
 // --- Click log (link attribution backup) ---
@@ -155,7 +158,10 @@ export const clicks = pgTable(
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ visitorIdx: index("click_visitor_idx").on(t.visitorId) }),
+  (t) => ({
+    visitorIdx: index("click_visitor_idx").on(t.visitorId),
+    clickAffIdx: index("click_aff_idx").on(t.affiliateId),
+  }),
 );
 
 // --- Orders mirrored from Shopify webhooks ---
@@ -203,6 +209,9 @@ export const commissions = pgTable(
   (t) => ({
     affIdx: index("comm_aff_idx").on(t.affiliateId),
     statusIdx: index("comm_status_idx").on(t.status),
+    orderIdx: index("comm_order_idx").on(t.orderId), // refund/clawback lookups
+    payoutIdx: index("comm_payout_idx").on(t.payoutId), // payout claim/release
+    approvableIdx: index("comm_approvable_idx").on(t.approvableAt), // cron maturation
     // At most one *positive* commission per order (negative refund adjustments
     // are exempt so post-payout clawbacks can be netted against later batches).
     orderPositiveUniq: uniqueIndex("comm_order_positive_uniq")
@@ -211,15 +220,22 @@ export const commissions = pgTable(
   }),
 );
 
-export const payoutItems = pgTable("payout_items", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  payoutId: uuid("payout_id").references(() => payouts.id),
-  affiliateId: uuid("affiliate_id").references(() => affiliates.id),
-  amount: numeric("amount", { precision: 12, scale: 2 }),
-  currency: text("currency").default("USD"),
-  paypalItemId: text("paypal_item_id"),
-  transactionStatus: text("transaction_status"),
-});
+export const payoutItems = pgTable(
+  "payout_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    payoutId: uuid("payout_id").references(() => payouts.id),
+    affiliateId: uuid("affiliate_id").references(() => affiliates.id),
+    amount: numeric("amount", { precision: 12, scale: 2 }),
+    currency: text("currency").default("USD"),
+    paypalItemId: text("paypal_item_id"),
+    transactionStatus: text("transaction_status"),
+  },
+  (t) => ({
+    piPayoutIdx: index("pi_payout_idx").on(t.payoutId),
+    piAffIdx: index("pi_aff_idx").on(t.affiliateId),
+  }),
+);
 
 // --- Messaging ---
 export const messages = pgTable("messages", {

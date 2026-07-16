@@ -9,6 +9,8 @@ import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCod
 import { auth } from "@/lib/auth";
 import { getEarningsSeries } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
+import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
+import { shopifyReady } from "@/lib/integrations";
 import type { TimePoint } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -155,13 +157,22 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
 
   await db.insert(affiliateCampaigns).values({ affiliateId: aff.id, campaignId: campaign.id });
 
-  // Instant access → issue a code immediately.
+  // Instant access → issue a code immediately (and push it to Shopify so it
+  // actually works at checkout, not just locally).
   if (instant) {
     const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-    const code = `${refCode}${percent}`.toUpperCase();
+    const code = await uniqueDiscountCode(`${refCode}${percent}`);
+    let shopifyDiscountId: string | null = null;
+    if (await shopifyReady()) {
+      try {
+        shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+      } catch (e) {
+        console.error("[joinCampaign] Shopify code creation failed:", e);
+      }
+    }
     await db
       .insert(discountCodes)
-      .values({ affiliateId: aff.id, code, percentage: percent.toString(), active: true })
+      .values({ affiliateId: aff.id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
       .onConflictDoNothing();
   }
 

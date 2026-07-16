@@ -1,7 +1,24 @@
 // lib/discounts.ts — bulk Shopify discount code creation (throttled).
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { discountCodes } from "@/db/schema";
 import { shopifyGraphQL } from "./shopify";
+
+/**
+ * A discount code that isn't already taken. `refCode + percent` collides by
+ * construction (JOHN@15% and JOHN1@5% both → JOHN15), which would otherwise
+ * leave the second affiliate with no code, so we suffix until unique.
+ */
+export async function uniqueDiscountCode(base: string): Promise<string> {
+  const root = base.toUpperCase();
+  if (!db) return root;
+  const taken = async (c: string) => Boolean(await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, c) }));
+  if (!(await taken(root))) return root;
+  for (let n = 2; ; n++) {
+    const candidate = `${root}-${n}`;
+    if (!(await taken(candidate))) return candidate;
+  }
+}
 
 const CREATE_CODE = `
   mutation Create($basicCodeDiscount: DiscountCodeBasicInput!) {

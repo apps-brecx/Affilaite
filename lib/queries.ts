@@ -323,23 +323,37 @@ export async function listGroups(): Promise<Group[]> {
 
 // ---------- Commissions ----------
 
-export async function listCommissions(filter?: CommissionState): Promise<Commission[]> {
+export async function listCommissions(filter?: CommissionState, affiliateId?: string): Promise<Commission[]> {
   if (!db) return [];
+  // NOTE: do NOT join discount_codes here — an affiliate with 2+ codes would
+  // fan each commission into N rows and double-count the ledger. Attach one
+  // code per affiliate from a keyed map instead.
+  const conds = [
+    filter ? eq(commissions.status, filter) : undefined,
+    affiliateId ? eq(commissions.affiliateId, affiliateId) : undefined,
+  ].filter(Boolean) as any[];
   const rows = await db
-    .select({ c: commissions, user: users, order: orders, code: discountCodes })
+    .select({ c: commissions, user: users, order: orders })
     .from(commissions)
     .leftJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
     .leftJoin(users, eq(affiliates.userId, users.id))
     .leftJoin(orders, eq(commissions.orderId, orders.id))
-    .leftJoin(discountCodes, eq(discountCodes.affiliateId, affiliates.id))
-    .where(filter ? eq(commissions.status, filter) : undefined)
+    .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(commissions.createdAt));
+
+  const affIds = [...new Set(rows.map((r) => r.c.affiliateId).filter(Boolean))] as string[];
+  const codes = affIds.length
+    ? await db.select().from(discountCodes).where(inArray(discountCodes.affiliateId, affIds))
+    : [];
+  const codeByAff = new Map<string, string>();
+  for (const dc of codes) if (dc.affiliateId && !codeByAff.has(dc.affiliateId)) codeByAff.set(dc.affiliateId, dc.code);
+
   return rows.map((r) => ({
     id: r.c.id,
     orderNumber: r.order?.orderNumber ?? "—",
     affiliateId: r.c.affiliateId ?? "",
     affiliateName: r.user?.name ?? r.user?.email ?? "Unknown",
-    affiliateCode: r.code?.code ?? "",
+    affiliateCode: r.c.affiliateId ? codeByAff.get(r.c.affiliateId) ?? "" : "",
     amount: num(r.c.amount),
     currency: r.c.currency ?? "USD",
     attributedBy: (r.c.attributedBy as "coupon" | "link") ?? "coupon",
@@ -351,8 +365,8 @@ export async function listCommissions(filter?: CommissionState): Promise<Commiss
 }
 
 export async function getAffiliateCommissions(affiliateId: string, limit = 20): Promise<Commission[]> {
-  const all = await listCommissions();
-  return all.filter((c) => c.affiliateId === affiliateId).slice(0, limit);
+  const rows = await listCommissions(undefined, affiliateId);
+  return rows.slice(0, limit);
 }
 
 // Convenience aliases used by pages.

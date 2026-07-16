@@ -78,6 +78,13 @@
       "when": 1784213632276,
       "tag": "0010_phone_and_venmo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784218282157,
+      "tag": "0011_hot_indexes",
+      "breakpoints": true
     }
   ]
 }

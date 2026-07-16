@@ -7,10 +7,14 @@ export async function sendEmail(to: string, subject: string, html: string) {
   const { apiKey, from } = await emailConfig();
   if (!apiKey) {
     console.warn("[email] Resend not connected — skipping send to", to);
-    return { skipped: true };
+    return { skipped: true as const };
   }
   const resend = new Resend(apiKey);
-  return resend.emails.send({ from, to, subject, html });
+  // Resend v4 resolves with { data, error } instead of throwing — surface the
+  // error so callers don't report "sent" when nothing was delivered.
+  const { data, error } = await resend.emails.send({ from, to, subject, html });
+  if (error) throw new Error(`Resend: ${error.message ?? JSON.stringify(error)}`);
+  return { id: data?.id };
 }
 
 /** Personalize a body with an affiliate's variables. */

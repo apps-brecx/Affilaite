@@ -28,6 +28,7 @@ import {
   updateDiscountInShopify,
   deleteDiscountInShopify,
   setDiscountActiveInShopify,
+  uniqueDiscountCode,
 } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
@@ -74,19 +75,23 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
   await db.update(affiliates).set({ status: "approved" }).where(eq(affiliates.id, id));
 
   // Issue a discount code if one doesn't exist yet.
+  let shopifyError: string | null = null;
+  let issuedCode: string | null = null;
   const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, id) });
   if (!existing) {
     const program = aff.programId
       ? await db.query.programs.findFirst({ where: eq(programs.id, aff.programId) })
       : await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
     const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-    const code = `${aff.refCode}${percent}`.toUpperCase();
+    const code = await uniqueDiscountCode(`${aff.refCode}${percent}`);
+    issuedCode = code;
 
     let shopifyDiscountId: string | null = null;
     if (await shopifyReady()) {
       try {
         shopifyDiscountId = await createDiscountForAffiliate(code, percent);
-      } catch (e) {
+      } catch (e: any) {
+        shopifyError = e?.message ?? "Shopify sync failed";
         console.error("[approveAffiliate] Shopify code creation failed:", e);
       }
     }
@@ -104,7 +109,14 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
     "/dashboard",
   );
   revalAdmin();
-  return { ok: true, message: "Affiliate approved and code issued." };
+  // Be honest when the coupon didn't make it into Shopify — it won't work at checkout.
+  if (shopifyError) {
+    return {
+      ok: true,
+      message: `Affiliate approved${issuedCode ? ` (code ${issuedCode})` : ""}, but Shopify sync failed: ${shopifyError}. Push the code from Discount Codes.`,
+    };
+  }
+  return { ok: true, message: `Affiliate approved${issuedCode ? ` and code ${issuedCode} issued` : ""}.` };
 }
 
 export async function setAffiliateStatus(
@@ -361,16 +373,19 @@ export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const approved = await db.query.affiliates.findMany({ where: eq(affiliates.status, "approved") });
+  const shopifyOn = await shopifyReady();
   let created = 0;
+  let shopifyFailed = 0;
   for (const aff of approved) {
-    const code = `${prefix}${aff.refCode}${percent}`.toUpperCase();
-    const exists = await db.query.discountCodes.findFirst({ where: eq(discountCodes.code, code) });
-    if (exists) continue;
+    // Skip affiliates who already have a code.
+    if (await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, aff.id) })) continue;
+    const code = await uniqueDiscountCode(`${prefix}${aff.refCode}${percent}`);
     let shopifyDiscountId: string | null = null;
-    if (await shopifyReady()) {
+    if (shopifyOn) {
       try {
         shopifyDiscountId = await createDiscountForAffiliate(code, percent);
       } catch (e) {
+        shopifyFailed++;
         console.error("[bulkCreateDiscounts]", code, e);
       }
     }
@@ -381,7 +396,8 @@ export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise
     created++;
   }
   revalidatePath("/admin/codes");
-  return { ok: true, message: `Created ${created} discount code(s).` };
+  const note = shopifyFailed ? ` (${shopifyFailed} failed to sync to Shopify — push them individually)` : "";
+  return { ok: shopifyFailed === 0, message: `Created ${created} discount code(s)${note}.` };
 }
 
 /** Create one discount code for a single affiliate (also pushes to Shopify when connected). */
