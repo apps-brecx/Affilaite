@@ -251,7 +251,9 @@ export async function updatePayoutPhone(phoneRaw: string): Promise<ActionResult>
   return { ok: true, message: "Venmo payout number saved." };
 }
 
-export const NOTIF_PREF_KEYS = ["newCommission", "payoutSent", "programUpdates"] as const;
+// Kept module-local: a "use server" file may only export async functions, so
+// this must NOT be exported (doing so throws "can only export async functions").
+const NOTIF_PREF_KEYS = ["newCommission", "payoutSent", "programUpdates"] as const;
 
 /** Persist the affiliate's email notification preferences. */
 export async function updateNotificationPrefs(prefs: Record<string, boolean>): Promise<ActionResult> {
