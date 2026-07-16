@@ -1,8 +1,9 @@
 // lib/attribution.ts — the core engine: coupon-first, link-second, last-click.
 import { db } from "@/db";
 import { orders, commissions, discountCodes, affiliates, programs, clicks, users } from "@/db/schema";
-import { eq, inArray, gte, desc, and } from "drizzle-orm";
+import { eq, inArray, gte, desc, and, sql } from "drizzle-orm";
 import { notify } from "./notifications";
+import { sendEmailSafe } from "./email";
 
 const DAY = 864e5;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -143,6 +144,22 @@ export async function processOrderCreated(order: any) {
     `You earned ${order.currency} ${amount.toFixed(2)} on a new order.`,
     "/dashboard",
   );
+
+  // Email on the affiliate's FIRST sale — a real milestone worth celebrating.
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(commissions)
+    .where(and(eq(commissions.affiliateId, affiliate.id), sql`${commissions.amount} >= 0`));
+  if (Number(count) === 1 && affiliate.userId) {
+    const email = await getUserEmail(affiliate.userId);
+    if (email) {
+      await sendEmailSafe(
+        email,
+        "You made your first sale 🎉",
+        `Congrats — you just earned your first commission of ${order.currency} ${amount.toFixed(2)}! Keep sharing your link and code to keep them coming.`,
+      );
+    }
+  }
 }
 
 /**

@@ -17,6 +17,22 @@ export async function sendEmail(to: string, subject: string, html: string) {
   return { id: data?.id };
 }
 
+/**
+ * Fire-and-forget transactional email — wraps the body in the branded shell and
+ * never throws, so a mail hiccup can't break the signup/approve/payout flow.
+ * Returns true only when a message was actually handed to Resend.
+ */
+export async function sendEmailSafe(to: string, subject: string, bodyText: string): Promise<boolean> {
+  if (!to) return false;
+  try {
+    const res: any = await sendEmail(to, subject, wrapEmail(bodyText));
+    return !res?.skipped;
+  } catch (e) {
+    console.error("[email] lifecycle send failed:", e);
+    return false;
+  }
+}
+
 /** Personalize a body with an affiliate's variables. */
 export function renderTemplate(
   body: string,

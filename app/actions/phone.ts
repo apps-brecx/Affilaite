@@ -6,12 +6,17 @@ import { db } from "@/db";
 import { phoneVerifications } from "@/db/schema";
 import { sendSms } from "@/lib/sms";
 import { CODE_TTL_MS, MAX_ATTEMPTS, RESEND_COOLDOWN_MS, hashCode, normalizePhone } from "@/lib/phone";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 type Result = { ok: boolean; message: string; simulated?: boolean };
 
 /** Send a 6-digit verification code to a phone number. */
 export async function requestPhoneCode(input: unknown): Promise<Result> {
   if (!db) return { ok: false, message: "Database not configured." };
+  // Cap codes per IP so nobody can rack up SMS costs blasting many numbers.
+  if (!rateLimit(`sms:${await clientIp()}`, 6, 10 * 60_000).ok) {
+    return { ok: false, message: "Too many code requests — please try again shortly." };
+  }
   const raw = typeof input === "string" ? input : (input as any)?.phone;
   const phone = normalizePhone(raw);
   if (!phone) return { ok: false, message: "Enter a valid phone number." };

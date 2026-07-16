@@ -11,6 +11,9 @@ import { getEarningsSeries } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
 import { shopifyReady } from "@/lib/integrations";
+import { sendEmailSafe } from "@/lib/email";
+import { APP_URL } from "@/lib/links";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import type { TimePoint } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -56,6 +59,9 @@ const applySchema = z.object({
 
 export async function applyAsAffiliate(input: unknown): Promise<ActionResult & { affiliateId?: string }> {
   if (!db) return { ok: false, message: "Database not configured." };
+  if (!rateLimit(`apply:${await clientIp()}`, 5, 10 * 60_000).ok) {
+    return { ok: false, message: "Too many attempts — please try again in a few minutes." };
+  }
   const parsed = applySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
   const data = parsed.data;
@@ -99,6 +105,12 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
     })
     .returning();
 
+  await sendEmailSafe(
+    data.email,
+    "We got your application 🎉",
+    `Hi ${data.name},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.`,
+  );
+
   revalidatePath("/admin/affiliates");
   revalidatePath("/admin");
   return { ok: true, message: "Application received", affiliateId: aff.id };
@@ -115,6 +127,9 @@ const joinSchema = z.object({
 /** Public campaign signup. Behavior depends on the campaign's access type. */
 export async function joinCampaign(input: unknown): Promise<ActionResult & { instant?: boolean }> {
   if (!db) return { ok: false, message: "Database not configured." };
+  if (!rateLimit(`join:${await clientIp()}`, 5, 10 * 60_000).ok) {
+    return { ok: false, message: "Too many attempts — please try again in a few minutes." };
+  }
   const parsed = joinSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
   const data = parsed.data;
@@ -175,6 +190,14 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
       .values({ affiliateId: aff.id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
       .onConflictDoNothing();
   }
+
+  await sendEmailSafe(
+    email,
+    instant ? "You're in! 🎉" : "We got your application 🎉",
+    instant
+      ? `Hi ${data.name},\n\nYour Sipfluence partner account is ready. Sign in to grab your code and referral link.\n\n${APP_URL}/login`
+      : `Hi ${data.name},\n\nThanks for applying — we're reviewing your details and will email you once you're approved.`,
+  );
 
   revalidatePath("/admin/affiliates");
   revalidatePath(`/admin/campaigns/${campaign.id}`);

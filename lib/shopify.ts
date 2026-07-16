@@ -14,27 +14,49 @@ export async function verifyShopifyHmac(rawBody: string, hmacHeader: string): Pr
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const isThrottled = (json: any) =>
+  Array.isArray(json?.errors) &&
+  json.errors.some((e: any) => e?.extensions?.code === "THROTTLED" || /throttl/i.test(e?.message ?? ""));
+
 export async function shopifyGraphQL<T = any>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const { domain, token, version } = await shopifyConfig();
   if (!domain || !token) throw new Error("Shopify is not connected");
-  const res = await fetch(`https://${domain}/admin/api/${version}/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": token,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!res.ok) {
-    const hint =
-      res.status === 401 || res.status === 403
-        ? " — the Admin API access token was rejected. Check it's a valid token (starts with shpat_) with the right scopes."
-        : res.status === 404
-          ? " — check the store domain and API version."
-          : "";
-    throw new Error(`Shopify GraphQL ${res.status}${hint}`);
+  const url = `https://${domain}/admin/api/${version}/graphql.json`;
+  const MAX_ATTEMPTS = 4;
+
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    // HTTP 429: honor Retry-After, then back off. Shopify throttles aggressively.
+    if (res.status === 429) {
+      if (attempt >= MAX_ATTEMPTS) throw new Error("Shopify GraphQL 429 — rate limited, retries exhausted.");
+      const retryAfter = Number(res.headers.get("Retry-After"));
+      await sleep(retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** (attempt - 1));
+      continue;
+    }
+    if (!res.ok) {
+      const hint =
+        res.status === 401 || res.status === 403
+          ? " — the Admin API access token was rejected. Check it's a valid token (starts with shpat_) with the right scopes."
+          : res.status === 404
+            ? " — check the store domain and API version."
+            : "";
+      throw new Error(`Shopify GraphQL ${res.status}${hint}`);
+    }
+
+    const json = (await res.json()) as any;
+    // GraphQL-level throttling returns HTTP 200 with a THROTTLED error — retry.
+    if (isThrottled(json) && attempt < MAX_ATTEMPTS) {
+      await sleep(500 * 2 ** (attempt - 1));
+      continue;
+    }
+    return json as T;
   }
-  return res.json() as Promise<T>;
 }
 
 /** Register the webhooks this app depends on. Run once during setup. */

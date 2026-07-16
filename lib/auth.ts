@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users, affiliates, programs, inviteTemplates } from "@/db/schema";
 import { authConfig } from "./auth.config";
+import { rateLimit } from "./rate-limit";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -19,6 +20,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(creds?.email ?? "").toLowerCase().trim();
         const password = String(creds?.password ?? "");
         if (!email || !password) return null;
+        // Throttle brute-force: cap attempts per email. Denies (like a wrong
+        // password) rather than revealing the limit.
+        if (!rateLimit(`login:${email}`, 8, 10 * 60_000).ok) return null;
 
         // Bootstrap admin from env when no DB user exists yet.
         if (!db) {

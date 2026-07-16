@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, Wallet, Mail, MessageSquare, CheckCircle2, AlertCircle, Loader2, Save, Unplug, Plug } from "lucide-react";
+import { ShoppingBag, Wallet, Mail, MessageSquare, CheckCircle2, AlertCircle, Loader2, Save, Unplug, Plug, Send } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { saveIntegration, disconnectIntegration, testShopifyConnection } from "@/app/actions/admin";
+import { saveIntegration, disconnectIntegration, testShopifyConnection, testSms, testEmail } from "@/app/actions/admin";
 
 export interface IntegrationsStatus {
   shopify: { ready: boolean; domain: string; version: string; tokenMask: string; secretMask: string };
@@ -120,6 +120,39 @@ function Field({
   );
 }
 
+/** Small "send a test to X" row — save the credentials first, then verify delivery. */
+function InlineTester({
+  placeholder,
+  buttonLabel,
+  inputType = "text",
+  action,
+}: {
+  placeholder: string;
+  buttonLabel: string;
+  inputType?: string;
+  action: (value: string) => Promise<{ ok: boolean; message: string }>;
+}) {
+  const [value, setValue] = useState("");
+  const [pending, start] = useTransition();
+  const toast = useToast();
+  const run = () =>
+    start(async () => {
+      const res = await action(value);
+      toast(res.message, res.ok ? "success" : "error");
+    });
+  return (
+    <div className="flex items-end gap-2 rounded-lg border border-dashed border-hairline bg-muted/20 p-2.5">
+      <div className="flex-1 space-y-1">
+        <Label className="text-[11px]">Send a test</Label>
+        <Input type={inputType} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} className="h-9" />
+      </div>
+      <Button type="button" variant="secondary" size="sm" onClick={run} disabled={pending || !value.trim()}>
+        {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} {buttonLabel}
+      </Button>
+    </div>
+  );
+}
+
 export function IntegrationsSettings({ status }: { status: IntegrationsStatus }) {
   // Shopify
   const [domain, setDomain] = useState(status.shopify.domain);
@@ -191,6 +224,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
       >
         <Field label="API key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={secretPlaceholder(status.email.keyMask) || "re_…"} className="font-mono" />
         <Field label="From address" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Syruvia <affiliates@yourbrand.com>" />
+        <InlineTester inputType="email" placeholder="you@email.com" buttonLabel="Send test" action={testEmail} />
       </IntegrationCard>
 
       <IntegrationCard
@@ -210,6 +244,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         <Field label="From number / Messaging Service SID" value={smsFrom} onChange={(e) => setSmsFrom(e.target.value)} placeholder="+1 555 000 1111 or MG…" />
         <Field label="Account SID" type="password" value={smsKey} onChange={(e) => setSmsKey(e.target.value)} placeholder={secretPlaceholder(status.sms.keyMask) || "AC…"} className="font-mono" />
         <Field label="Auth Token" type="password" value={smsSecret} onChange={(e) => setSmsSecret(e.target.value)} placeholder={secretPlaceholder(status.sms.secretMask) || "••••••"} className="font-mono" />
+        <InlineTester inputType="tel" placeholder="+1 555 123 4567" buttonLabel="Send test code" action={testSms} />
       </IntegrationCard>
     </div>
   );

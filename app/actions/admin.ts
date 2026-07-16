@@ -31,7 +31,9 @@ import {
   uniqueDiscountCode,
 } from "@/lib/discounts";
 import { createPayoutBatch } from "@/lib/paypal";
-import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
+import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
+import { sendSms } from "@/lib/sms";
+import { normalizePhone } from "@/lib/phone";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
@@ -108,6 +110,17 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
     "Your partner account is active — grab your link and start earning.",
     "/dashboard",
   );
+
+  // Email the affiliate — the apply screen promises "we'll email you once approved".
+  const approvedUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
+  if (approvedUser?.email) {
+    await sendEmailSafe(
+      approvedUser.email,
+      "You're approved 🎉",
+      `Hi ${approvedUser.name ?? "there"},\n\nYour Sipfluence partner account is approved${issuedCode ? ` and your discount code is ${issuedCode}` : ""}. Sign in to grab your link and start earning.\n\n${APP_URL}/login`,
+    );
+  }
+
   revalAdmin();
   // Be honest when the coupon didn't make it into Shopify — it won't work at checkout.
   if (shopifyError) {
@@ -585,9 +598,13 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
     affiliateId,
     "payouts",
     "Payout sent 💸",
-    `A payout of $${amount.toFixed(2)} is on its way to your PayPal.`,
+    `A payout of $${amount.toFixed(2)} is on its way to you.`,
     "/payouts",
   );
+  const payoutUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
+  if (payoutUser?.email) {
+    await sendEmailSafe(payoutUser.email, "Your payout is on its way 💸", `A payout of $${amount.toFixed(2)} is on its way to you. Thanks for driving sales!`);
+  }
   revalAdmin();
   return { ok: true, message: `Custom payout of $${amount.toFixed(2)} submitted.` };
 }
@@ -726,8 +743,15 @@ export async function runPayout(): Promise<ActionResult> {
 
   // Success: the claimed rows (and only those) become paid.
   await db.update(commissions).set({ status: "paid" }).where(eq(commissions.payoutId, batchId));
-  for (const affiliateId of new Set(recipients.map((r) => r.affiliateId))) {
-    await notify(affiliateId, "payouts", "Payout sent 💸", "Your commission is on its way to your PayPal.", "/payouts");
+  const recAffIds = [...new Set(recipients.map((r) => r.affiliateId))];
+  const recAffs = await db.query.affiliates.findMany({ where: inArray(affiliates.id, recAffIds) });
+  const recUsers = recAffs.length ? await db.query.users.findMany({ where: inArray(users.id, recAffs.map((a) => a.userId)) }) : [];
+  const emailByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.email ?? null]));
+  for (const affiliateId of recAffIds) {
+    await notify(affiliateId, "payouts", "Payout sent 💸", "Your commission is on its way to you.", "/payouts");
+    const total = recipients.filter((r) => r.affiliateId === affiliateId).reduce((s, r) => s + Number(r.amount), 0);
+    const email = emailByAff.get(affiliateId);
+    if (email) await sendEmailSafe(email, "Your payout is on its way 💸", `Good news — a payout of ${total.toFixed(2)} is on its way to you. Thanks for driving sales!`);
   }
 
   revalAdmin();
@@ -1203,6 +1227,33 @@ export async function testShopifyConnection(): Promise<ActionResult> {
     return { ok: true, message: name ? `Connected to “${name}”.` : "Connected to Shopify." };
   } catch (e: any) {
     return { ok: false, message: e?.message ?? "Could not reach Shopify." };
+  }
+}
+
+/** Send a test SMS so the admin can confirm the provider works end-to-end. */
+export async function testSms(phoneRaw: string): Promise<ActionResult> {
+  await assertAdmin();
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false, message: "Enter a valid phone number to test." };
+  const res = await sendSms(phone, "Your Sipfluence test code is 123456. If you got this, SMS is working. 🎉");
+  if (res.simulated) return { ok: false, message: "No SMS provider connected — set Provider to 'twilio' and save first." };
+  if (!res.sent) return { ok: false, message: `SMS failed: ${res.error ?? "unknown error"}` };
+  return { ok: true, message: `Test text sent to ${phone}.` };
+}
+
+/** Send a test email so the admin can confirm Resend + the from-address work. */
+export async function testEmail(to: string): Promise<ActionResult> {
+  await assertAdmin();
+  const address = (to ?? "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return { ok: false, message: "Enter a valid email to test." };
+  if (!(await emailReady())) return { ok: false, message: "Connect Resend (add an API key) first." };
+  try {
+    const body = "This is a test email from Sipfluence. If you're reading this, transactional email is working. 🎉";
+    const res: any = await sendEmail(address, "Sipfluence test email", wrapEmail(body));
+    if (res?.skipped) return { ok: false, message: "Email is not connected." };
+    return { ok: true, message: `Test email sent to ${address}.` };
+  } catch (e: any) {
+    return { ok: false, message: `Email failed: ${e?.message ?? "unknown error"}` };
   }
 }
 

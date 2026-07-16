@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { users, passwordResetTokens } from "@/db/schema";
 import { sendEmail, wrapEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/links";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 type Result = { ok: boolean; message: string };
 
@@ -20,6 +21,8 @@ export async function requestPasswordReset(input: unknown): Promise<Result> {
   const generic = { ok: true, message: "If an account exists for that email, a reset link is on its way." };
   const email = typeof input === "string" ? input : (input as any)?.email;
   if (!db || typeof email !== "string" || !email.includes("@")) return generic;
+  // Throttle reset requests per IP; stay silent (generic) to avoid enumeration.
+  if (!rateLimit(`reset:${await clientIp()}`, 5, 15 * 60_000).ok) return generic;
 
   const user = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase().trim()) });
   if (!user) return generic;
