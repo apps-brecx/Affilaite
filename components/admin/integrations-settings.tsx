@@ -173,6 +173,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
   const [smsFrom, setSmsFrom] = useState(status.sms.from || "");
   const [smsKey, setSmsKey] = useState("");
   const [smsSecret, setSmsSecret] = useState("");
+  const [clearSmsKey, setClearSmsKey] = useState(false);
 
   const secretPlaceholder = (mask: string) => (mask ? `${mask} — leave blank to keep` : "");
 
@@ -233,7 +234,7 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         icon={MessageSquare}
         title="SMS (phone verification)"
         ready={status.sms.ready}
-        fields={() => ({ provider: smsProvider, accountSid: smsAccountSid, from: smsFrom, apiKey: smsKey, apiSecret: smsSecret })}
+        fields={() => ({ provider: smsProvider, accountSid: smsAccountSid, from: smsFrom, apiKey: smsKey, apiSecret: smsSecret, clearApiKey: clearSmsKey ? "1" : "" })}
       >
         <div className="rounded-lg bg-primary/[0.06] p-3 text-xs text-muted-foreground">
           Sends the signup verification codes. <span className="font-medium text-foreground">Twilio is supported</span> —
@@ -244,7 +245,13 @@ export function IntegrationsSettings({ status }: { status: IntegrationsStatus })
         </div>
         <Field label="Provider" value={smsProvider} onChange={(e) => setSmsProvider(e.target.value)} placeholder="twilio" />
         <Field label="Account SID (AC…)" value={smsAccountSid} onChange={(e) => setSmsAccountSid(e.target.value)} placeholder="AC…" className="font-mono" hint="From your Twilio Console dashboard. Always starts with AC." />
-        <Field label="API Key SID (SK…) — optional" type="password" value={smsKey} onChange={(e) => setSmsKey(e.target.value)} placeholder={secretPlaceholder(status.sms.keyMask) || "leave blank to use Auth Token"} className="font-mono" />
+        <Field label="API Key SID (SK…) — optional" type="password" value={smsKey} onChange={(e) => setSmsKey(e.target.value)} placeholder={secretPlaceholder(status.sms.keyMask) || "leave blank to use Auth Token"} className="font-mono" disabled={clearSmsKey} />
+        {status.sms.keyMask && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={clearSmsKey} onChange={(e) => setClearSmsKey(e.target.checked)} className="size-3.5 accent-primary" />
+            Remove the saved API Key and authenticate with Account SID + Auth Token instead
+          </label>
+        )}
         <Field label="Auth Token / API Key secret" type="password" value={smsSecret} onChange={(e) => setSmsSecret(e.target.value)} placeholder={secretPlaceholder(status.sms.secretMask) || "••••••"} className="font-mono" />
         <Field label="From number / Messaging Service SID" value={smsFrom} onChange={(e) => setSmsFrom(e.target.value)} placeholder="+1 555 000 1111 or MG…" />
         <InlineTester inputType="tel" placeholder="+1 555 123 4567" buttonLabel="Send test code" action={testSms} />
