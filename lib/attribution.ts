@@ -55,10 +55,24 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  // 3. BACKUP: link cookie → most recent click within window (last-click)
-  if (!affiliate && Array.isArray(order.note_attributes)) {
-    const visitorId = order.note_attributes.find((a: any) => a.name === "_aff_vid")?.value;
-    if (visitorId) {
+  // 3. BACKUP: referral link, carried into checkout as order note attributes by the
+  //    storefront snippet (docs/STOREFRONT_TRACKING.md). Coupon still wins if both exist,
+  //    so a sale is only ever credited once.
+  if (!affiliate) {
+    const attrs: Array<{ name?: string; value?: string }> = Array.isArray(order.note_attributes)
+      ? order.note_attributes
+      : [];
+    const refCode = attrs.find((a) => a.name === "_aff_ref")?.value?.toUpperCase();
+    const visitorId = attrs.find((a) => a.name === "_aff_vid")?.value;
+
+    // 3a. Direct ref code — works even when the click row was never logged.
+    if (refCode) {
+      affiliate = await db.query.affiliates.findFirst({ where: eq(affiliates.refCode, refCode) });
+      if (affiliate) attributedBy = "link";
+    }
+
+    // 3b. Fall back to the visitor id → most recent click within the program window.
+    if (!affiliate && visitorId) {
       const prog = await getDefaultProgram();
       const windowStart = new Date(Date.now() - (prog?.cookieWindowDays ?? 30) * DAY);
       const recentClick = await db.query.clicks.findFirst({
@@ -91,16 +105,24 @@ export async function processOrderCreated(order: any) {
       ? (base * Number(program.commissionValue)) / 100
       : Number(program.commissionValue);
 
-  await db.insert(commissions).values({
-    orderId: orderRow.id,
-    affiliateId: affiliate.id,
-    programId: program.id,
-    amount: amount.toFixed(2),
-    currency: order.currency,
-    attributedBy,
-    status: "pending",
-    approvableAt: new Date(Date.now() + program.holdDays * DAY),
-  });
+  // Idempotent on order_id: if a commission already exists for this order (e.g. a
+  // duplicate webhook delivery), do nothing rather than credit the sale twice.
+  const [inserted] = await db
+    .insert(commissions)
+    .values({
+      orderId: orderRow.id,
+      affiliateId: affiliate.id,
+      programId: program.id,
+      amount: amount.toFixed(2),
+      currency: order.currency,
+      attributedBy,
+      status: "pending",
+      approvableAt: new Date(Date.now() + program.holdDays * DAY),
+    })
+    .onConflictDoNothing({ target: commissions.orderId })
+    .returning();
+
+  if (!inserted) return; // already credited for this order
 
   await notify(
     affiliate.id,

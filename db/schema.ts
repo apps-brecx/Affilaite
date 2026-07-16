@@ -10,6 +10,7 @@ import {
   jsonb,
   pgEnum,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["admin", "affiliate"]);
@@ -181,6 +182,11 @@ export const commissions = pgTable(
   (t) => ({
     affIdx: index("comm_aff_idx").on(t.affiliateId),
     statusIdx: index("comm_status_idx").on(t.status),
+    // One commission per order — makes duplicate webhook deliveries a no-op so
+    // an affiliate can never be credited (or paid) twice for the same sale.
+    // NULL order_id (manual adjustments) is exempt: Postgres treats NULLs as distinct.
+    orderUnique: uniqueIndex("comm_order_unique").on(t.orderId),
+    payoutIdx: index("comm_payout_idx").on(t.payoutId),
   }),
 );
 
