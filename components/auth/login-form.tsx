@@ -26,8 +26,11 @@ export function LoginForm() {
         toast("Invalid email or password.", "error");
         return;
       }
+      // Only follow same-site paths (a single leading slash) — never an
+      // absolute URL or protocol-relative "//host", which would be an open redirect.
       const next = params.get("next");
-      router.push(next || "/dashboard");
+      const safeNext = next && /^\/(?!\/)/.test(next) ? next : "/dashboard";
+      router.push(safeNext);
       router.refresh();
     });
   };

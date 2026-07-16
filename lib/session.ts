@@ -27,5 +27,8 @@ export async function requireAffiliate(): Promise<Affiliate> {
   }
   const affiliate = await getAffiliate(affiliateId!);
   if (!affiliate) redirect("/login");
+  // Only approved affiliates get the portal; pending/suspended/rejected land
+  // on a friendly status screen instead of a dashboard with a dead code.
+  if (affiliate.status !== "approved") redirect("/pending");
   return affiliate;
 }

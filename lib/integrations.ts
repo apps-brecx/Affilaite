@@ -8,7 +8,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { appSettings } from "@/db/schema";
 
-const KEY = crypto.scryptSync(process.env.AUTH_SECRET ?? "syruvia-dev-secret", "syruvia-integrations", 32);
+// Fail hard rather than fall open to a public dev key: integration secrets are
+// encrypted with a key derived from AUTH_SECRET, so it must be set in any real
+// deployment (the same secret NextAuth already requires).
+if (!process.env.AUTH_SECRET) {
+  throw new Error("AUTH_SECRET is required — it derives the key that encrypts integration secrets.");
+}
+const KEY = crypto.scryptSync(process.env.AUTH_SECRET, "syruvia-integrations", 32);
 
 export function encryptSecret(text: string): string {
   if (!text) return "";
