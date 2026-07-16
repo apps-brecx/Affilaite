@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PromotionForm } from "@/components/admin/promotion-form";
+import { CreateReveal } from "@/components/admin/create-reveal";
 import { PromotionsTabs } from "@/components/admin/promotions-tabs";
 import { CatalogControlTab } from "@/components/admin/catalog-control-tab";
 import { CurationList } from "@/components/admin/curation-list";
@@ -35,8 +36,14 @@ export default async function PromotionsPage() {
   const newCollectionIds = collections.collections.filter((c) => !seenC.has(c.id)).map((c) => c.id);
 
   const promotionsPanel = (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+    <div className="space-y-6">
+      <CreateReveal label="New promotion">
+        <div className="max-w-xl">
+          <PromotionForm products={catalog.products} connected={catalog.connected} error={catalog.error} />
+        </div>
+      </CreateReveal>
+      <div className="grid grid-cols-1 gap-6">
+        <div className="space-y-4">
           {promos.length === 0 && (
             <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
               No promotions yet. Launch one to reward a burst of activity.
@@ -74,8 +81,7 @@ export default async function PromotionsPage() {
             </Card>
           ))}
         </div>
-
-      <PromotionForm products={catalog.products} connected={catalog.connected} error={catalog.error} />
+      </div>
     </div>
   );
 

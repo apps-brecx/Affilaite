@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { GroupForm } from "@/components/admin/group-form";
+import { CreateReveal } from "@/components/admin/create-reveal";
 import { listGroups, listAffiliates } from "@/lib/queries";
 
 export const metadata = { title: "Groups" };
@@ -17,8 +18,14 @@ export default async function GroupsPage() {
     <div className="space-y-8">
       <PageHeader title="Groups" description="Segment affiliates for targeted messaging, promotions, and payouts." />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2">
+      <CreateReveal label="New group">
+        <div className="max-w-md">
+          <GroupForm />
+        </div>
+      </CreateReveal>
+
+      <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {groups.length === 0 && (
             <p className="col-span-full rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
               No groups yet. Create one to segment your affiliates.
@@ -68,8 +75,6 @@ export default async function GroupsPage() {
             );
           })}
         </div>
-
-        <GroupForm />
       </div>
     </div>
   );

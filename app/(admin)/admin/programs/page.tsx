@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgramForm, SetDefaultButton } from "@/components/admin/program-form";
+import { CreateReveal } from "@/components/admin/create-reveal";
 import { listPrograms } from "@/lib/queries";
 import { formatCurrency } from "@/lib/utils";
 
@@ -13,6 +14,12 @@ export default async function ProgramsPage() {
   return (
     <div className="space-y-8">
       <PageHeader title="Programs" description="Commission rulesets. Assign affiliates to a program to set how they earn." />
+
+      <CreateReveal label="New program">
+        <div className="max-w-md">
+          <ProgramForm />
+        </div>
+      </CreateReveal>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {programs.map((p) => (
@@ -55,8 +62,6 @@ export default async function ProgramsPage() {
             </CardContent>
           </Card>
         ))}
-
-        <ProgramForm />
       </div>
     </div>
   );

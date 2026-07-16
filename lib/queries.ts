@@ -901,6 +901,21 @@ export async function pendingSampleCount(): Promise<number> {
   return Number(r?.c ?? 0);
 }
 
+/** Red-dot counts for the admin sidebar (pending things that need attention). */
+export async function getAdminNavBadges(): Promise<Record<string, number>> {
+  if (!db) return {};
+  const [samples, apps] = await Promise.all([
+    db.select({ c: sql<number>`count(*)` }).from(sampleRequests).where(eq(sampleRequests.status, "requested")),
+    db.select({ c: sql<number>`count(*)` }).from(affiliates).where(eq(affiliates.status, "pending")),
+  ]);
+  const badges: Record<string, number> = {};
+  const s = Number(samples[0]?.c ?? 0);
+  const a = Number(apps[0]?.c ?? 0);
+  if (s > 0) badges["/admin/samples"] = s;
+  if (a > 0) badges["/admin/affiliates"] = a;
+  return badges;
+}
+
 // ---------- Group chat ----------
 
 function pollTally(poll: any, votes: { optionIndex: number }[]) {

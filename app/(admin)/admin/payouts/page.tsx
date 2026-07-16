@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Wallet, Users, CircleDollarSign, ChevronRight } from "lucide-react";
+import { Wallet, ChevronRight } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
-import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PayoutRunner } from "@/components/admin/payout-runner";
 import { CustomPayout } from "@/components/admin/custom-payout";
 import { PayoutExport } from "@/components/admin/payout-export";
+import { PayableStats } from "@/components/admin/payable-stats";
 import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates, paidAllTime } from "@/lib/queries";
 import { reconcileProcessingPayouts } from "@/app/actions/admin";
 import { paypalReady } from "@/lib/integrations";
@@ -38,11 +38,7 @@ export default async function AdminPayoutsPage() {
         description="Pay every approved affiliate in one native PayPal batch — no third-party fees."
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Payable now" value={kpis.payableNow} icon={Wallet} accent="primary" />
-        <StatCard label="Recipients" value={rows.length} format="number" icon={Users} accent="gold" />
-        <StatCard label="Paid all-time" value={lifetimePaid} icon={CircleDollarSign} accent="success" />
-      </div>
+      <PayableStats rows={rows} payableNow={kpis.payableNow} paidAllTime={lifetimePaid} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -79,10 +75,16 @@ export default async function AdminPayoutsPage() {
                   <Wallet className="size-5" />
                 </span>
                 <div>
-                  <p className="font-medium">{p.senderBatchId}</p>
+                  <p className="font-medium">
+                    {p.affiliateCount === 1 && p.items[0]
+                      ? p.items[0].affiliateName
+                      : `${p.affiliateCount} affiliate${p.affiliateCount === 1 ? "" : "s"}`}
+                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
+                      {p.senderBatchId.replace(/^(CUSTOM|AFF)-/, "").slice(0, 8)}
+                    </span>
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(p.createdAt)} · {p.affiliateCount} affiliate{p.affiliateCount === 1 ? "" : "s"}
-                    {p.paypalBatchId ? <> · <span className="font-mono">{p.paypalBatchId}</span></> : ""}
+                    {formatDate(p.createdAt)} · {p.affiliateCount} recipient{p.affiliateCount === 1 ? "" : "s"}
                   </p>
                 </div>
               </div>
