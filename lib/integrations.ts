@@ -90,6 +90,7 @@ export async function paypalConfig() {
 export async function smsConfig() {
   return {
     provider: await plain("int_sms_provider", "SMS_PROVIDER"),
+    accountSid: await plain("int_sms_account_sid", "TWILIO_ACCOUNT_SID"),
     apiKey: await secret("int_sms_key", "SMS_API_KEY"),
     apiSecret: await secret("int_sms_secret", "SMS_API_SECRET"),
     from: await plain("int_sms_from", "SMS_FROM"),
@@ -127,6 +128,6 @@ export async function integrationsStatus() {
     shopify: { ready: Boolean(s.domain && s.token), domain: s.domain, version: s.version, tokenMask: mask(s.token), secretMask: mask(s.apiSecret) },
     paypal: { ready: Boolean(p.clientId && p.clientSecret), base: p.base, clientIdMask: mask(p.clientId), clientSecretMask: mask(p.clientSecret), webhookId: p.webhookId },
     email: { ready: Boolean(e.apiKey), from: e.from, keyMask: mask(e.apiKey) },
-    sms: { ready: Boolean(sms.provider), provider: sms.provider, from: sms.from, keyMask: mask(sms.apiKey), secretMask: mask(sms.apiSecret) },
+    sms: { ready: Boolean(sms.provider), provider: sms.provider, accountSid: sms.accountSid, from: sms.from, keyMask: mask(sms.apiKey), secretMask: mask(sms.apiSecret) },
   };
 }

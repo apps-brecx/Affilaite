@@ -1150,7 +1150,7 @@ const INTEGRATION_KEYS: Record<string, string[]> = {
   shopify: ["int_shopify_domain", "int_shopify_version", "int_shopify_token", "int_shopify_secret"],
   paypal: ["int_paypal_base", "int_paypal_client_id", "int_paypal_client_secret", "int_paypal_webhook_id"],
   email: ["int_email_from", "int_resend_key"],
-  sms: ["int_sms_provider", "int_sms_from", "int_sms_key", "int_sms_secret"],
+  sms: ["int_sms_provider", "int_sms_account_sid", "int_sms_from", "int_sms_key", "int_sms_secret"],
 };
 
 export async function saveIntegration(service: string, fields: Record<string, string>): Promise<ActionResult> {
@@ -1171,6 +1171,7 @@ export async function saveIntegration(service: string, fields: Record<string, st
     await writeSecret("int_resend_key", fields.apiKey ?? "");
   } else if (service === "sms") {
     if (fields.provider !== undefined) await writeSetting("int_sms_provider", fields.provider.trim());
+    if (fields.accountSid !== undefined) await writeSetting("int_sms_account_sid", fields.accountSid.trim());
     if (fields.from !== undefined) await writeSetting("int_sms_from", fields.from.trim());
     await writeSecret("int_sms_key", fields.apiKey ?? "");
     await writeSecret("int_sms_secret", fields.apiSecret ?? "");

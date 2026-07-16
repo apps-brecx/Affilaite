@@ -37,23 +37,30 @@ async function deliver(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, b
 }
 
 /**
- * Twilio Messages API. Uses the config's apiKey as the Account SID, apiSecret as
- * the Auth Token, and `from` as either a sender number (E.164) or a Messaging
- * Service SID (starts with "MG").
+ * Twilio Messages API. The Account SID (AC…) always goes in the request URL.
+ * Auth is either Account SID + Auth Token, or — when an API Key SID (SK…) is
+ * provided — API Key SID + its secret (recommended). `from` is a sender number
+ * (E.164) or a Messaging Service SID (starts with "MG").
  */
 async function deliverTwilio(cfg: Awaited<ReturnType<typeof smsConfig>>, to: string, body: string): Promise<void> {
-  const accountSid = cfg.apiKey.trim();
-  const authToken = cfg.apiSecret.trim();
+  const accountSid = cfg.accountSid.trim();
+  const apiKeySid = cfg.apiKey.trim(); // optional SK… key
+  const secret = cfg.apiSecret.trim(); // Auth Token, or API Key secret
   const from = cfg.from.trim();
-  if (!accountSid || !authToken || !from) {
-    throw new Error("Twilio needs an Account SID, Auth Token, and a From number / Messaging Service SID.");
+  if (!accountSid.startsWith("AC")) {
+    throw new Error("Twilio Account SID must start with 'AC' (find it on your Twilio Console dashboard).");
   }
+  if (!secret || !from) {
+    throw new Error("Twilio needs an Account SID (AC…), an Auth Token or API Key secret, and a From number.");
+  }
+  // Username = API Key SID when given, else the Account SID.
+  const authUser = apiKeySid || accountSid;
 
   const params = new URLSearchParams({ To: to, Body: body });
   if (from.startsWith("MG")) params.set("MessagingServiceSid", from);
   else params.set("From", from);
 
-  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const auth = Buffer.from(`${authUser}:${secret}`).toString("base64");
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`, {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },

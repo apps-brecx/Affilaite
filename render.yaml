@@ -45,6 +45,8 @@ services:
       # SMS for signup phone verification (optional — blank keeps demo mode).
       - key: SMS_PROVIDER
         sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
       - key: SMS_API_KEY
         sync: false
       - key: SMS_API_SECRET
