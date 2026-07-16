@@ -81,6 +81,15 @@ export async function paypalConfig() {
   };
 }
 
+export async function smsConfig() {
+  return {
+    provider: await plain("int_sms_provider", "SMS_PROVIDER"),
+    apiKey: await secret("int_sms_key", "SMS_API_KEY"),
+    apiSecret: await secret("int_sms_secret", "SMS_API_SECRET"),
+    from: await plain("int_sms_from", "SMS_FROM"),
+  };
+}
+
 export async function emailConfig() {
   return {
     apiKey: await secret("int_resend_key", "RESEND_API_KEY"),
@@ -99,6 +108,10 @@ export async function paypalReady() {
 export async function emailReady() {
   const c = await emailConfig();
   return Boolean(c.apiKey);
+}
+export async function smsReady() {
+  const c = await smsConfig();
+  return Boolean(c.provider);
 }
 
 /** Non-secret status snapshot for the Settings UI. */

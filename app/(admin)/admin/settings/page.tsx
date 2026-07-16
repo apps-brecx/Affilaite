@@ -4,12 +4,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DefaultDestination } from "@/components/admin/default-destination";
+import { PhoneVerificationToggle } from "@/components/admin/phone-verification-toggle";
 import { dataSource, getDefaultDestination } from "@/lib/queries";
+import { phoneVerificationRequired } from "@/lib/phone";
 
 export const metadata = { title: "Settings · General" };
 
 export default async function GeneralSettingsPage() {
   const defaultDestination = await getDefaultDestination();
+  const requirePhone = await phoneVerificationRequired();
   return (
     <div className="space-y-8">
       <PageHeader title="General" description="Program-wide defaults and links.">
@@ -19,6 +22,8 @@ export default async function GeneralSettingsPage() {
       </PageHeader>
 
       <DefaultDestination value={defaultDestination} />
+
+      <PhoneVerificationToggle enabled={requirePhone} />
 
       <Card>
         <CardHeader>

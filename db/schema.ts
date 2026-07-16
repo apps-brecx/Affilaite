@@ -35,6 +35,7 @@ export const payoutStatus = pgEnum("payout_status", [
   "failed",
 ]);
 export const commissionType = pgEnum("commission_type", ["percent", "flat"]);
+export const payoutMethod = pgEnum("payout_method", ["paypal", "venmo"]);
 export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
 export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
 export const campaignAccess = pgEnum("campaign_access", ["instant", "approval", "invite"]);
@@ -61,6 +62,21 @@ export const passwordResetTokens = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({ tokenIdx: index("reset_token_idx").on(t.tokenHash) }),
+);
+
+// --- Phone verification codes (SMS OTP at signup; hashed, expiring, capped) ---
+export const phoneVerifications = pgTable(
+  "phone_verifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    phone: text("phone").notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ phoneIdx: index("phone_verif_idx").on(t.phone) }),
 );
 
 // --- Program = a commission ruleset ---
@@ -94,6 +110,10 @@ export const affiliates = pgTable(
     status: affiliateStatus("status").notNull().default("pending"),
     refCode: text("ref_code").notNull().unique(),
     paypalEmail: text("paypal_email"),
+    // Payout rail: Venmo pays to a (verified) phone; PayPal pays to an email.
+    payoutMethod: payoutMethod("payout_method").notNull().default("venmo"),
+    phone: text("phone"),
+    phoneVerifiedAt: timestamp("phone_verified_at"),
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),

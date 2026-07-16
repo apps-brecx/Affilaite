@@ -1,16 +1,18 @@
 import { ApplyForm } from "@/components/marketing/apply-form";
 import { Ticket, Wallet, Zap, TrendingUp } from "lucide-react";
+import { phoneVerificationRequired } from "@/lib/phone";
 
 export const metadata = { title: "Become a Partner" };
 
 const PERKS = [
   { icon: TrendingUp, title: "Competitive commission", body: "Earn on every order you drive." },
-  { icon: Wallet, title: "Paid via PayPal", body: "Fast, native payouts — no middlemen." },
+  { icon: Wallet, title: "Paid via Venmo", body: "Fast payouts straight to your phone." },
   { icon: Ticket, title: "Your own code & link", body: "Ready the moment you're approved." },
   { icon: Zap, title: "Bonuses & drops", body: "Time-boxed promos to boost your earnings." },
 ];
 
-export default function ApplyPage() {
+export default async function ApplyPage() {
+  const requirePhone = await phoneVerificationRequired();
   return (
     <div className="relative">
       <div className="aurora pointer-events-none absolute inset-0 h-96" />
@@ -39,7 +41,7 @@ export default function ApplyPage() {
         </div>
 
         {/* Right — form */}
-        <ApplyForm />
+        <ApplyForm requirePhone={requirePhone} />
       </div>
     </div>
   );

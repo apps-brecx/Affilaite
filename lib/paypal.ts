@@ -27,11 +27,12 @@ export async function paypalToken(): Promise<string> {
 export interface PayoutRecipient {
   senderItemId: string;
   amount: string; // "12.00"
-  email: string;
+  receiver: string; // PayPal email, or phone number for Venmo
+  method: "paypal" | "venmo";
   currency?: string;
 }
 
-/** Create a PayPal payout batch. `senderBatchId` guarantees idempotency. */
+/** Create a PayPal/Venmo payout batch. `senderBatchId` guarantees idempotency. */
 export async function createPayoutBatch(senderBatchId: string, recipients: PayoutRecipient[]) {
   const { base } = await paypalConfig();
   const token = await paypalToken();
@@ -41,13 +42,18 @@ export async function createPayoutBatch(senderBatchId: string, recipients: Payou
       email_subject: "Your affiliate commission is here 🎉",
       email_message: "Thanks for driving sales — here's your payout.",
     },
-    items: recipients.map((r) => ({
-      recipient_type: "EMAIL",
-      amount: { value: r.amount, currency: r.currency ?? "USD" },
-      receiver: r.email,
-      note: "Affiliate commission",
-      sender_item_id: r.senderItemId,
-    })),
+    items: recipients.map((r) => {
+      const common = {
+        amount: { value: r.amount, currency: r.currency ?? "USD" },
+        receiver: r.receiver,
+        note: "Affiliate commission",
+        sender_item_id: r.senderItemId,
+      };
+      // Venmo payouts identify the recipient by phone number + wallet.
+      return r.method === "venmo"
+        ? { recipient_type: "PHONE", recipient_wallet: "VENMO", ...common }
+        : { recipient_type: "EMAIL", ...common };
+    }),
   };
 
   const res = await fetch(`${base}/v1/payments/payouts`, {

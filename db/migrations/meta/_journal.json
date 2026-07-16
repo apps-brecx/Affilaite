@@ -71,6 +71,13 @@
       "when": 1784212408452,
       "tag": "0009_money_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784213632276,
+      "tag": "0010_phone_and_venmo",
+      "breakpoints": true
     }
   ]
 }

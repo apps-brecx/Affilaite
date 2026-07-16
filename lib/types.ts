@@ -62,6 +62,9 @@ export interface Affiliate {
   code: string; // discount code
   status: AffiliateState;
   paypalEmail: string | null;
+  payoutMethod: "paypal" | "venmo";
+  phone: string | null;
+  phoneVerified: boolean;
   companyName: string | null;
   programId: string;
   programName: string;
