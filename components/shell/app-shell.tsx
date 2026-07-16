@@ -151,7 +151,7 @@ function NavRow({
       {active && (
         <motion.span
           layoutId="nav-active"
-          className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+          className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary"
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />
       )}
