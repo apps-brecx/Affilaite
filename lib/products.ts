@@ -17,8 +17,9 @@ export interface StoreProduct {
 }
 
 const PRODUCTS_QUERY = `
-  query Catalog($first: Int!) {
-    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
+  query Catalog($first: Int!, $after: String) {
+    products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true) {
+      pageInfo { hasNextPage endCursor }
       edges {
         node {
           id
@@ -44,30 +45,39 @@ export async function getStoreProducts(
   if (!(await shopifyReady())) return { connected: false, products: [] };
   try {
     const { domain } = await shopifyConfig();
-    const json = await shopifyGraphQL<any>(PRODUCTS_QUERY, { first: limit });
-    const errs = json.errors;
-    if (errs?.length) {
-      console.error("[getStoreProducts] GraphQL errors:", errs);
-      return { connected: true, products: [], error: errs.map((e: any) => e.message).join(", ") };
-    }
-    const edges = json.data?.products?.edges ?? [];
-    const products: StoreProduct[] = edges
-      .map((e: any) => e.node)
-      .filter((n: any) => n && n.status !== "ARCHIVED")
-      .map((n: any) => {
+    const products: StoreProduct[] = [];
+    let after: string | null = null;
+    // Page through with a cursor (250/page, Shopify's max) up to `limit`, so a
+    // catalog with >100 products doesn't silently drop items past the first page.
+    for (let guard = 0; products.length < limit && guard < 200; guard++) {
+      const pageSize = Math.min(250, limit - products.length + 5);
+      const json: any = await shopifyGraphQL<any>(PRODUCTS_QUERY, { first: pageSize, after });
+      if (json.errors?.length) {
+        console.error("[getStoreProducts] GraphQL errors:", json.errors);
+        // If we already have some products, return them rather than nothing.
+        if (products.length) break;
+        return { connected: true, products: [], error: json.errors.map((e: any) => e.message).join(", ") };
+      }
+      const conn = json.data?.products;
+      for (const e of conn?.edges ?? []) {
+        const n = e.node;
+        if (!n || n.status === "ARCHIVED") continue;
         const price = n.priceRangeV2?.minVariantPrice;
-        return {
-          id: n.id as string,
-          title: n.title as string,
-          handle: n.handle as string,
+        products.push({
+          id: n.id,
+          title: n.title,
+          handle: n.handle,
           url: (n.onlineStoreUrl as string) || (domain ? `https://${domain}/products/${n.handle}` : `/products/${n.handle}`),
           image: n.featuredImage?.url ?? null,
           price: price?.amount ? Number(price.amount).toFixed(2) : null,
           currency: price?.currencyCode ?? null,
           available: (n.totalInventory ?? 0) > 0 || n.totalInventory == null,
-        };
-      });
-    return { connected: true, products };
+        });
+      }
+      if (!conn?.pageInfo?.hasNextPage) break;
+      after = conn.pageInfo.endCursor;
+    }
+    return { connected: true, products: products.slice(0, limit) };
   } catch (e: any) {
     console.error("[getStoreProducts]", e);
     return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };

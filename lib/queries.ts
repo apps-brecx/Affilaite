@@ -45,8 +45,13 @@ const DAY = 86_400_000;
 
 // ---------- Affiliates (with derived stats) ----------
 
-async function affiliateStatMaps() {
+async function affiliateStatMaps(affiliateIds?: string[]) {
   if (!db) return { earn: new Map(), clickCount: new Map(), orderCount: new Map() };
+  // Scope to the affiliates we're rendering — an affiliate portal page loads
+  // one affiliate and must not aggregate the whole org's commissions/clicks.
+  if (affiliateIds && affiliateIds.length === 0) return { earn: new Map(), clickCount: new Map(), orderCount: new Map() };
+  const scope = affiliateIds ? inArray(commissions.affiliateId, affiliateIds) : undefined;
+  const clickScope = affiliateIds ? inArray(clicks.affiliateId, affiliateIds) : undefined;
 
   const earnRows = await db
     .select({
@@ -56,11 +61,13 @@ async function affiliateStatMaps() {
       cnt: sql<number>`count(*)`,
     })
     .from(commissions)
+    .where(scope)
     .groupBy(commissions.affiliateId, commissions.status);
 
   const clickRows = await db
     .select({ affiliateId: clicks.affiliateId, cnt: sql<number>`count(*)` })
     .from(clicks)
+    .where(clickScope)
     .groupBy(clicks.affiliateId);
 
   const earn = new Map<string, { pending: number; approved: number; paid: number; orders: number }>();
@@ -131,7 +138,7 @@ async function loadAffiliates(where?: any): Promise<Affiliate[]> {
     : [];
   const codeByAff = new Map(codes.map((c) => [c.affiliateId!, c]));
 
-  const { earn, clickCount } = await affiliateStatMaps();
+  const { earn, clickCount } = await affiliateStatMaps(ids);
   return rows
     .map((r) => mapAffiliate({ ...r, code: codeByAff.get(r.aff.id) }, earn, clickCount))
     .sort((a, b) => b.totalEarned - a.totalEarned);
