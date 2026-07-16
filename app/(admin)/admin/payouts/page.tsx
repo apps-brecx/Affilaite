@@ -7,7 +7,7 @@ import { PayoutRunner } from "@/components/admin/payout-runner";
 import { CustomPayout } from "@/components/admin/custom-payout";
 import { PayoutExport } from "@/components/admin/payout-export";
 import { PayableStats } from "@/components/admin/payable-stats";
-import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates, paidAllTime } from "@/lib/queries";
+import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates, paidAllTime, getPaidRecipients } from "@/lib/queries";
 import { reconcileProcessingPayouts } from "@/app/actions/admin";
 import { paypalReady } from "@/lib/integrations";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -20,12 +20,13 @@ export default async function AdminPayoutsPage() {
   // history and "Paid all-time" reflect what actually cleared.
   if (paypalLive) await reconcileProcessingPayouts();
 
-  const [rows, payouts, kpis, allAffiliates, lifetimePaid] = await Promise.all([
+  const [rows, payouts, kpis, allAffiliates, lifetimePaid, paidRecipients] = await Promise.all([
     getPayableBatch(),
     listPayouts(),
     getAdminKpis(),
     listAffiliates(),
     paidAllTime(),
+    getPaidRecipients(),
   ]);
   const customRows = allAffiliates
     .filter((a) => a.status === "approved")
@@ -38,7 +39,7 @@ export default async function AdminPayoutsPage() {
         description="Pay every approved affiliate in one native PayPal batch — no third-party fees."
       />
 
-      <PayableStats rows={rows} payableNow={kpis.payableNow} paidAllTime={lifetimePaid} />
+      <PayableStats rows={rows} paid={paidRecipients} payableNow={kpis.payableNow} paidAllTime={lifetimePaid} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

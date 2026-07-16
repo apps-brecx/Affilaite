@@ -534,6 +534,41 @@ export async function paidAllTime(): Promise<number> {
   return num(r?.total);
 }
 
+export interface PaidRecipient {
+  affiliateId: string | null;
+  name: string;
+  email: string;
+  total: number;
+  payments: number;
+}
+
+/** Distinct affiliates who have actually been paid (successful items), all-time. */
+export async function getPaidRecipients(): Promise<PaidRecipient[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({
+      affiliateId: payoutItems.affiliateId,
+      name: users.name,
+      email: users.email,
+      total: sql<string>`sum(${payoutItems.amount})`,
+      payments: sql<number>`count(*)`,
+    })
+    .from(payoutItems)
+    .leftJoin(affiliates, eq(payoutItems.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(inArray(payoutItems.transactionStatus, [...PAID_ITEM_STATUSES]))
+    .groupBy(payoutItems.affiliateId, users.name, users.email);
+  return rows
+    .map((r) => ({
+      affiliateId: r.affiliateId ?? null,
+      name: r.name ?? r.email ?? "Unknown",
+      email: r.email ?? "",
+      total: num(r.total),
+      payments: Number(r.payments),
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
 export interface DiscountCodeRow {
   id: string;
   code: string;
