@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { and, eq, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes, sampleRequests } from "@/db/schema";
+import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes, sampleRequests, groupMessages, groupMessageReads, pollVotes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
@@ -393,4 +393,46 @@ export async function requestSample(input: unknown): Promise<ActionResult> {
   revalidatePath("/samples");
   revalidatePath("/admin/samples");
   return { ok: true, message: "Sample requested — we'll review it shortly." };
+}
+
+/** Mark all messages in the affiliate's group as read (populates read receipts). */
+export async function markGroupRead(): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const me = await getAffiliate(affiliateId);
+  if (!me?.groupId) return { ok: true, message: "No group." };
+  const msgs = await db.select({ id: groupMessages.id }).from(groupMessages).where(eq(groupMessages.groupId, me.groupId));
+  if (msgs.length) {
+    await db
+      .insert(groupMessageReads)
+      .values(msgs.map((m) => ({ messageId: m.id, affiliateId })))
+      .onConflictDoNothing();
+  }
+  return { ok: true, message: "ok" };
+}
+
+/** Cast (or change) the affiliate's vote on a poll message. */
+export async function votePoll(messageId: string, optionIndex: number): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  if (!Number.isInteger(optionIndex) || optionIndex < 0) return { ok: false, message: "Invalid option." };
+
+  const msg = await db.query.groupMessages.findFirst({ where: eq(groupMessages.id, messageId) });
+  const poll = msg?.poll as { options: string[] } | null;
+  if (!msg || !poll?.options) return { ok: false, message: "Poll not found." };
+  if (optionIndex >= poll.options.length) return { ok: false, message: "Invalid option." };
+  // Only members of the message's group can vote.
+  const me = await getAffiliate(affiliateId);
+  if (!me || me.groupId !== msg.groupId) return { ok: false, message: "You're not in this group." };
+
+  await db
+    .insert(pollVotes)
+    .values({ messageId, affiliateId, optionIndex })
+    .onConflictDoUpdate({ target: [pollVotes.messageId, pollVotes.affiliateId], set: { optionIndex } });
+  revalidatePath("/community");
+  return { ok: true, message: "Vote recorded." };
 }

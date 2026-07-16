@@ -11,6 +11,7 @@ import {
   users,
   programs,
   groups,
+  groupMessages,
   promotions,
   commissions,
   discountCodes,
@@ -302,6 +303,51 @@ export async function createGroup(input: unknown): Promise<ActionResult> {
   await db.insert(groups).values({ name: parsed.data.name, description: parsed.data.description || null });
   revalidatePath("/admin/groups");
   return { ok: true, message: "Group created." };
+}
+
+/** Post a message (text / attachments / poll) to a group's chat. */
+export async function sendGroupMessage(groupId: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  const senderId = ((await auth())?.user as any)?.id ?? null;
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      body: z.string().max(4000).optional().default(""),
+      attachments: z
+        .array(z.object({ type: z.string(), url: z.string().url(), name: z.string().optional() }))
+        .optional()
+        .default([]),
+      poll: z
+        .object({ question: z.string().min(1), options: z.array(z.string().min(1)).min(2).max(8) })
+        .nullable()
+        .optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid message." };
+  const d = parsed.data;
+  if (!d.body.trim() && (!d.attachments || d.attachments.length === 0) && !d.poll) {
+    return { ok: false, message: "Add a message, attachment, or poll." };
+  }
+
+  const group = await db.query.groups.findFirst({ where: eq(groups.id, groupId) });
+  if (!group) return { ok: false, message: "Group not found." };
+
+  await db.insert(groupMessages).values({
+    groupId,
+    senderId,
+    body: d.body.trim() || null,
+    attachments: d.attachments && d.attachments.length ? d.attachments : null,
+    poll: d.poll ?? null,
+  });
+
+  // Notify every affiliate in the group (their unread badge lights up).
+  const members = await db.select({ id: affiliates.id }).from(affiliates).where(eq(affiliates.groupId, groupId));
+  for (const m of members) {
+    await notify(m.id, "community", `New message in ${group.name}`, d.poll ? d.poll.question : d.body.slice(0, 80) || "Shared an attachment", "/community");
+  }
+  revalidatePath("/admin/groups");
+  revalidatePath(`/admin/groups/${groupId}`);
+  return { ok: true, message: "Message sent to the group." };
 }
 
 export async function updateGroup(id: string, input: unknown): Promise<ActionResult> {

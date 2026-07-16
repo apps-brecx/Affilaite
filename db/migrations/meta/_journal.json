@@ -134,6 +134,13 @@
       "when": 1784234360193,
       "tag": "0018_samples_control",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784234922726,
+      "tag": "0019_group_chat",
+      "breakpoints": true
     }
   ]
 }

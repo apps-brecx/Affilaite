@@ -4,7 +4,8 @@ import { ArrowLeft, UsersRound } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { GroupManager } from "@/components/admin/group-manager";
 import { GroupMessageComposer } from "@/components/admin/group-message-composer";
-import { getGroup, listAffiliates } from "@/lib/queries";
+import { GroupChat } from "@/components/admin/group-chat";
+import { getGroup, listAffiliates, getGroupChat } from "@/lib/queries";
 
 export default async function GroupManagePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,6 +16,7 @@ export default async function GroupManagePage({ params }: { params: Promise<{ id
   const members = affiliates.filter((a) => a.groupId === id);
   // Candidates: approved affiliates not already in this group.
   const candidates = affiliates.filter((a) => a.status === "approved" && a.groupId !== id);
+  const chat = await getGroupChat(id);
 
   return (
     <div className="space-y-8">
@@ -34,6 +36,8 @@ export default async function GroupManagePage({ params }: { params: Promise<{ id
       <GroupManager group={group} members={members} candidates={candidates}>
         <GroupMessageComposer groupId={group.id} groupName={group.name} memberCount={members.length} />
       </GroupManager>
+
+      <GroupChat groupId={group.id} memberCount={members.length} messages={chat} />
     </div>
   );
 }

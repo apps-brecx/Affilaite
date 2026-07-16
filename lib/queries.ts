@@ -8,6 +8,9 @@ import {
   users,
   programs,
   groups,
+  groupMessages,
+  groupMessageReads,
+  pollVotes,
   commissions,
   orders,
   clicks,
@@ -38,6 +41,7 @@ import type {
   CommissionState,
   Campaign,
   SampleRequest,
+  GroupChatMessage,
 } from "./types";
 import { mergeConfig, mergeBrand, type BrandSettings } from "./campaign-config";
 import { PAID_ITEM_STATUSES } from "./paypal";
@@ -895,4 +899,83 @@ export async function pendingSampleCount(): Promise<number> {
   if (!db) return 0;
   const [r] = await db.select({ c: sql<number>`count(*)` }).from(sampleRequests).where(eq(sampleRequests.status, "requested"));
   return Number(r?.c ?? 0);
+}
+
+// ---------- Group chat ----------
+
+function pollTally(poll: any, votes: { optionIndex: number }[]) {
+  if (!poll?.options) return null;
+  const counts = new Array(poll.options.length).fill(0);
+  for (const v of votes) if (v.optionIndex >= 0 && v.optionIndex < counts.length) counts[v.optionIndex]++;
+  return {
+    question: poll.question ?? "",
+    options: poll.options.map((text: string, i: number) => ({ text, votes: counts[i] })),
+    totalVotes: votes.length,
+  };
+}
+
+/** Admin view of a group's chat: messages + read receipts + poll tallies. */
+export async function getGroupChat(groupId: string): Promise<GroupChatMessage[]> {
+  if (!db) return [];
+  const msgs = await db.select().from(groupMessages).where(eq(groupMessages.groupId, groupId)).orderBy(desc(groupMessages.createdAt));
+  if (!msgs.length) return [];
+  const ids = msgs.map((m) => m.id);
+  const reads = await db
+    .select({ messageId: groupMessageReads.messageId, name: users.name, email: users.email })
+    .from(groupMessageReads)
+    .leftJoin(affiliates, eq(groupMessageReads.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(inArray(groupMessageReads.messageId, ids));
+  const votes = await db.select().from(pollVotes).where(inArray(pollVotes.messageId, ids));
+  const readsByMsg = new Map<string, string[]>();
+  for (const r of reads) {
+    const arr = readsByMsg.get(r.messageId) ?? [];
+    arr.push(r.name ?? r.email ?? "Someone");
+    readsByMsg.set(r.messageId, arr);
+  }
+  return msgs.map((m) => {
+    const readers = readsByMsg.get(m.id) ?? [];
+    return {
+      id: m.id,
+      body: m.body ?? null,
+      attachments: (m.attachments as any) ?? [],
+      poll: pollTally(m.poll, votes.filter((v) => v.messageId === m.id)),
+      myVote: null,
+      createdAt: new Date(m.createdAt ?? Date.now()).toISOString(),
+      readCount: readers.length,
+      readers,
+    };
+  });
+}
+
+/** Affiliate view: their group's messages + their own poll vote. No member identities. */
+export async function getMyGroupChat(groupId: string, affiliateId: string): Promise<GroupChatMessage[]> {
+  if (!db) return [];
+  const msgs = await db.select().from(groupMessages).where(eq(groupMessages.groupId, groupId)).orderBy(desc(groupMessages.createdAt));
+  if (!msgs.length) return [];
+  const ids = msgs.map((m) => m.id);
+  const votes = await db.select().from(pollVotes).where(inArray(pollVotes.messageId, ids));
+  const myVotes = new Map(votes.filter((v) => v.affiliateId === affiliateId).map((v) => [v.messageId, v.optionIndex]));
+  return msgs.map((m) => ({
+    id: m.id,
+    body: m.body ?? null,
+    attachments: (m.attachments as any) ?? [],
+    poll: pollTally(m.poll, votes.filter((v) => v.messageId === m.id)),
+    myVote: myVotes.has(m.id) ? myVotes.get(m.id)! : null,
+    createdAt: new Date(m.createdAt ?? Date.now()).toISOString(),
+    readCount: 0,
+    readers: [],
+  }));
+}
+
+/** How many messages in this group the affiliate hasn't opened yet (badge). */
+export async function unreadGroupCount(groupId: string, affiliateId: string): Promise<number> {
+  if (!db) return 0;
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(groupMessages).where(eq(groupMessages.groupId, groupId));
+  const [{ read }] = await db
+    .select({ read: sql<number>`count(*)` })
+    .from(groupMessageReads)
+    .innerJoin(groupMessages, eq(groupMessageReads.messageId, groupMessages.id))
+    .where(and(eq(groupMessages.groupId, groupId), eq(groupMessageReads.affiliateId, affiliateId)));
+  return Math.max(0, Number(total) - Number(read));
 }

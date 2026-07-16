@@ -102,6 +102,53 @@ export const groups = pgTable("groups", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// --- Group chat (WhatsApp-style broadcast group) ---
+// Admins post; affiliates read (and vote on polls) but never see each other.
+export const groupMessages = pgTable(
+  "group_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id").notNull().references(() => groups.id),
+    senderId: uuid("sender_id").references(() => users.id), // the admin who posted
+    body: text("body"),
+    // [{ type: "image" | "video" | "file", url, name }]
+    attachments: jsonb("attachments").$type<{ type: string; url: string; name?: string }[]>(),
+    // { question, options: string[] } — null when not a poll
+    poll: jsonb("poll").$type<{ question: string; options: string[] }>(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ gmGroupIdx: index("gm_group_idx").on(t.groupId) }),
+);
+
+export const groupMessageReads = pgTable(
+  "group_message_reads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id").notNull().references(() => groupMessages.id),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    readAt: timestamp("read_at").defaultNow(),
+  },
+  (t) => ({
+    gmrMsgIdx: index("gmr_msg_idx").on(t.messageId),
+    gmrUniq: uniqueIndex("gmr_msg_aff_uniq").on(t.messageId, t.affiliateId),
+  }),
+);
+
+export const pollVotes = pgTable(
+  "poll_votes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id").notNull().references(() => groupMessages.id),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    optionIndex: integer("option_index").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    pvMsgIdx: index("pv_msg_idx").on(t.messageId),
+    pvUniq: uniqueIndex("pv_msg_aff_uniq").on(t.messageId, t.affiliateId),
+  }),
+);
+
 // --- Affiliate profile (1:1 with a user) ---
 export const affiliates = pgTable(
   "affiliates",

@@ -204,6 +204,27 @@ export interface AdminKpis {
   awaitingApproval: number;
 }
 
+export interface ChatAttachment {
+  type: string; // image | video | file
+  url: string;
+  name?: string;
+}
+export interface ChatPollOption {
+  text: string;
+  votes: number;
+}
+export interface GroupChatMessage {
+  id: string;
+  body: string | null;
+  attachments: ChatAttachment[];
+  poll: { question: string; options: ChatPollOption[]; totalVotes: number } | null;
+  myVote: number | null; // affiliate's chosen option index, if any
+  createdAt: string;
+  // Admin-only read receipts:
+  readCount: number;
+  readers: string[]; // affiliate names who've seen it
+}
+
 export interface SampleRequest {
   id: string;
   affiliateId: string;

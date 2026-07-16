@@ -2,8 +2,9 @@ import { UsersRound, Mail, Inbox, Megaphone } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AffiliateGroupChat } from "@/components/affiliate/group-chat";
 import { requireAffiliate } from "@/lib/session";
-import { getGroup, getMessagesForAffiliate, type InboxMessage } from "@/lib/queries";
+import { getGroup, getMessagesForAffiliate, getMyGroupChat, type InboxMessage } from "@/lib/queries";
 import { relativeTime, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Community" };
@@ -33,9 +34,10 @@ function groupByDay(messages: InboxMessage[]): { label: string; items: InboxMess
 
 export default async function CommunityPage() {
   const me = await requireAffiliate();
-  const [group, messages] = await Promise.all([
+  const [group, messages, chat] = await Promise.all([
     me.groupId ? getGroup(me.groupId) : Promise.resolve(undefined),
     getMessagesForAffiliate(me),
+    me.groupId ? getMyGroupChat(me.groupId, me.id) : Promise.resolve([]),
   ]);
 
   return (
@@ -44,6 +46,16 @@ export default async function CommunityPage() {
         title="Community"
         description="Your group and every message from the Sipfluence team — all in one place."
       />
+
+      {/* Group chat — WhatsApp-style feed from the team */}
+      {group && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <UsersRound className="size-4" /> {group.name}
+          </h2>
+          <AffiliateGroupChat groupName={group.name} initial={chat} />
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Group */}
