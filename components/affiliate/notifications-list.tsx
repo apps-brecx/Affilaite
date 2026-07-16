@@ -30,6 +30,35 @@ const SECTION_META: Record<string, { label: string; icon: typeof Bell }> = {
   community: { label: "Community", icon: UsersRound },
 };
 
+// Bucket a notification's timestamp into a human date label: Today / Yesterday
+// / weekday-this-week / full date. Keeps items chronological within each group.
+function dateGroup(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dayMs = 86_400_000;
+  const days = Math.round((startOf(now) - startOf(d)) / dayMs);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
+  return d.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+function groupByDate(items: NotificationRow[]): { label: string; items: NotificationRow[] }[] {
+  const groups: { label: string; items: NotificationRow[] }[] = [];
+  for (const n of items) {
+    const label = dateGroup(n.createdAt);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(n);
+    else groups.push({ label, items: [n] });
+  }
+  return groups;
+}
+
 export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
   const [items, setItems] = useState(initial);
 
@@ -60,12 +89,19 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
     );
   }
 
+  const groups = groupByDate(items);
+
   return (
-    <div className="mx-auto max-w-3xl space-y-3">
-      {items.map((n) => {
-        const meta = SECTION_META[n.section] ?? { label: "Update", icon: Bell };
-        const Icon = meta.icon;
-        const inner = (
+    <div className="mx-auto max-w-3xl space-y-8">
+      {groups.map((group) => (
+        <section key={group.label} className="space-y-3">
+          <h2 className="sticky top-16 z-10 -mx-1 bg-background/80 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+            {group.label}
+          </h2>
+          {group.items.map((n) => {
+            const meta = SECTION_META[n.section] ?? { label: "Update", icon: Bell };
+            const Icon = meta.icon;
+            const inner = (
           <CardContent className="flex items-start gap-3 p-4">
             <span className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Icon className="size-4" />
@@ -83,18 +119,20 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
             {n.href && <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground" />}
           </CardContent>
         );
-        return n.href ? (
-          <Link key={n.id} href={n.href} className="block">
-            <Card className={`transition-shadow hover:shadow-lift ${n.read ? "" : "border-primary/20 bg-primary/[0.02]"}`}>
-              {inner}
-            </Card>
-          </Link>
-        ) : (
-          <Card key={n.id} className={n.read ? "" : "border-primary/20 bg-primary/[0.02]"}>
-            {inner}
-          </Card>
-        );
-      })}
+            return n.href ? (
+              <Link key={n.id} href={n.href} className="block">
+                <Card className={`transition-shadow hover:shadow-lift ${n.read ? "" : "border-primary/20 bg-primary/[0.02]"}`}>
+                  {inner}
+                </Card>
+              </Link>
+            ) : (
+              <Card key={n.id} className={n.read ? "" : "border-primary/20 bg-primary/[0.02]"}>
+                {inner}
+              </Card>
+            );
+          })}
+        </section>
+      ))}
     </div>
   );
 }
