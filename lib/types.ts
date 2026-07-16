@@ -123,10 +123,14 @@ export interface Commission {
 }
 
 export interface PayoutItem {
+  id: string;
+  affiliateId: string | null;
   affiliateName: string;
   affiliateEmail: string;
   amount: number;
+  currency: string;
   transactionStatus: string;
+  paypalItemId: string | null;
 }
 
 export interface Payout {

@@ -1,9 +1,10 @@
 import { db } from "@/db";
-import { payoutItems } from "@/db/schema";
+import { payoutItems, payouts } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { verifyPaypalWebhook } from "@/lib/paypal";
+import { verifyPaypalWebhook, rollupBatchStatus } from "@/lib/paypal";
 
-// PayPal payout item status webhook → reconcile payout_items.
+// PayPal payout item status webhook → reconcile payout_items and roll the batch
+// status up (processing → success/failed) so the admin UI reflects reality.
 export async function POST(req: Request) {
   // MUST verify the signature before trusting anything — otherwise anyone who
   // guesses the URL could flip a real payout to SUCCESS/FAILED.
@@ -25,10 +26,21 @@ export async function POST(req: Request) {
   const paypalItemId = resource.payout_item_id;
 
   if (db && senderItemId) {
-    await db
+    const [updated] = await db
       .update(payoutItems)
-      .set({ transactionStatus: status, paypalItemId })
-      .where(eq(payoutItems.id, senderItemId));
+      .set({ transactionStatus: status, ...(paypalItemId ? { paypalItemId } : {}) })
+      .where(eq(payoutItems.id, senderItemId))
+      .returning({ payoutId: payoutItems.payoutId });
+
+    // Roll the batch up from its items' latest statuses.
+    if (updated?.payoutId) {
+      const siblings = await db
+        .select({ s: payoutItems.transactionStatus })
+        .from(payoutItems)
+        .where(eq(payoutItems.payoutId, updated.payoutId));
+      const rolled = rollupBatchStatus(siblings.map((s) => s.s ?? "PENDING"));
+      await db.update(payouts).set({ status: rolled }).where(eq(payouts.id, updated.payoutId));
+    }
   }
 
   return new Response("ok", { status: 200 });

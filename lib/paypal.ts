@@ -138,5 +138,49 @@ export async function getPayoutBatch(payoutBatchId: string) {
   const res = await fetch(`${base}/v1/payments/payouts/${payoutBatchId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`PayPal get-batch failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`);
+  }
   return res.json();
+}
+
+// PayPal payout-item transaction_status values, bucketed for our 4-state batch
+// enum (draft/processing/success/failed). A dollar only counts as "paid" once
+// its item reaches SUCCESS.
+export const PAID_ITEM_STATUSES = ["SUCCESS"] as const;
+const PENDING_ITEM_STATUSES = new Set(["PENDING", "UNCLAIMED", "ONHOLD", "NEW"]);
+const FAILED_ITEM_STATUSES = new Set(["FAILED", "RETURNED", "BLOCKED", "REFUNDED", "REVERSED", "DENIED", "CANCELED"]);
+
+export interface ParsedPayoutItem {
+  senderItemId: string;
+  payoutItemId: string | null;
+  transactionStatus: string;
+}
+
+/** Pull per-item statuses out of a PayPal get-batch response. */
+export function parsePayoutBatch(raw: any): { batchStatus: string; items: ParsedPayoutItem[] } {
+  const batchStatus = String(raw?.batch_header?.batch_status ?? "").toUpperCase();
+  const items: ParsedPayoutItem[] = (raw?.items ?? []).map((i: any) => ({
+    senderItemId: i?.payout_item?.sender_item_id ?? "",
+    payoutItemId: i?.payout_item_id ?? null,
+    transactionStatus: String(i?.transaction_status ?? "PENDING").toUpperCase(),
+  }));
+  return { batchStatus, items };
+}
+
+/**
+ * Roll a set of item statuses up to a single batch status.
+ * - any item still pending → "processing"
+ * - otherwise, at least one success → "success" (money moved)
+ * - everything terminal-failed → "failed"
+ */
+export function rollupBatchStatus(itemStatuses: string[]): "processing" | "success" | "failed" {
+  if (itemStatuses.length === 0) return "processing";
+  const norm = itemStatuses.map((s) => s.toUpperCase());
+  if (norm.some((s) => PENDING_ITEM_STATUSES.has(s) || (!FAILED_ITEM_STATUSES.has(s) && s !== "SUCCESS"))) {
+    return "processing";
+  }
+  if (norm.some((s) => s === "SUCCESS")) return "success";
+  return "failed";
 }

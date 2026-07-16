@@ -1,25 +1,32 @@
-import { Wallet, Users, CircleDollarSign } from "lucide-react";
+import Link from "next/link";
+import { Wallet, Users, CircleDollarSign, ChevronRight } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PayoutRunner } from "@/components/admin/payout-runner";
 import { CustomPayout } from "@/components/admin/custom-payout";
-import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates } from "@/lib/queries";
+import { PayoutExport } from "@/components/admin/payout-export";
+import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates, paidAllTime } from "@/lib/queries";
+import { reconcileProcessingPayouts } from "@/app/actions/admin";
 import { paypalReady } from "@/lib/integrations";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Payouts" };
 
 export default async function AdminPayoutsPage() {
-  const [rows, payouts, kpis, allAffiliates] = await Promise.all([
+  const paypalLive = await paypalReady();
+  // Refresh any still-"processing" batches from PayPal before rendering, so the
+  // history and "Paid all-time" reflect what actually cleared.
+  if (paypalLive) await reconcileProcessingPayouts();
+
+  const [rows, payouts, kpis, allAffiliates, lifetimePaid] = await Promise.all([
     getPayableBatch(),
     listPayouts(),
     getAdminKpis(),
     listAffiliates(),
+    paidAllTime(),
   ]);
-  const lifetimePaid = payouts.reduce((s, p) => s + p.totalAmount, 0);
-  const paypalLive = await paypalReady();
   const customRows = allAffiliates
     .filter((a) => a.status === "approved")
     .map((a) => ({ id: a.id, name: a.name, email: a.email, paypalEmail: a.paypalEmail }));
@@ -53,17 +60,19 @@ export default async function AdminPayoutsPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle>Batch history</CardTitle>
+          {payouts.length > 0 && <PayoutExport payouts={payouts} />}
         </CardHeader>
         <CardContent className="space-y-3">
           {payouts.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">No payout batches yet.</p>
           )}
           {payouts.map((p) => (
-            <div
+            <Link
               key={p.id}
-              className="flex flex-col gap-3 rounded-lg border border-hairline p-4 sm:flex-row sm:items-center sm:justify-between"
+              href={`/admin/payouts/${p.id}`}
+              className="flex flex-col gap-3 rounded-lg border border-hairline p-4 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex items-center gap-4">
                 <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -80,8 +89,9 @@ export default async function AdminPayoutsPage() {
               <div className="flex items-center gap-4">
                 <span className="tnum text-lg font-semibold">{formatCurrency(p.totalAmount)}</span>
                 <StatusPill status={p.status} />
+                <ChevronRight className="size-4 text-muted-foreground" />
               </div>
-            </div>
+            </Link>
           ))}
         </CardContent>
       </Card>

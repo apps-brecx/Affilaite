@@ -40,6 +40,7 @@ import type {
   SampleRequest,
 } from "./types";
 import { mergeConfig, mergeBrand, type BrandSettings } from "./campaign-config";
+import { PAID_ITEM_STATUSES } from "./paypal";
 
 export const dataSource = isDbConfigured ? "live" : "unconfigured";
 const num = (v: unknown) => (v == null ? 0 : Number(v));
@@ -443,12 +444,58 @@ export async function listPayouts(): Promise<Payout[]> {
     items: items
       .filter((i) => i.it.payoutId === p.id)
       .map((i) => ({
+        id: i.it.id,
+        affiliateId: i.it.affiliateId ?? null,
         affiliateName: i.user?.name ?? "Unknown",
         affiliateEmail: i.user?.email ?? "",
         amount: num(i.it.amount),
+        currency: i.it.currency ?? "USD",
         transactionStatus: i.it.transactionStatus ?? "PENDING",
+        paypalItemId: i.it.paypalItemId ?? null,
       })),
   }));
+}
+
+/** One payout batch with its line items (drill-down / export). */
+export async function getPayout(id: string): Promise<Payout | null> {
+  if (!db) return null;
+  const p = await db.query.payouts.findFirst({ where: eq(payouts.id, id) });
+  if (!p) return null;
+  const items = await db
+    .select({ it: payoutItems, user: users })
+    .from(payoutItems)
+    .leftJoin(affiliates, eq(payoutItems.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(eq(payoutItems.payoutId, id));
+  return {
+    id: p.id,
+    senderBatchId: p.senderBatchId,
+    paypalBatchId: p.paypalBatchId,
+    status: p.status,
+    totalAmount: num(p.totalAmount),
+    affiliateCount: p.affiliateCount ?? 0,
+    createdAt: new Date(p.createdAt ?? Date.now()).toISOString(),
+    items: items.map((i) => ({
+      id: i.it.id,
+      affiliateId: i.it.affiliateId ?? null,
+      affiliateName: i.user?.name ?? "Unknown",
+      affiliateEmail: i.user?.email ?? "",
+      amount: num(i.it.amount),
+      currency: i.it.currency ?? "USD",
+      transactionStatus: i.it.transactionStatus ?? "PENDING",
+      paypalItemId: i.it.paypalItemId ?? null,
+    })),
+  };
+}
+
+/** Actual money paid out = sum of successfully-completed payout items. */
+export async function paidAllTime(): Promise<number> {
+  if (!db) return 0;
+  const [r] = await db
+    .select({ total: sql<string>`coalesce(sum(${payoutItems.amount}),0)` })
+    .from(payoutItems)
+    .where(inArray(payoutItems.transactionStatus, [...PAID_ITEM_STATUSES]));
+  return num(r?.total);
 }
 
 export interface DiscountCodeRow {

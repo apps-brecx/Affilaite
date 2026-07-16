@@ -3,7 +3,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -31,7 +31,7 @@ import {
   setDiscountActiveInShopify,
   uniqueDiscountCode,
 } from "@/lib/discounts";
-import { createPayoutBatch } from "@/lib/paypal";
+import { createPayoutBatch, getPayoutBatch, parsePayoutBatch, rollupBatchStatus } from "@/lib/paypal";
 import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
 import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
@@ -615,6 +615,57 @@ export async function pushDiscountToShopify(id: string): Promise<ActionResult> {
 // ---------- Payouts ----------
 
 /** Pay a single affiliate a custom (ad-hoc) amount — a bonus or manual payout. */
+/**
+ * Poll PayPal for a batch's real state and update our item + batch statuses.
+ * This is what flips a batch from "processing" to "success"/"failed" once PayPal
+ * finishes (payouts are asynchronous). Best-effort: returns the batch's status.
+ */
+export async function reconcilePayout(payoutId: string): Promise<{ ok: boolean; status?: string; message?: string }> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const batch = await db.query.payouts.findFirst({ where: eq(payouts.id, payoutId) });
+  if (!batch) return { ok: false, message: "Batch not found." };
+  // Nothing to poll without a PayPal batch id, and terminal batches are done.
+  if (!batch.paypalBatchId || batch.status === "success" || batch.status === "failed") {
+    return { ok: true, status: batch.status };
+  }
+  try {
+    const parsed = parsePayoutBatch(await getPayoutBatch(batch.paypalBatchId));
+    const localItems = await db.select().from(payoutItems).where(eq(payoutItems.payoutId, payoutId));
+    // Update each local item from PayPal (matched by our id == sender_item_id).
+    for (const pi of parsed.items) {
+      if (!pi.senderItemId) continue;
+      await db
+        .update(payoutItems)
+        .set({ transactionStatus: pi.transactionStatus, ...(pi.payoutItemId ? { paypalItemId: pi.payoutItemId } : {}) })
+        .where(eq(payoutItems.id, pi.senderItemId));
+    }
+    // Roll the (freshest) item statuses up to the batch.
+    const statuses = parsed.items.length
+      ? parsed.items.map((i) => i.transactionStatus)
+      : localItems.map((i) => i.transactionStatus ?? "PENDING");
+    const rolled = rollupBatchStatus(statuses);
+    if (rolled !== batch.status) {
+      await db.update(payouts).set({ status: rolled }).where(eq(payouts.id, payoutId));
+    }
+    return { ok: true, status: rolled };
+  } catch (e: any) {
+    console.error("[reconcilePayout]", e);
+    return { ok: false, message: e?.message ?? "Couldn't refresh from PayPal." };
+  }
+}
+
+/** Reconcile every batch still marked "processing" (page load / cron). */
+export async function reconcileProcessingPayouts(): Promise<void> {
+  if (!db) return;
+  const pending = await db
+    .select({ id: payouts.id })
+    .from(payouts)
+    .where(and(eq(payouts.status, "processing"), isNotNull(payouts.paypalBatchId)));
+  for (const p of pending) {
+    await reconcilePayout(p.id);
+  }
+}
+
 export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
@@ -658,6 +709,11 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
     await db.update(payouts).set({ status: "failed" }).where(eq(payouts.id, batch.id));
     return { ok: false, message: "PayPal payout failed — see logs." };
   }
+
+  // Pull PayPal's current state so a fast-completing payout shows "Paid out"
+  // right away instead of sitting on "Processing" (best-effort; webhook + the
+  // page-load reconcile will catch up if PayPal is still processing).
+  await reconcilePayout(batch.id).catch(() => {});
 
   await notify(
     affiliateId,
@@ -808,6 +864,8 @@ export async function runPayout(): Promise<ActionResult> {
 
   // Success: the claimed rows (and only those) become paid.
   await db.update(commissions).set({ status: "paid" }).where(eq(commissions.payoutId, batchId));
+  // Reflect PayPal's current state immediately where possible.
+  await reconcilePayout(batchId).catch(() => {});
   const recAffIds = [...new Set(recipients.map((r) => r.affiliateId))];
   const recAffs = await db.query.affiliates.findMany({ where: inArray(affiliates.id, recAffIds) });
   const recUsers = recAffs.length ? await db.query.users.findMany({ where: inArray(users.id, recAffs.map((a) => a.userId)) }) : [];
