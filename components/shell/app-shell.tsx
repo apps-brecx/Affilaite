@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { markNotificationsReadByPath, getMyBadges } from "@/app/actions/notifications";
 import {
   Menu,
   X,
-  ChevronsUpDown,
+  ChevronDown,
   LifeBuoy,
   LayoutDashboard,
   Link2,
@@ -17,12 +18,22 @@ import {
   Users,
   UsersRound,
   Megaphone,
-  Layers,
+  Award,
   Receipt,
   Ticket,
   BadgePercent,
+  Rocket,
+  SlidersHorizontal,
+  Blocks,
+  CreditCard,
+  Palette,
+  Mail,
+  UserCircle,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -40,14 +51,125 @@ const ICONS: Record<IconName, LucideIcon> = {
   affiliates: Users,
   groups: UsersRound,
   commissions: Receipt,
-  programs: Layers,
+  programs: Award,
   codes: Ticket,
   promotions: BadgePercent,
   messages: Megaphone,
+  campaigns: Rocket,
+  general: SlidersHorizontal,
+  integrations: Blocks,
+  payments: CreditCard,
+  brand: Palette,
+  invites: Mail,
+  account: UserCircle,
+  notifications: Bell,
 };
 
-function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold leading-5 text-danger-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function NavRow({
+  item,
+  onNavigate,
+  badges,
+}: {
+  item: NavSection["items"][number];
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
+  const Icon = ICONS[item.icon];
+  const badge = badges?.[item.href] ?? 0;
+  const hasChildren = !!item.children?.length;
+  const withinParent = hasChildren && pathname.startsWith(item.href);
+  const [open, setOpen] = useState(withinParent);
+  useEffect(() => {
+    if (withinParent) setOpen(true);
+  }, [withinParent]);
+
+  const active =
+    pathname === item.href ||
+    (item.href !== "/admin" && item.href !== "/dashboard" && !hasChildren && pathname.startsWith(item.href));
+
+  if (hasChildren) {
+    return (
+      <div>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            "group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            withinParent ? "text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          )}
+        >
+          <Icon className={cn("size-4", withinParent ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+          {item.label}
+          <ChevronDown className={cn("ml-auto size-4 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="mt-1 flex flex-col gap-0.5 pl-4">
+            {item.children!.map((child) => {
+              const childActive = pathname === child.href;
+              const ChildIcon = ICONS[child.icon];
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                    childActive
+                      ? "bg-secondary font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  )}
+                >
+                  <ChildIcon className={cn("size-4", childActive ? "text-primary" : "text-muted-foreground")} />
+                  {child.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      className={cn(
+        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+      )}
+    >
+      {active && (
+        <motion.span
+          layoutId="nav-active"
+          className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary"
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+        />
+      )}
+      <Icon className={cn("size-4 transition-colors", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+      {item.label}
+      {badge > 0 && <NavBadge count={badge} />}
+    </Link>
+  );
+}
+
+function NavLinks({
+  sections,
+  onNavigate,
+  badges,
+}: {
+  sections: NavSection[];
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   return (
     <nav className="flex flex-col gap-6">
       {sections.map((section, i) => (
@@ -57,40 +179,9 @@ function NavLinks({ sections, onNavigate }: { sections: NavSection[]; onNavigate
               {section.title}
             </p>
           )}
-          {section.items.map((item) => {
-            const Icon = ICONS[item.icon];
-            const active =
-              pathname === item.href ||
-              (item.href !== "/admin" && item.href !== "/dashboard" && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={cn(
-                  "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="nav-active"
-                    className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                  />
-                )}
-                <Icon
-                  className={cn(
-                    "size-4 transition-colors",
-                    active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
-                  )}
-                />
-                {item.label}
-              </Link>
-            );
-          })}
+          {section.items.map((item) => (
+            <NavRow key={item.href} item={item} onNavigate={onNavigate} badges={badges} />
+          ))}
         </div>
       ))}
     </nav>
@@ -105,7 +196,13 @@ function UserCard({ name, email, role }: { name: string; email: string; role: st
         <p className="truncate text-sm font-medium text-foreground">{name}</p>
         <p className="truncate text-xs text-muted-foreground">{role}</p>
       </div>
-      <ChevronsUpDown className="size-4 text-muted-foreground" />
+      <button
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        aria-label="Sign out"
+        className="text-muted-foreground transition-colors hover:text-danger"
+      >
+        <LogOut className="size-4" />
+      </button>
     </div>
   );
 }
@@ -114,14 +211,48 @@ export function AppShell({
   sections,
   user,
   variant,
+  badges: initialBadges,
   children,
 }: {
   sections: NavSection[];
   user: { name: string; email: string; role: string };
   variant: "affiliate" | "admin";
+  badges?: Record<string, number>;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
+
+  // Live badge counts: poll on an interval and whenever the tab regains focus,
+  // so new notifications show up without a page reload.
+  useEffect(() => {
+    if (variant !== "affiliate") return;
+    let active = true;
+    const refresh = () =>
+      getMyBadges()
+        .then((b) => active && setBadges(b))
+        .catch(() => {});
+    const id = setInterval(refresh, 12000);
+    const onVisible = () => document.visibilityState === "visible" && refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [variant]);
+
+  // Entering a section clears only that section's notifications (which also
+  // brings the Notifications total down). Visiting the Notifications inbox
+  // itself clears nothing — each tab keeps its dot until it's actually opened.
+  useEffect(() => {
+    if (variant !== "affiliate") return;
+    markNotificationsReadByPath(pathname)
+      .then(() => getMyBadges())
+      .then((b) => setBadges(b))
+      .catch(() => {});
+  }, [pathname, variant]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -136,15 +267,17 @@ export function AppShell({
           )}
         </div>
         <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-          <NavLinks sections={sections} />
+          <NavLinks sections={sections} badges={badges} />
         </div>
         <div className="mt-4 space-y-2">
-          <Link
-            href="#"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-          >
-            <LifeBuoy className="size-4" /> Support
-          </Link>
+          {variant === "affiliate" && (
+            <Link
+              href="/community"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            >
+              <LifeBuoy className="size-4" /> Help &amp; community
+            </Link>
+          )}
           <UserCard {...user} />
         </div>
       </aside>
@@ -156,7 +289,7 @@ export function AppShell({
           <ThemeToggle />
           <button
             onClick={() => setOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-hairline"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-hairline"
             aria-label="Open menu"
           >
             <Menu className="size-4" />
@@ -193,7 +326,7 @@ export function AppShell({
                 </button>
               </div>
               <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
-                <NavLinks sections={sections} onNavigate={() => setOpen(false)} />
+                <NavLinks sections={sections} onNavigate={() => setOpen(false)} badges={badges} />
               </div>
               <UserCard {...user} />
             </motion.aside>
@@ -204,15 +337,17 @@ export function AppShell({
       {/* Main */}
       <div className="lg:pl-64">
         {/* Desktop top bar */}
-        <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-3 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
-          <Link
-            href={variant === "admin" ? "/dashboard" : "/admin"}
-            className="rounded-md border border-hairline px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {variant === "admin" ? "View affiliate portal →" : "Switch to admin →"}
-          </Link>
+        <header className="sticky top-0 z-20 hidden h-16 items-center justify-end gap-2 border-b border-hairline bg-background/70 px-8 backdrop-blur-lg lg:flex">
+          <span className="mr-auto text-sm text-muted-foreground">
+            {variant === "admin" ? "Sipfluence · Admin" : "Sipfluence · Partner Portal"}
+          </span>
           <ThemeToggle />
-          <Avatar name={user.name} size={34} />
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <LogOut className="size-3.5" /> Sign out
+          </button>
         </header>
 
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

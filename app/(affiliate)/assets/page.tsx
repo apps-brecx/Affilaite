@@ -1,5 +1,5 @@
-import { Download, Image as ImageIcon, FileText, Film, LayoutTemplate } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { Download, Image as ImageIcon, FileText, Film, LayoutTemplate, Images } from "lucide-react";
+import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,14 @@ export default async function AssetsPage() {
         title="Creative assets"
         description="Brand-approved banners, product shots, and copy — ready to post. Everything is on-brand and up to date."
       />
+
+      {assets.length === 0 && (
+        <EmptyState
+          icon={Images}
+          title="No creatives yet"
+          description="Brand assets will show up here as soon as the Syruvia team adds them. Check back soon."
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {assets.map((a) => {

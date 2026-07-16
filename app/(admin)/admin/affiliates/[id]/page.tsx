@@ -1,30 +1,35 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, Ban, Mail, Building2, CircleDollarSign } from "lucide-react";
+import { ArrowLeft, Mail, Building2, CircleDollarSign } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EarningsArea } from "@/components/charts/charts";
-import { getAffiliate, getAffiliateCommissions, getAffiliateEarnings } from "@/lib/queries";
-import { listAffiliates } from "@/lib/queries";
+import { AffiliateActions, ReassignProgram } from "@/components/admin/affiliate-actions";
+import { AffiliateCampaigns, EditCode } from "@/components/admin/affiliate-membership";
+import {
+  getAffiliate,
+  getAffiliateCommissions,
+  getAffiliateEarnings,
+  listPrograms,
+  listCampaigns,
+  getAffiliateCampaignIds,
+} from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
-
-export async function generateStaticParams() {
-  const all = await listAffiliates();
-  return all.map((a) => ({ id: a.id }));
-}
+import { Rocket } from "lucide-react";
 
 export default async function AffiliateDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await getAffiliate(id);
   if (!a) notFound();
   const commissions = await getAffiliateCommissions(a.id);
-  const series = await getAffiliateEarnings(30);
+  const series = await getAffiliateEarnings(30, a.id);
+  const programs = await listPrograms();
+  const campaigns = await listCampaigns();
+  const campaignIds = await getAffiliateCampaignIds(a.id);
 
   return (
     <div className="space-y-8">
@@ -46,14 +51,13 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5"><Mail className="size-3.5" />{a.email}</span>
                 {a.companyName && <span className="inline-flex items-center gap-1.5"><Building2 className="size-3.5" />{a.companyName}</span>}
-                <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs">{a.code}</span>
+              </div>
+              <div className="mt-3">
+                <EditCode affiliateId={a.id} code={a.code} />
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline"><Ban className="size-4" /> Suspend</Button>
-            <Button className="bg-success text-success-foreground hover:bg-success/90"><Check className="size-4" /> Approve</Button>
-          </div>
+          <AffiliateActions id={a.id} status={a.status} />
         </CardContent>
       </Card>
 
@@ -63,6 +67,18 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
         <StatCard label="Paid lifetime" value={a.paidEarnings} accent="primary" />
         <StatCard label="Earnings / click" value={a.epc} accent="gold" />
       </div>
+
+      {/* Campaigns */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Rocket className="size-4 text-primary" /> Campaigns
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AffiliateCampaigns affiliateId={a.id} campaigns={campaigns} memberIds={campaignIds} />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -79,7 +95,10 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
             <Detail label="Conversion" value={`${a.conversionRate}%`} />
             <Detail label="Clicks" value={a.clicks.toLocaleString()} />
             <Detail label="Joined" value={formatDate(a.joinedAt)} />
-            <Button variant="outline" className="w-full">Reassign program</Button>
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs text-muted-foreground">Reassign program</p>
+              <ReassignProgram id={a.id} programId={a.programId} programs={programs.map((p) => ({ id: p.id, name: p.name }))} />
+            </div>
           </CardContent>
         </Card>
       </div>

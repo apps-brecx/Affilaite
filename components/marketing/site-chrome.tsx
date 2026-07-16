@@ -11,12 +11,11 @@ export function SiteHeader() {
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
           <a href="#features" className="transition-colors hover:text-foreground">Features</a>
           <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
-          <a href="#numbers" className="transition-colors hover:text-foreground">Results</a>
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-            <Link href="/dashboard">Sign in</Link>
+            <Link href="/login">Sign in</Link>
           </Button>
           <Button size="sm" asChild>
             <Link href="/apply">Become a partner</Link>
@@ -34,10 +33,9 @@ export function SiteFooter() {
         <div className="flex items-center gap-3">
           <Logo />
         </div>
-        <p>© 2026 Affilaite. Built for modern Shopify brands.</p>
+        <p>© 2026 Syruvia. Partner program.</p>
         <div className="flex gap-6">
-          <Link href="/admin" className="transition-colors hover:text-foreground">Admin</Link>
-          <Link href="/dashboard" className="transition-colors hover:text-foreground">Portal</Link>
+          <Link href="/login" className="transition-colors hover:text-foreground">Sign in</Link>
           <Link href="/apply" className="transition-colors hover:text-foreground">Apply</Link>
         </div>
       </div>

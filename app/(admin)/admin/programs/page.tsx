@@ -1,10 +1,8 @@
-import { Plus, Star, Clock, Calendar, Percent, DollarSign, Users } from "lucide-react";
+import { Star, Clock, Calendar, Percent, DollarSign, Users } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input, Label } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { ProgramForm, SetDefaultButton } from "@/components/admin/program-form";
 import { listPrograms } from "@/lib/queries";
 import { formatCurrency } from "@/lib/utils";
 
@@ -49,53 +47,16 @@ export default async function ProgramsPage() {
                 <Meta icon={DollarSign} label="Min payout" value={formatCurrency(p.payoutMinimum)} />
                 <Meta icon={Percent} label="New customer" value={p.newCustomerOnly ? "Only" : "All"} />
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">Edit</Button>
-                {!p.isDefault && <Button variant="ghost" size="sm">Set default</Button>}
-              </div>
+              {!p.isDefault && (
+                <div className="flex gap-2">
+                  <SetDefaultButton id={p.id} />
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
 
-        {/* Create card */}
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted-foreground">
-              <Plus className="size-4" /> New program
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input placeholder="e.g. Holiday Partners" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle">
-                  <option>Percent</option>
-                  <option>Flat</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Value</Label>
-                <Input type="number" placeholder="15" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Cookie days</Label>
-                <Input type="number" placeholder="30" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Hold days</Label>
-                <Input type="number" placeholder="30" />
-              </div>
-            </div>
-            <Switch label="New customers only" />
-            <Button className="w-full">Create program</Button>
-          </CardContent>
-        </Card>
+        <ProgramForm />
       </div>
     </div>
   );

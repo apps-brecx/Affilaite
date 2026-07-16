@@ -14,12 +14,21 @@ export type IconName =
   | "programs"
   | "codes"
   | "promotions"
-  | "messages";
+  | "messages"
+  | "campaigns"
+  | "general"
+  | "integrations"
+  | "payments"
+  | "brand"
+  | "invites"
+  | "account"
+  | "notifications";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: IconName;
+  children?: { label: string; href: string; icon: IconName }[];
 }
 
 export interface NavSection {
@@ -28,16 +37,25 @@ export interface NavSection {
 }
 
 export const affiliateNav: NavSection[] = [
+  { items: [{ label: "Dashboard", href: "/dashboard", icon: "dashboard" }] },
   {
+    title: "Earn",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
       { label: "Links & Codes", href: "/links", icon: "links" },
+      { label: "Promotions", href: "/promotions", icon: "promotions" },
       { label: "Performance", href: "/performance", icon: "performance" },
       { label: "Payouts", href: "/payouts", icon: "payouts" },
-      { label: "Assets", href: "/assets", icon: "assets" },
-      { label: "Settings", href: "/settings", icon: "settings" },
     ],
   },
+  {
+    title: "Resources",
+    items: [
+      { label: "Assets", href: "/assets", icon: "assets" },
+      { label: "Community", href: "/community", icon: "groups" },
+      { label: "Notifications", href: "/notifications", icon: "notifications" },
+    ],
+  },
+  { items: [{ label: "Settings", href: "/settings", icon: "settings" }] },
 ];
 
 export const adminNav: NavSection[] = [
@@ -64,12 +82,27 @@ export const adminNav: NavSection[] = [
   {
     title: "Growth",
     items: [
+      { label: "Campaigns", href: "/admin/campaigns", icon: "campaigns" },
       { label: "Discount Codes", href: "/admin/codes", icon: "codes" },
       { label: "Promotions", href: "/admin/promotions", icon: "promotions" },
     ],
   },
   {
     title: "System",
-    items: [{ label: "Settings", href: "/admin/settings", icon: "settings" }],
+    items: [
+      {
+        label: "Settings",
+        href: "/admin/settings",
+        icon: "settings",
+        children: [
+          { label: "General", href: "/admin/settings", icon: "general" },
+          { label: "Integrations", href: "/admin/settings/integrations", icon: "integrations" },
+          { label: "Payments", href: "/admin/settings/payments", icon: "payments" },
+          { label: "Brand & theme", href: "/admin/settings/brand", icon: "brand" },
+          { label: "Invite templates", href: "/admin/settings/invites", icon: "invites" },
+          { label: "Account", href: "/admin/settings/account", icon: "account" },
+        ],
+      },
+    ],
   },
 ];

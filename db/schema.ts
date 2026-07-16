@@ -1,4 +1,5 @@
 // db/schema.ts — Affilaite data model (Neon Postgres via Drizzle)
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -10,6 +11,7 @@ import {
   jsonb,
   pgEnum,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["admin", "affiliate"]);
@@ -33,15 +35,33 @@ export const payoutStatus = pgEnum("payout_status", [
   "failed",
 ]);
 export const commissionType = pgEnum("commission_type", ["percent", "flat"]);
+export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
+export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
+export const campaignAccess = pgEnum("campaign_access", ["instant", "approval", "invite"]);
 
 // --- Users (admin + affiliates share auth, differ by role) ---
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  passwordHash: text("password_hash"),
   role: roleEnum("role").notNull().default("affiliate"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// --- Password reset tokens (hashed, single-use, expiring) ---
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ tokenIdx: index("reset_token_idx").on(t.tokenHash) }),
+);
 
 // --- Program = a commission ruleset ---
 export const programs = pgTable("programs", {
@@ -77,6 +97,9 @@ export const affiliates = pgTable(
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),
+    channel: text("channel"),
+    audienceSize: text("audience_size"),
+    applyNote: text("apply_note"),
     socialLinks: jsonb("social_links").$type<Record<string, string>>(),
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -160,6 +183,11 @@ export const commissions = pgTable(
   (t) => ({
     affIdx: index("comm_aff_idx").on(t.affiliateId),
     statusIdx: index("comm_status_idx").on(t.status),
+    // At most one *positive* commission per order (negative refund adjustments
+    // are exempt so post-payout clawbacks can be netted against later batches).
+    orderPositiveUniq: uniqueIndex("comm_order_positive_uniq")
+      .on(t.orderId)
+      .where(sql`${t.amount} >= 0`),
   }),
 );
 
@@ -168,6 +196,7 @@ export const payoutItems = pgTable("payout_items", {
   payoutId: uuid("payout_id").references(() => payouts.id),
   affiliateId: uuid("affiliate_id").references(() => affiliates.id),
   amount: numeric("amount", { precision: 12, scale: 2 }),
+  currency: text("currency").default("USD"),
   paypalItemId: text("paypal_item_id"),
   transactionStatus: text("transaction_status"),
 });
@@ -192,6 +221,11 @@ export const promotions = pgTable("promotions", {
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   groupId: uuid("group_id").references(() => groups.id),
+  // Optional featured product from the Shopify catalog.
+  productId: text("product_id"),
+  productTitle: text("product_title"),
+  productImage: text("product_image"),
+  productUrl: text("product_url"),
 });
 
 // --- Creative assets ---
@@ -201,6 +235,76 @@ export const assets = pgTable("assets", {
   kind: text("kind").default("banner"), // banner | image | copy | video
   url: text("url"),
   dimensions: text("dimensions"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// --- Per-affiliate notifications (drives the sidebar unread badges) ---
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    // Which portal section this relates to: dashboard | links | promotions |
+    // performance | payouts | assets | community.
+    section: text("section").notNull().default("dashboard"),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ notifAffIdx: index("notif_aff_idx").on(t.affiliateId) }),
+);
+
+// --- Campaigns (affiliate + referral, ReferralCandy-style) ---
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  type: campaignType("type").notNull().default("affiliate"),
+  status: campaignStatus("status").notNull().default("active"),
+  access: campaignAccess("access").notNull().default("approval"),
+  slug: text("slug").unique(),                       // campaign URL: /join/<slug>
+  shortCode: text("short_code"),                     // prefix for generated codes
+  destinationUrl: text("destination_url"),           // where referral links land
+  startsAt: timestamp("starts_at"),
+  endsAt: timestamp("ends_at"),
+  description: text("description"),
+  codePrefix: text("code_prefix"),
+  config: jsonb("config"),                           // rich rewards & rules (see lib/campaign-config)
+  // Advocate/affiliate reward (commission for affiliate campaigns; "give" for referral)
+  rewardType: commissionType("reward_type").default("percent"),
+  rewardValue: numeric("reward_value", { precision: 8, scale: 2 }),
+  // Friend reward — referral campaigns only ("get")
+  friendRewardType: commissionType("friend_reward_type").default("percent"),
+  friendRewardValue: numeric("friend_reward_value", { precision: 8, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// --- Global app settings (key/value) ---
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const affiliateCampaigns = pgTable(
+  "affiliate_campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    campaignId: uuid("campaign_id").notNull().references(() => campaigns.id),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ pairIdx: index("aff_camp_idx").on(t.affiliateId, t.campaignId) }),
+);
+
+// --- Invite email templates (admin-designed) ---
+export const inviteTemplates = pgTable("invite_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -216,5 +320,7 @@ export const webhookEvents = pgTable(
     processedAt: timestamp("processed_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ dedupeIdx: index("wh_dedupe_idx").on(t.source, t.externalId) }),
+  // Unique so an insert is the idempotency gate against concurrent Shopify
+  // retries (check-then-insert races otherwise let two deliveries both through).
+  (t) => ({ dedupeIdx: uniqueIndex("wh_dedupe_idx").on(t.source, t.externalId) }),
 );

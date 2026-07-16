@@ -1,10 +1,11 @@
-import { UsersRound, Plus, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { UsersRound, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
+import { GroupForm } from "@/components/admin/group-form";
 import { listGroups, listAffiliates } from "@/lib/queries";
 
 export const metadata = { title: "Groups" };
@@ -18,6 +19,11 @@ export default async function GroupsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2">
+          {groups.length === 0 && (
+            <p className="col-span-full rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
+              No groups yet. Create one to segment your affiliates.
+            </p>
+          )}
           {groups.map((g) => {
             const members = affiliates.filter((a) => a.groupId === g.id).slice(0, 5);
             return (
@@ -34,9 +40,12 @@ export default async function GroupsPage() {
                   <Badge variant="secondary">{g.memberCount}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">{g.description}</p>
+                  <p className="text-sm text-muted-foreground">{g.description || "No description."}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex -space-x-2">
+                      {members.length === 0 && (
+                        <span className="text-xs text-muted-foreground">No members yet</span>
+                      )}
                       {members.map((m) => (
                         <span key={m.id} className="ring-2 ring-card rounded-full">
                           <Avatar name={m.name} size={28} />
@@ -48,8 +57,10 @@ export default async function GroupsPage() {
                         </span>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Manage <ArrowRight className="size-3.5" />
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/admin/groups/${g.id}`}>
+                        Manage <ArrowRight className="size-3.5" />
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>
@@ -58,24 +69,7 @@ export default async function GroupsPage() {
           })}
         </div>
 
-        <Card className="h-fit border-dashed">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted-foreground">
-              <Plus className="size-4" /> New group
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input placeholder="e.g. Holiday Crew" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <Textarea placeholder="Who belongs here and why…" />
-            </div>
-            <Button className="w-full">Create group</Button>
-          </CardContent>
-        </Card>
+        <GroupForm />
       </div>
     </div>
   );

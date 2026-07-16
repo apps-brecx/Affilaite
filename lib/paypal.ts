@@ -1,11 +1,11 @@
 // lib/paypal.ts — OAuth token + Payouts client (idempotent batches).
-const BASE = process.env.PAYPAL_BASE ?? "https://api-m.sandbox.paypal.com";
+// Reads credentials from the effective integration config (UI or env).
+import { paypalConfig } from "./integrations";
 
 export async function paypalToken(): Promise<string> {
-  const auth = Buffer.from(
-    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
-  ).toString("base64");
-  const res = await fetch(`${BASE}/v1/oauth2/token`, {
+  const { clientId, clientSecret, base } = await paypalConfig();
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await fetch(`${base}/v1/oauth2/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${auth}`,
@@ -13,7 +13,14 @@ export async function paypalToken(): Promise<string> {
     },
     body: "grant_type=client_credentials",
   });
-  const json = (await res.json()) as { access_token: string };
+  // A 401 (bad creds) must NOT sail through as a successful token — otherwise
+  // the payout path treats a failed auth as "sent" and marks commissions paid.
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`PayPal auth failed (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+  }
+  const json = (await res.json()) as { access_token?: string };
+  if (!json.access_token) throw new Error("PayPal auth returned no access token");
   return json.access_token;
 }
 
@@ -26,6 +33,7 @@ export interface PayoutRecipient {
 
 /** Create a PayPal payout batch. `senderBatchId` guarantees idempotency. */
 export async function createPayoutBatch(senderBatchId: string, recipients: PayoutRecipient[]) {
+  const { base } = await paypalConfig();
   const token = await paypalToken();
   const body = {
     sender_batch_header: {
@@ -42,22 +50,86 @@ export async function createPayoutBatch(senderBatchId: string, recipients: Payou
     })),
   };
 
-  const res = await fetch(`${BASE}/v1/payments/payouts`, {
+  const res = await fetch(`${base}/v1/payments/payouts`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      // Idempotency: PayPal dedupes retries carrying the same request id, so a
+      // safe retry of the SAME batch never double-pays.
       "PayPal-Request-Id": senderBatchId,
     },
     body: JSON.stringify(body),
   });
-  const json = (await res.json()) as { batch_header?: { payout_batch_id?: string } };
-  return { payoutBatchId: json.batch_header?.payout_batch_id, raw: json };
+  const json = (await res.json().catch(() => ({}))) as {
+    batch_header?: { payout_batch_id?: string };
+    message?: string;
+    name?: string;
+  };
+  // Treat any non-2xx (INSUFFICIENT_FUNDS, 401, 422, …) or a missing batch id as
+  // a hard failure so the caller rolls back instead of marking money "paid".
+  if (!res.ok || !json.batch_header?.payout_batch_id) {
+    throw new Error(
+      `PayPal payout failed (${res.status})${json.name ? ` ${json.name}` : ""}${json.message ? `: ${json.message}` : ""}`,
+    );
+  }
+  return { payoutBatchId: json.batch_header.payout_batch_id, raw: json };
+}
+
+/**
+ * Verify an inbound PayPal webhook against the configured webhook id via
+ * PayPal's verify-webhook-signature API. Returns false (fail-closed) when the
+ * webhook id isn't configured or verification doesn't come back SUCCESS.
+ */
+export async function verifyPaypalWebhook(
+  headers: Headers,
+  rawBody: string,
+): Promise<boolean> {
+  const { base, webhookId } = await paypalConfig();
+  if (!webhookId) return false; // can't verify → don't trust it
+
+  const transmissionId = headers.get("paypal-transmission-id");
+  const transmissionTime = headers.get("paypal-transmission-time");
+  const transmissionSig = headers.get("paypal-transmission-sig");
+  const certUrl = headers.get("paypal-cert-url");
+  const authAlgo = headers.get("paypal-auth-algo");
+  if (!transmissionId || !transmissionTime || !transmissionSig || !certUrl || !authAlgo) return false;
+
+  let webhookEvent: unknown;
+  try {
+    webhookEvent = JSON.parse(rawBody);
+  } catch {
+    return false;
+  }
+
+  try {
+    const token = await paypalToken();
+    const res = await fetch(`${base}/v1/notifications/verify-webhook-signature`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        auth_algo: authAlgo,
+        cert_url: certUrl,
+        transmission_id: transmissionId,
+        transmission_sig: transmissionSig,
+        transmission_time: transmissionTime,
+        webhook_id: webhookId,
+        webhook_event: webhookEvent,
+      }),
+    });
+    if (!res.ok) return false;
+    const json = (await res.json()) as { verification_status?: string };
+    return json.verification_status === "SUCCESS";
+  } catch (e) {
+    console.error("[verifyPaypalWebhook]", e);
+    return false;
+  }
 }
 
 export async function getPayoutBatch(payoutBatchId: string) {
+  const { base } = await paypalConfig();
   const token = await paypalToken();
-  const res = await fetch(`${BASE}/v1/payments/payouts/${payoutBatchId}`, {
+  const res = await fetch(`${base}/v1/payments/payouts/${payoutBatchId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.json();

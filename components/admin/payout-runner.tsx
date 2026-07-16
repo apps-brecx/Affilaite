@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Wallet, ShieldCheck, Loader2, CheckCircle2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
+import { runPayout } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
 
 interface PayableRow {
@@ -15,13 +18,21 @@ interface PayableRow {
   amount: number;
 }
 
-export function PayoutRunner({ rows }: { rows: PayableRow[] }) {
+export function PayoutRunner({ rows, live }: { rows: PayableRow[]; live?: boolean }) {
   const [state, setState] = useState<"ready" | "processing" | "done">("ready");
+  const [, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
   const total = rows.reduce((s, r) => s + r.amount, 0);
 
   const run = () => {
     setState("processing");
-    setTimeout(() => setState("done"), 2200);
+    start(async () => {
+      const res = await runPayout();
+      toast(res.message, res.ok ? "success" : "error");
+      setState(res.ok ? "done" : "ready");
+      router.refresh();
+    });
   };
 
   return (
@@ -38,7 +49,7 @@ export function PayoutRunner({ rows }: { rows: PayableRow[] }) {
         <div className="text-right">
           <p className="font-display text-2xl font-semibold tracking-tight">{formatCurrency(total)}</p>
           <Badge variant="secondary" className="mt-1">
-            <Zap className="size-3" /> Sandbox mode
+            <Zap className="size-3" /> {live ? "PayPal live" : "PayPal not connected"}
           </Badge>
         </div>
       </CardHeader>

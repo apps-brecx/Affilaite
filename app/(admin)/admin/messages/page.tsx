@@ -3,18 +3,25 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BroadcastComposer } from "@/components/admin/broadcast-composer";
-import { listMessages } from "@/lib/queries";
+import { listMessages, listAffiliates, listGroups } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Messages" };
 
 export default async function MessagesPage() {
-  const messages = await listMessages();
+  const [messages, affiliates, groups] = await Promise.all([listMessages(), listAffiliates(), listGroups()]);
+  const countBy = (s: string) => affiliates.filter((a) => a.status === s).length;
+  const audiences = [
+    { label: "All approved", count: countBy("approved"), status: ["approved"] },
+    { label: "Pending applicants", count: countBy("pending"), status: ["pending"] },
+    { label: "Everyone", count: affiliates.length, status: ["approved", "pending", "suspended"] },
+    ...groups.map((g) => ({ label: g.name, count: g.memberCount, groupIds: [g.id] })),
+  ];
   return (
     <div className="space-y-8">
       <PageHeader title="Broadcast messaging" description="Reach your affiliate community with personalized, on-brand emails." />
 
-      <BroadcastComposer />
+      <BroadcastComposer audiences={audiences} />
 
       <Card>
         <CardHeader>
@@ -23,6 +30,9 @@ export default async function MessagesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {messages.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">No broadcasts sent yet.</p>
+          )}
           {messages.map((m) => (
             <div
               key={m.id}

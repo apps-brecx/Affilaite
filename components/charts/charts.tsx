@@ -1,12 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,6 +14,20 @@ import {
 } from "recharts";
 import type { TimePoint } from "@/lib/types";
 import { formatCompactCurrency, formatCurrency } from "@/lib/utils";
+
+// Recharts' ResponsiveContainer measures the DOM, so it renders differently on
+// the server. Gate charts behind mount to avoid hydration mismatches.
+function useMounted() {
+  const [m, setM] = useState(false);
+  useEffect(() => setM(true), []);
+  return m;
+}
+
+function ChartFrame({ height, children }: { height: number; children: React.ReactNode }) {
+  const mounted = useMounted();
+  if (!mounted) return <div style={{ height }} aria-hidden />;
+  return <>{children}</>;
+}
 
 const AXIS = "hsl(var(--muted-foreground))";
 const GRID = "hsl(var(--chart-grid))";
@@ -41,6 +55,7 @@ export function EarningsArea({
   color?: string;
 }) {
   return (
+    <ChartFrame height={height}>
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
@@ -92,6 +107,7 @@ export function EarningsArea({
         />
       </AreaChart>
     </ResponsiveContainer>
+    </ChartFrame>
   );
 }
 
@@ -106,6 +122,7 @@ export function Sparkline({
   height?: number;
 }) {
   return (
+    <ChartFrame height={height}>
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
         <defs>
@@ -124,12 +141,14 @@ export function Sparkline({
         />
       </AreaChart>
     </ResponsiveContainer>
+    </ChartFrame>
   );
 }
 
 /** Orders/clicks bars — recessive, rounded ends. */
 export function ActivityBars({ data, height = 220 }: { data: TimePoint[]; height?: number }) {
   return (
+    <ChartFrame height={height}>
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
@@ -160,6 +179,7 @@ export function ActivityBars({ data, height = 220 }: { data: TimePoint[]; height
         <Bar dataKey="orders" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
+    </ChartFrame>
   );
 }
 

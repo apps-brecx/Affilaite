@@ -1,7 +1,10 @@
-// db/seed.ts — populate a fresh Neon database with a starter program + affiliates.
-// Run with: DATABASE_URL=... npm run db:seed
+// db/seed.ts — minimal, honest starter data: the admin account + a default program.
+// Everything else (affiliates, commissions, orders) arrives through real activity.
+// Run with: DATABASE_URL=... ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run db:seed
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { db, isDbConfigured } from "./index";
-import { programs, groups, users, affiliates, discountCodes } from "./schema";
+import { users, programs } from "./schema";
 
 async function main() {
   if (!isDbConfigured || !db) {
@@ -9,60 +12,32 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Seeding programs…");
-  const [core] = await db
-    .insert(programs)
-    .values({
-      name: "Core Partner",
+  const email = (process.env.ADMIN_EMAIL ?? "bu@brecx.com").toLowerCase();
+  const password = process.env.ADMIN_PASSWORD ?? "syruvia";
+
+  const existingAdmin = await db.query.users.findFirst({ where: eq(users.email, email) });
+  if (!existingAdmin) {
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.insert(users).values({ email, name: "Syruvia Admin", passwordHash, role: "admin" });
+    console.log(`✅ Admin created: ${email}`);
+  } else {
+    console.log(`Admin already exists: ${email}`);
+  }
+
+  const defaultProgram = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+  if (!defaultProgram) {
+    await db.insert(programs).values({
+      name: "Syruvia Core",
       commissionType: "percent",
       commissionValue: "15",
       cookieWindowDays: 30,
       holdDays: 30,
       payoutMinimum: "25",
       isDefault: true,
-    })
-    .returning();
-
-  await db.insert(programs).values([
-    { name: "Elite Circle", commissionType: "percent", commissionValue: "25", cookieWindowDays: 60, holdDays: 21, payoutMinimum: "50" },
-    { name: "Creator Flat", commissionType: "flat", commissionValue: "20", newCustomerOnly: true, payoutMinimum: "25" },
-  ]);
-
-  console.log("Seeding groups…");
-  await db.insert(groups).values([
-    { name: "VIP Creators", description: "Top performers." },
-    { name: "Newsletter Partners", description: "Email-first affiliates." },
-    { name: "Social & Video", description: "IG, TikTok, YouTube." },
-  ]);
-
-  console.log("Seeding affiliates…");
-  const people = [
-    { name: "Sarah Whitfield", email: "sarah@example.com", refCode: "SARAH" },
-    { name: "Marcus Chen", email: "marcus@example.com", refCode: "MARCUS" },
-    { name: "Elena Rossi", email: "elena@example.com", refCode: "ELENA" },
-  ];
-
-  for (const p of people) {
-    const [u] = await db
-      .insert(users)
-      .values({ email: p.email, name: p.name, role: "affiliate" })
-      .returning();
-    const [aff] = await db
-      .insert(affiliates)
-      .values({
-        userId: u.id,
-        status: "approved",
-        refCode: p.refCode,
-        paypalEmail: p.email,
-        programId: core.id,
-      })
-      .returning();
-    await db.insert(discountCodes).values({
-      affiliateId: aff.id,
-      code: `${p.refCode}15`,
-      percentage: "15",
-      active: true,
     });
+    console.log("✅ Default program created: Syruvia Core (15%)");
+  } else {
+    console.log("Default program already exists.");
   }
 
   console.log("✅ Seed complete.");

@@ -1,12 +1,18 @@
+import { Ticket } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { DiscountGenerator } from "@/components/admin/discount-generator";
-import { listAffiliates } from "@/lib/queries";
+import { DiscountManager } from "@/components/admin/discount-manager";
+import { listAffiliates, listDiscountCodes } from "@/lib/queries";
+import { shopifyReady } from "@/lib/integrations";
 
 export const metadata = { title: "Discount Codes" };
 
 export default async function CodesPage() {
-  const affiliates = await listAffiliates();
+  const [affiliates, codes, shopifyConnected] = await Promise.all([
+    listAffiliates(),
+    listDiscountCodes(),
+    shopifyReady(),
+  ]);
   const targets = affiliates
     .filter((a) => a.status === "approved")
     .map((a) => ({ id: a.id, name: a.name, refCode: a.refCode }));
@@ -14,12 +20,14 @@ export default async function CodesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Bulk discount generator"
-        description="Create a unique, trackable Shopify discount code for every affiliate in one pass."
+        title="Discount codes"
+        description="Create, edit, and manage every affiliate discount code — synced to Shopify in real time."
       >
-        <Badge variant="gold">⭐ Signature feature</Badge>
+        <Badge variant={shopifyConnected ? "success" : "muted"}>
+          {shopifyConnected ? "Shopify connected" : "Shopify offline"}
+        </Badge>
       </PageHeader>
-      <DiscountGenerator targets={targets} />
+      <DiscountManager codes={codes} targets={targets} shopifyConnected={shopifyConnected} />
     </div>
   );
 }

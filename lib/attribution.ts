@@ -2,8 +2,13 @@
 import { db } from "@/db";
 import { orders, commissions, discountCodes, affiliates, programs, clicks, users } from "@/db/schema";
 import { eq, inArray, gte, desc, and } from "drizzle-orm";
+import { notify } from "./notifications";
 
 const DAY = 864e5;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Order sources we never pay commission on (POS / draft-order conversions).
+const EXCLUDED_SOURCES = new Set(["pos", "shopify_draft_order"]);
 
 async function getDefaultProgram() {
   return db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
@@ -16,12 +21,22 @@ async function getUserEmail(userId: string) {
   return u?.email ?? null;
 }
 
-/** orders/create → attribute, calculate, and record a pending commission. */
+/**
+ * orders/create + orders/paid → attribute, calculate, and record a pending
+ * commission. Safe to run more than once for the same order: the order mirror
+ * and the commission insert are both idempotent, so a retry (or the paid event
+ * following the create event) never double-books.
+ */
 export async function processOrderCreated(order: any) {
   if (!db) return;
 
-  // 1. Mirror the order (idempotent on shopifyOrderId)
-  const [orderRow] = await db
+  // 0. Never earn on test orders or POS / draft-order conversions.
+  if (order.test === true) return;
+  if (order.source_name && EXCLUDED_SOURCES.has(String(order.source_name))) return;
+
+  // 1. Mirror the order (idempotent on shopifyOrderId). If it already exists
+  //    (e.g. this is the orders/paid event after orders/create), reuse it.
+  const [insertedOrder] = await db
     .insert(orders)
     .values({
       shopifyOrderId: String(order.id),
@@ -37,9 +52,21 @@ export async function processOrderCreated(order: any) {
     .onConflictDoNothing({ target: orders.shopifyOrderId })
     .returning();
 
-  if (!orderRow) return; // duplicate webhook
+  const orderRow =
+    insertedOrder ??
+    (await db.query.orders.findFirst({ where: eq(orders.shopifyOrderId, String(order.id)) }));
+  if (!orderRow) return;
 
-  // 2. PRIMARY: coupon match (source of truth)
+  // Keep the mirrored financial status current as the order progresses.
+  if (!insertedOrder && order.financial_status && order.financial_status !== orderRow.financialStatus) {
+    await db.update(orders).set({ financialStatus: order.financial_status }).where(eq(orders.id, orderRow.id));
+  }
+
+  // 2. Only real money earns commission — the order must actually be paid.
+  //    Unpaid orders are mirrored above but wait for the orders/paid webhook.
+  if (order.financial_status !== "paid") return;
+
+  // 3. PRIMARY: coupon match (source of truth)
   const usedCodes: string[] = (order.discount_codes ?? []).map((d: any) => d.code?.toUpperCase()).filter(Boolean);
   let affiliate: typeof affiliates.$inferSelect | undefined;
   let attributedBy: "coupon" | "link" | null = null;
@@ -54,7 +81,7 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  // 3. BACKUP: link cookie → most recent click within window (last-click)
+  // 4. BACKUP: link cookie → most recent click within window (last-click)
   if (!affiliate && Array.isArray(order.note_attributes)) {
     const visitorId = order.note_attributes.find((a: any) => a.name === "_aff_vid")?.value;
     if (visitorId) {
@@ -73,13 +100,13 @@ export async function processOrderCreated(order: any) {
 
   if (!affiliate || affiliate.status !== "approved") return; // no attribution
 
-  // 4. Fraud: block self-referral (buyer email == affiliate email)
+  // 5. Fraud: block self-referral (buyer email == affiliate email)
   if (order.email && affiliate.userId) {
     const affEmail = await getUserEmail(affiliate.userId);
     if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) return;
   }
 
-  // 5. Calculate + record commission
+  // 6. Calculate + record commission
   const program = affiliate.programId ? await getProgram(affiliate.programId) : await getDefaultProgram();
   if (!program) return;
   if (program.newCustomerOnly && !orderRow.isNewCustomer) return;
@@ -90,30 +117,103 @@ export async function processOrderCreated(order: any) {
       ? (base * Number(program.commissionValue)) / 100
       : Number(program.commissionValue);
 
-  await db.insert(commissions).values({
-    orderId: orderRow.id,
-    affiliateId: affiliate.id,
-    programId: program.id,
-    amount: amount.toFixed(2),
-    currency: order.currency,
-    attributedBy,
-    status: "pending",
-    approvableAt: new Date(Date.now() + program.holdDays * DAY),
-  });
+  // Idempotent: the partial unique index on commissions(order_id) WHERE
+  // amount >= 0 means a second attribution of the same order is a no-op.
+  const [created] = await db
+    .insert(commissions)
+    .values({
+      orderId: orderRow.id,
+      affiliateId: affiliate.id,
+      programId: program.id,
+      amount: amount.toFixed(2),
+      currency: order.currency,
+      attributedBy,
+      status: "pending",
+      approvableAt: new Date(Date.now() + program.holdDays * DAY),
+    })
+    .onConflictDoNothing()
+    .returning({ id: commissions.id });
+
+  if (!created) return; // already attributed — don't re-notify
+
+  await notify(
+    affiliate.id,
+    "dashboard",
+    "New sale attributed 🎉",
+    `You earned ${order.currency} ${amount.toFixed(2)} on a new order.`,
+    "/dashboard",
+  );
 }
 
-/** refunds/create → reverse the commission tied to this order. */
+/**
+ * Reduce the commission(s) on an order by a refunded fraction (0–1).
+ * Unpaid commissions are reduced in place (fully refunded → reversed); already
+ * paid commissions get a negative adjustment row that nets against the next
+ * payout batch, since the money is already out the door.
+ */
+async function applyClawback(orderId: string, fraction: number) {
+  const f = Math.max(0, Math.min(1, fraction));
+  if (f <= 0) return;
+
+  const comms = await db.query.commissions.findMany({ where: eq(commissions.orderId, orderId) });
+  for (const c of comms) {
+    const amt = Number(c.amount);
+    if (amt < 0) continue; // skip existing adjustment rows
+
+    if (c.status === "pending" || c.status === "approved") {
+      const next = round2(amt * (1 - f));
+      if (next < 0.01) {
+        await db.update(commissions).set({ status: "reversed" }).where(eq(commissions.id, c.id));
+      } else {
+        await db.update(commissions).set({ amount: next.toFixed(2) }).where(eq(commissions.id, c.id));
+      }
+    } else if (c.status === "paid") {
+      // Already paid — record a negative adjustment to settle next time.
+      const delta = round2(amt * f);
+      if (delta >= 0.01) {
+        await db.insert(commissions).values({
+          orderId: c.orderId,
+          affiliateId: c.affiliateId,
+          programId: c.programId,
+          amount: (-delta).toFixed(2),
+          currency: c.currency,
+          attributedBy: "refund-adjustment",
+          status: "approved",
+          approvableAt: new Date(),
+        });
+      }
+    }
+  }
+}
+
+/** refunds/create → reverse the commission tied to this order, proportionally. */
 export async function processRefund(refund: any) {
   if (!db) return;
   const orderRow = await db.query.orders.findFirst({
     where: eq(orders.shopifyOrderId, String(refund.order_id)),
   });
   if (!orderRow) return;
-  await db
-    .update(commissions)
-    .set({ status: "reversed" })
-    .where(
-      and(eq(commissions.orderId, orderRow.id), inArray(commissions.status, ["pending", "approved"])),
-    );
-  // For partial refunds: compute refunded fraction and reduce `amount` proportionally instead.
+
+  // Commission is earned on subtotal, so clawback tracks refunded subtotal.
+  const refundedSubtotal = (refund.refund_line_items ?? []).reduce((s: number, li: any) => {
+    const v = li.subtotal_set?.shop_money?.amount ?? li.subtotal ?? 0;
+    return s + Number(v || 0);
+  }, 0);
+  const orderSubtotal = Number(orderRow.subtotal ?? 0);
+  const fraction = orderSubtotal > 0 ? refundedSubtotal / orderSubtotal : 0;
+
+  // NOTE: fraction is measured against the original subtotal; across multiple
+  // partial refunds this is exact for paid commissions and a close approximation
+  // for still-unpaid ones.
+  await applyClawback(orderRow.id, fraction);
+}
+
+/** orders/cancelled → treat as a full clawback (nothing was truly sold). */
+export async function processCancelledOrder(order: any) {
+  if (!db) return;
+  const orderRow = await db.query.orders.findFirst({
+    where: eq(orders.shopifyOrderId, String(order.id)),
+  });
+  if (!orderRow) return;
+  await applyClawback(orderRow.id, 1);
 }

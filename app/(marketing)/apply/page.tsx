@@ -4,8 +4,8 @@ import { Ticket, Wallet, Zap, TrendingUp } from "lucide-react";
 export const metadata = { title: "Become a Partner" };
 
 const PERKS = [
-  { icon: TrendingUp, title: "15–25% commission", body: "Competitive rates that grow as you do." },
-  { icon: Wallet, title: "Paid via PayPal", body: "Fast, native payouts — no minimums drama." },
+  { icon: TrendingUp, title: "Competitive commission", body: "Earn on every order you drive." },
+  { icon: Wallet, title: "Paid via PayPal", body: "Fast, native payouts — no middlemen." },
   { icon: Ticket, title: "Your own code & link", body: "Ready the moment you're approved." },
   { icon: Zap, title: "Bonuses & drops", body: "Time-boxed promos to boost your earnings." },
 ];

@@ -29,6 +29,31 @@ export interface Group {
   memberCount: number;
 }
 
+export type CampaignType = "affiliate" | "referral";
+export type CampaignStatus = "active" | "paused" | "ended";
+export type CampaignAccess = "instant" | "approval" | "invite";
+
+export interface Campaign {
+  id: string;
+  name: string;
+  type: CampaignType;
+  status: CampaignStatus;
+  access: CampaignAccess;
+  slug: string | null;
+  shortCode: string | null;
+  destinationUrl: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  description: string;
+  codePrefix: string | null;
+  rewardType: "percent" | "flat";
+  rewardValue: number;
+  friendRewardType: "percent" | "flat";
+  friendRewardValue: number;
+  config: import("./campaign-config").CampaignConfig;
+  memberCount: number;
+}
+
 export interface Affiliate {
   id: string;
   name: string;
@@ -124,6 +149,12 @@ export interface Promotion {
   endsAt: string;
   groupName: string;
   status: "scheduled" | "live" | "ended";
+  product?: {
+    id: string;
+    title: string;
+    image: string | null;
+    url: string;
+  } | null;
 }
 
 export interface Asset {

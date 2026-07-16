@@ -6,13 +6,17 @@ export const STORE_URL =
     ? `https://${process.env.SHOPIFY_STORE_DOMAIN}`
     : "https://your-store.com";
 
-/** The affiliate's trackable referral link (routes through /api/track). */
-export function buildReferralLink(refCode: string, targetUrl?: string) {
+/**
+ * The affiliate's trackable referral link (routes through /api/track).
+ * `appUrl` can be passed explicitly so client components don't fall back to
+ * the build-time default (server env isn't available in the browser bundle).
+ */
+export function buildReferralLink(refCode: string, targetUrl?: string, appUrl: string = APP_URL) {
   const to = encodeURIComponent(targetUrl ?? STORE_URL);
-  return `${APP_URL}/api/track?ref=${encodeURIComponent(refCode)}&to=${to}`;
+  return `${appUrl}/api/track?ref=${encodeURIComponent(refCode)}&to=${to}`;
 }
 
-export async function qrDataUrl(text: string, dark = "#0f3d2e") {
+export async function qrDataUrl(text: string, dark = "#431431") {
   return QRCode.toString(text, {
     type: "svg",
     margin: 1,

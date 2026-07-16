@@ -3,115 +3,123 @@
 @tailwind utilities;
 
 /*
-  Affilaite design system — "Obsidian & Gold"
-  A private-bank aesthetic: warm ivory & deep emerald in light,
-  obsidian & gilded highlights in dark. Editorial serif for display,
-  a clean grotesk for UI, tabular figures for every number that is money.
+  Sipfluence design system — "The Pantry"
+  Syruvia's affiliate & referral brand: glossy syrup, bubbly energy,
+  confetti-level enthusiasm — with clean, modern precision.
+  Cream & white do the work, Syrup Pink leads, accents are sprinkles.
+  Display: Bricolage Grotesque · Body: Instrument Sans.
 */
 
 @layer base {
   :root {
-    --background: 40 33% 98%;
-    --foreground: 24 14% 11%;
+    /* Vanilla Cream #FFF7F1 canvas · Black Cherry #431431 ink */
+    --background: 26 100% 97%;
+    --foreground: 322 54% 17%;
 
-    --card: 40 40% 99.5%;
-    --card-foreground: 24 14% 11%;
+    --card: 30 100% 99.5%;
+    --card-foreground: 322 54% 17%;
 
-    --popover: 40 40% 99.5%;
-    --popover-foreground: 24 14% 11%;
+    --popover: 30 100% 99.5%;
+    --popover-foreground: 322 54% 17%;
 
-    --primary: 162 74% 22%;
-    --primary-foreground: 40 33% 98%;
+    /* Syrup Pink #FF5C9E */
+    --primary: 336 100% 68%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 38 22% 93%;
-    --secondary-foreground: 24 14% 16%;
+    /* Strawberry Milk #FFDCEB */
+    --secondary: 334 100% 93%;
+    --secondary-foreground: 322 54% 24%;
 
-    --muted: 38 20% 94.5%;
-    --muted-foreground: 30 7% 42%;
+    --muted: 334 62% 95.5%;
+    --muted-foreground: 322 16% 46%;
 
-    --accent: 38 26% 92%;
-    --accent-foreground: 24 14% 14%;
+    --accent: 334 100% 93%;
+    --accent-foreground: 322 54% 18%;
 
-    --gold: 38 46% 48%;
-    --gold-foreground: 30 30% 12%;
+    /* Honey Pop #FFC94D — rewards & sparkles */
+    --gold: 42 100% 65%;
+    --gold-foreground: 322 54% 17%;
 
-    --success: 156 58% 32%;
-    --success-foreground: 150 40% 97%;
-    --success-soft: 152 44% 90%;
+    /* Mint Splash #8FE3C8 */
+    --success: 161 46% 37%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 161 55% 90%;
 
-    --warning: 33 82% 42%;
-    --warning-foreground: 36 60% 97%;
-    --warning-soft: 40 70% 90%;
+    /* Peach Fizz #FFAE7E */
+    --warning: 22 86% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 22 100% 90%;
 
-    --danger: 6 66% 45%;
-    --danger-foreground: 10 40% 98%;
-    --danger-soft: 8 62% 92%;
+    --danger: 350 78% 55%;
+    --danger-foreground: 0 0% 100%;
+    --danger-soft: 350 100% 93%;
 
-    --border: 36 16% 87%;
-    --hairline: 36 14% 84%;
-    --input: 36 16% 87%;
-    --ring: 162 74% 22%;
+    --border: 340 46% 90%;
+    --hairline: 338 40% 87%;
+    --input: 340 46% 90%;
+    --ring: 336 100% 68%;
 
-    --shadow-color: 30 20% 20%;
+    --shadow-color: 322 45% 28%;
 
-    --radius: 0.9rem;
+    --radius: 1rem;
 
-    --chart-1: 162 60% 30%;
-    --chart-2: 38 52% 46%;
-    --chart-3: 218 44% 46%;
-    --chart-4: 286 28% 50%;
-    --chart-grid: 36 14% 88%;
+    --chart-1: 336 100% 68%;
+    --chart-2: 42 100% 62%;
+    --chart-3: 22 100% 72%;
+    --chart-4: 161 55% 60%;
+    --chart-grid: 340 42% 91%;
   }
 
   .dark {
-    --background: 30 9% 6%;
-    --foreground: 40 24% 91%;
+    /* Black Cherry surfaces */
+    --background: 322 45% 8%;
+    --foreground: 26 100% 95%;
 
-    --card: 30 8% 8.5%;
-    --card-foreground: 40 24% 91%;
+    --card: 322 40% 11%;
+    --card-foreground: 26 100% 95%;
 
-    --popover: 30 8% 8.5%;
-    --popover-foreground: 40 24% 91%;
+    --popover: 322 40% 11%;
+    --popover-foreground: 26 100% 95%;
 
-    --primary: 158 60% 46%;
-    --primary-foreground: 160 40% 6%;
+    --primary: 336 100% 70%;
+    --primary-foreground: 322 60% 10%;
 
-    --secondary: 34 7% 15%;
-    --secondary-foreground: 40 20% 88%;
+    --secondary: 322 28% 18%;
+    --secondary-foreground: 26 60% 92%;
 
-    --muted: 34 6% 14%;
-    --muted-foreground: 40 8% 60%;
+    --muted: 322 24% 15%;
+    --muted-foreground: 330 18% 66%;
 
-    --accent: 34 8% 17%;
-    --accent-foreground: 40 20% 90%;
+    --accent: 322 30% 20%;
+    --accent-foreground: 26 60% 92%;
 
-    --gold: 40 58% 60%;
-    --gold-foreground: 34 40% 10%;
+    --gold: 42 100% 66%;
+    --gold-foreground: 322 54% 12%;
 
-    --success: 156 52% 46%;
-    --success-foreground: 150 40% 6%;
-    --success-soft: 156 40% 18%;
+    --success: 161 55% 55%;
+    --success-foreground: 322 45% 8%;
+    --success-soft: 161 40% 20%;
 
-    --warning: 38 78% 56%;
-    --warning-foreground: 36 60% 8%;
-    --warning-soft: 36 50% 18%;
+    --warning: 22 90% 62%;
+    --warning-foreground: 322 45% 8%;
+    --warning-soft: 22 55% 22%;
 
-    --danger: 6 72% 60%;
-    --danger-foreground: 10 40% 8%;
-    --danger-soft: 6 45% 20%;
+    --danger: 350 82% 64%;
+    --danger-foreground: 322 45% 8%;
+    --danger-soft: 350 45% 24%;
 
-    --border: 36 8% 18%;
-    --hairline: 36 8% 20%;
-    --input: 36 8% 20%;
-    --ring: 158 60% 46%;
+    --border: 322 24% 22%;
+    --hairline: 322 22% 24%;
+    --input: 322 24% 22%;
+    --ring: 336 100% 70%;
 
-    --shadow-color: 0 0% 0%;
+    --shadow-color: 322 70% 2%;
 
-    --chart-1: 158 56% 50%;
-    --chart-2: 40 58% 58%;
-    --chart-3: 216 56% 62%;
-    --chart-4: 286 40% 66%;
-    --chart-grid: 36 8% 18%;
+    --chart-1: 336 100% 70%;
+    --chart-2: 42 100% 64%;
+    --chart-3: 22 100% 72%;
+    --chart-4: 161 55% 60%;
+    --chart-grid: 322 22% 22%;
   }
 
   * {

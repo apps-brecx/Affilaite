@@ -1,18 +1,28 @@
 <div align="center">
 
-# Affilaite
+# SyruviaAite
 
-**A premium affiliate & referral platform for modern Shopify brands.**
+**Syruvia's affiliate & referral platform.**
 
-Coupon-first attribution · native PayPal payouts · a portal your partners will love.
+Coupon-first attribution · native PayPal payouts · a partner portal built for Syruvia's creators.
 
 </div>
 
 ---
 
-Affilaite connects to your Shopify store, tracks every sale, calculates commissions,
-reverses them automatically on refund, and pays affiliates in one native PayPal batch —
-wrapped in a clean, fast, private-bank-grade interface.
+SyruviaAite is Syruvia's private partner program. It connects to the Syruvia Shopify store,
+tracks every sale, calculates commissions, reverses them automatically on refund, and pays
+affiliates in one native PayPal batch — wrapped in a clean, fast, private-bank-grade interface.
+
+Everything on screen is real: the app is fully database-backed with role-based login (admin +
+affiliate), working actions on every button, and honest empty states until real activity arrives.
+No mock data.
+
+## 🔐 Access
+
+- **Partners** apply at `/apply`, then sign in at `/login` once approved.
+- **Admins** sign in at `/login` with the credentials seeded from `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+- Admin routes (`/admin/*`) and the partner portal are protected by middleware + role checks.
 
 ## ✨ What's inside
 

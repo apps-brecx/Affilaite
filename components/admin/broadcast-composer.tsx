@@ -1,25 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { Send, Users, Eye, Braces, CalendarClock } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Send, Users, Eye, Braces, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-const AUDIENCES = [
-  { label: "All approved", count: 71 },
-  { label: "VIP Creators", count: 8 },
-  { label: "Newsletter Partners", count: 21 },
-  { label: "Social & Video", count: 27 },
-];
+import { useToast } from "@/components/ui/toast";
+import { sendBroadcast } from "@/app/actions/admin";
 
 const VARS = ["{{name}}", "{{code}}", "{{earnings}}", "{{link}}"];
 
-export function BroadcastComposer() {
-  const [audience, setAudience] = useState(AUDIENCES[0]);
+interface AudienceOption {
+  label: string;
+  count: number;
+  status?: string[];
+  groupIds?: string[];
+}
+
+export function BroadcastComposer({ audiences }: { audiences: AudienceOption[] }) {
+  const [audience, setAudience] = useState(audiences[0]);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
+
+  const send = () => {
+    if (!subject.trim() || !body.trim()) {
+      toast("Add a subject and message.", "error");
+      return;
+    }
+    start(async () => {
+      const res = await sendBroadcast({ subject, body, status: audience.status, groupIds: audience.groupIds });
+      toast(res.message, res.ok ? "success" : "error");
+      if (res.ok) {
+        setSubject("");
+        setBody("");
+        router.refresh();
+      }
+    });
+  };
 
   const rendered = (body || "Hi {{name}}, your code {{code}} has earned you {{earnings}} so far — keep it up!")
     .replaceAll("{{name}}", "Sarah")
@@ -37,7 +58,7 @@ export function BroadcastComposer() {
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5"><Users className="size-3.5" /> Audience</Label>
             <div className="flex flex-wrap gap-2">
-              {AUDIENCES.map((a) => (
+              {audiences.map((a) => (
                 <button
                   key={a.label}
                   onClick={() => setAudience(a)}
@@ -81,9 +102,10 @@ export function BroadcastComposer() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-hairline pt-4">
-            <Button variant="outline"><CalendarClock className="size-4" /> Schedule</Button>
-            <Button><Send className="size-4" /> Send to {audience.count}</Button>
+          <div className="flex items-center justify-end border-t border-hairline pt-4">
+            <Button onClick={send} disabled={pending}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send to {audience.count}
+            </Button>
           </div>
         </CardContent>
       </Card>

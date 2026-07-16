@@ -4,14 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
-import { getCurrentAffiliate } from "@/lib/queries";
-import { buildReferralLink, qrDataUrl } from "@/lib/links";
+import { requireAffiliate } from "@/lib/session";
+import { buildReferralLink, qrDataUrl, APP_URL } from "@/lib/links";
+import { getDefaultDestination } from "@/lib/queries";
 
 export const metadata = { title: "Links & Codes" };
 
 export default async function LinksPage() {
-  const me = await getCurrentAffiliate();
-  const link = buildReferralLink(me.refCode);
+  const me = await requireAffiliate();
+  const destination = await getDefaultDestination();
+  const link = buildReferralLink(me.refCode, destination);
   const qr = await qrDataUrl(link);
 
   const shareTargets = [
@@ -37,7 +39,7 @@ export default async function LinksPage() {
             <div>
               <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Ticket className="size-4 text-gold" /> Your discount code
-                <Badge variant="gold" className="ml-1">15% off for customers</Badge>
+                <Badge variant="gold" className="ml-1">Customer discount</Badge>
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-gold/30 bg-gold/[0.06] p-2 pl-5 ring-gilded">
                 <span className="flex-1 font-display text-3xl font-semibold tracking-wide text-foreground sm:text-4xl">
@@ -103,7 +105,7 @@ export default async function LinksPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <DeepLinkBuilder refCode={me.refCode} />
+          <DeepLinkBuilder refCode={me.refCode} appUrl={APP_URL} defaultDestination={destination} />
         </CardContent>
       </Card>
     </div>
