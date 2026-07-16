@@ -70,13 +70,15 @@ export async function createDiscountForAffiliate(
       subtotal: { greaterThanOrEqualToSubtotal: options.minimumSubtotal },
     };
   }
-  if (options.combinesWith) {
-    basicCodeDiscount.combinesWith = {
-      productDiscounts: !!options.combinesWith.productDiscounts,
-      orderDiscounts: !!options.combinesWith.orderDiscounts,
-      shippingDiscounts: !!options.combinesWith.shippingDiscounts,
-    };
-  }
+  // Default to fully stackable so an affiliate code works even when the customer
+  // (e.g. a VIP) already has another discount. A campaign can still pass explicit
+  // combinesWith to restrict it.
+  const cw = options.combinesWith ?? { productDiscounts: true, orderDiscounts: true, shippingDiscounts: true };
+  basicCodeDiscount.combinesWith = {
+    productDiscounts: !!cw.productDiscounts,
+    orderDiscounts: !!cw.orderDiscounts,
+    shippingDiscounts: !!cw.shippingDiscounts,
+  };
 
   const json = await shopifyGraphQL<any>(CREATE_CODE, { basicCodeDiscount });
   const errs = json.data?.discountCodeBasicCreate?.userErrors ?? [];
@@ -123,7 +125,12 @@ function throwOnErrors(errs: any[]) {
 /** Update an existing Shopify discount's code and/or percentage. */
 export async function updateDiscountInShopify(
   shopifyDiscountId: string,
-  changes: { code?: string; value?: number; valueType?: "percent" | "fixed" },
+  changes: {
+    code?: string;
+    value?: number;
+    valueType?: "percent" | "fixed";
+    combinesWith?: { productDiscounts?: boolean; orderDiscounts?: boolean; shippingDiscounts?: boolean };
+  },
 ): Promise<void> {
   const basicCodeDiscount: Record<string, unknown> = {};
   if (changes.code) {
@@ -138,8 +145,22 @@ export async function updateDiscountInShopify(
           : { percentage: changes.value / 100 },
     };
   }
+  if (changes.combinesWith) {
+    basicCodeDiscount.combinesWith = {
+      productDiscounts: !!changes.combinesWith.productDiscounts,
+      orderDiscounts: !!changes.combinesWith.orderDiscounts,
+      shippingDiscounts: !!changes.combinesWith.shippingDiscounts,
+    };
+  }
   const json = await shopifyGraphQL<any>(UPDATE_CODE, { id: shopifyDiscountId, basicCodeDiscount });
   throwOnErrors(json.data?.discountCodeBasicUpdate?.userErrors);
+}
+
+/** Make an existing Shopify discount stack with product/order/shipping discounts. */
+export async function makeDiscountCombinable(shopifyDiscountId: string): Promise<void> {
+  await updateDiscountInShopify(shopifyDiscountId, {
+    combinesWith: { productDiscounts: true, orderDiscounts: true, shippingDiscounts: true },
+  });
 }
 
 /** Permanently delete a Shopify discount. */

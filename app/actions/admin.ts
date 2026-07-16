@@ -30,6 +30,7 @@ import {
   updateDiscountInShopify,
   deleteDiscountInShopify,
   setDiscountActiveInShopify,
+  makeDiscountCombinable,
   uniqueDiscountCode,
 } from "@/lib/discounts";
 import { upsertShopifyCustomer } from "@/lib/shopify-customers";
@@ -656,6 +657,28 @@ export async function deleteDiscountCode(id: string): Promise<ActionResult> {
   await db.delete(discountCodes).where(eq(discountCodes.id, id));
   revalidatePath("/admin/codes");
   return { ok: true, message: `Code “${existing.code}” deleted.` };
+}
+
+/** Make every Shopify-linked code stackable (fixes codes a VIP couldn't use). */
+export async function makeAllCodesCombinable(): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
+  const codes = await db.select().from(discountCodes).where(isNotNull(discountCodes.shopifyDiscountId));
+  let ok = 0;
+  let failed = 0;
+  for (const c of codes) {
+    try {
+      await makeDiscountCombinable(c.shopifyDiscountId!);
+      ok++;
+    } catch (e) {
+      console.error("[makeAllCodesCombinable]", c.code, e);
+      failed++;
+    }
+    await new Promise((r) => setTimeout(r, 400)); // respect Shopify rate limits
+  }
+  revalidatePath("/admin/codes");
+  return { ok: true, message: `Updated ${ok} code(s) to stack with other discounts${failed ? `, ${failed} failed` : ""}.` };
 }
 
 /** Push a local-only code up to Shopify (for codes created before Shopify was connected). */

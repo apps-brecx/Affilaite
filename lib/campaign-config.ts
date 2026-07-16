@@ -50,7 +50,7 @@ export function defaultConfig(): CampaignConfig {
   return {
     reward: { kind: "coupon", valueType: "percent", value: 15, custom: "", bonusEnabled: false, bonusType: "fixed", bonusValue: 0 },
     conditions: { minOrderType: "none", minOrderValue: 0, trigger: "every", triggerCustom: "", maxPerAdvocateEnabled: false, maxPerAdvocate: 0 },
-    coupon: { expires: false, combineProduct: false, combineOrder: false, combineShipping: true, appliesTo: "all", collections: "" },
+    coupon: { expires: false, combineProduct: true, combineOrder: true, combineShipping: true, appliesTo: "all", collections: "" },
     friend: { kind: "coupon", valueType: "percent", value: 10, minOrder: 0, promoDescription: "", promoUrl: "", promoExpires: false },
     payout: { mode: "manual" },
     approval: { mode: "auto" },

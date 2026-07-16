@@ -17,6 +17,7 @@ import {
   CloudOff,
   Cloud,
   CloudUpload,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -31,6 +32,7 @@ import {
   toggleDiscountCode,
   deleteDiscountCode,
   pushDiscountToShopify,
+  makeAllCodesCombinable,
 } from "@/app/actions/admin";
 import type { DiscountCodeRow } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -98,6 +100,20 @@ export function DiscountManager({
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search codes or affiliates…" className="pl-9" />
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const res = await makeAllCodesCombinable();
+                toast(res.message, res.ok ? "success" : "error");
+                if (res.ok) router.refresh();
+              })
+            }
+            title="Let codes stack with other discounts (VIP, sales)"
+          >
+            <Layers className="size-4" /> Make combinable
+          </Button>
           <Button variant="secondary" onClick={() => setBulkOpen(true)}>
             <Sparkles className="size-4" /> Bulk generate
           </Button>
