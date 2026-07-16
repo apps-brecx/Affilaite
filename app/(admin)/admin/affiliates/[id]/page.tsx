@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EarningsArea } from "@/components/charts/charts";
 import { AffiliateActions, ReassignProgram } from "@/components/admin/affiliate-actions";
 import { AffiliateCampaigns, EditCode } from "@/components/admin/affiliate-membership";
+import { EditAffiliateInfo } from "@/components/admin/edit-affiliate";
 import {
   getAffiliate,
   getAffiliateCommissions,
@@ -87,11 +88,17 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle>Details</CardTitle>
+            <EditAffiliateInfo affiliate={a} />
+          </CardHeader>
           <CardContent className="space-y-4 text-sm">
+            <Detail label="Email" value={a.email} />
+            <Detail label="Phone" value={a.phone ?? "Not set"} warn={!a.phone} />
+            <Detail label="PayPal" value={a.paypalEmail ?? "Not set"} warn={!a.paypalEmail} />
+            <Detail label="Address" value={a.address ?? "Not set"} />
             <Detail label="Program" value={a.programName} />
             <Detail label="Group" value={a.groupName ?? "—"} />
-            <Detail label="PayPal" value={a.paypalEmail ?? "Not set"} warn={!a.paypalEmail} />
             <Detail label="Conversion" value={`${a.conversionRate}%`} />
             <Detail label="Clicks" value={a.clicks.toLocaleString()} />
             <Detail label="Joined" value={formatDate(a.joinedAt)} />

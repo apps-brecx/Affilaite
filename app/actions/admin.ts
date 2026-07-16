@@ -144,6 +144,50 @@ export async function setAffiliateStatus(
   return { ok: true, message: `Affiliate ${status}.` };
 }
 
+/** Admin edit of an affiliate's contact/payout info (name, email, phone, address, PayPal). */
+export async function updateAffiliateInfo(id: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      name: z.string().min(1, "Enter a name"),
+      email: z.string().email("Enter a valid email"),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      paypalEmail: z.string().email().optional().or(z.literal("")),
+      companyName: z.string().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, id) });
+  if (!aff) return { ok: false, message: "Affiliate not found." };
+
+  const newEmail = d.email.toLowerCase().trim();
+  const clash = await db.query.users.findFirst({ where: eq(users.email, newEmail) });
+  if (clash && clash.id !== aff.userId) return { ok: false, message: "That email is already in use." };
+
+  const phone = d.phone && d.phone.trim() ? normalizePhone(d.phone) : null;
+  if (d.phone && d.phone.trim() && !phone) return { ok: false, message: "Enter a valid phone number." };
+  const phoneChanged = (phone ?? null) !== (aff.phone ?? null);
+
+  await db.update(users).set({ name: d.name, email: newEmail }).where(eq(users.id, aff.userId));
+  await db
+    .update(affiliates)
+    .set({
+      phone,
+      ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
+      address: d.address?.trim() || null,
+      paypalEmail: d.paypalEmail?.trim().toLowerCase() || null,
+      companyName: d.companyName?.trim() || null,
+    })
+    .where(eq(affiliates.id, id));
+  revalidatePath(`/admin/affiliates/${id}`);
+  revalidatePath("/admin/affiliates");
+  return { ok: true, message: "Affiliate info updated." };
+}
+
 export async function assignProgram(affiliateId: string, programId: string): Promise<ActionResult> {
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
@@ -800,6 +844,8 @@ async function createAndInvite(
   email: string,
   templateId?: string,
   existingCode?: string,
+  phoneRaw?: string,
+  address?: string,
 ): Promise<InviteOutcome> {
   email = email.toLowerCase().trim();
   const existing = await db!.query.users.findFirst({ where: eq(users.email, email) });
@@ -821,9 +867,10 @@ async function createAndInvite(
   const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
   const code = cleanCode || `${refCode}${percent}`.toUpperCase();
 
+  const phone = phoneRaw && phoneRaw.trim() ? normalizePhone(phoneRaw) : null;
   const [aff] = await db!
     .insert(affiliates)
-    .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, programId: program?.id ?? null })
+    .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, phone, address: address?.trim() || null, programId: program?.id ?? null })
     .returning();
 
   // Issue the discount code (create in Shopify only if it's a freshly generated one;
@@ -863,10 +910,17 @@ export async function inviteAffiliate(input: unknown): Promise<ActionResult & { 
   await assertAdmin();
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
-    .object({ name: z.string().optional(), email: z.string().email(), code: z.string().optional(), templateId: z.string().optional() })
+    .object({
+      name: z.string().optional(),
+      email: z.string().email(),
+      code: z.string().optional(),
+      templateId: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a valid email." };
-  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code);
+  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code, parsed.data.phone, parsed.data.address);
   revalAdmin();
   if (!res.ok) return { ok: false, message: `${res.email}: ${res.error}` };
   return {

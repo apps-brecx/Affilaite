@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Instagram, Globe, Loader2 } from "lucide-react";
-import { Input, Label } from "@/components/ui/input";
+import { Instagram, Globe, Loader2, Phone, Mail, MapPin } from "lucide-react";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/toast";
@@ -19,6 +19,9 @@ export function ProfileForm({ me }: { me: Affiliate }) {
     start(async () => {
       const res = await updateProfile({
         name: String(fd.get("name") ?? ""),
+        email: String(fd.get("email") ?? ""),
+        phone: String(fd.get("phone") ?? ""),
+        address: String(fd.get("address") ?? ""),
         companyName: String(fd.get("companyName") ?? ""),
         instagram: String(fd.get("instagram") ?? ""),
         website: String(fd.get("website") ?? ""),
@@ -42,8 +45,30 @@ export function ProfileForm({ me }: { me: Affiliate }) {
           <Input name="name" defaultValue={me.name} required />
         </div>
         <div className="space-y-1.5">
+          <Label>Email</Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input name="email" type="email" className="pl-9" defaultValue={me.email} required />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Mobile number</Label>
+          <div className="relative">
+            <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input name="phone" type="tel" className="pl-9" defaultValue={me.phone ?? ""} placeholder="+1 555 123 4567" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
           <Label>Company (optional)</Label>
           <Input name="companyName" defaultValue={me.companyName ?? ""} />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Shipping address (for samples)</Label>
+          <div className="relative">
+            <MapPin className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+            <Textarea name="address" className="pl-9" rows={2} defaultValue={me.address ?? ""} placeholder="Street, city, state, ZIP, country" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Add this if you&apos;d like to receive product samples (coming soon).</p>
         </div>
         <div className="space-y-1.5">
           <Label>Instagram</Label>

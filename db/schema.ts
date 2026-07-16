@@ -114,6 +114,8 @@ export const affiliates = pgTable(
     payoutMethod: payoutMethod("payout_method").notNull().default("venmo"),
     phone: text("phone"),
     phoneVerifiedAt: timestamp("phone_verified_at"),
+    // Shipping address for product samples (opt-in; sample program comes later).
+    address: text("address"),
     programId: uuid("program_id").references(() => programs.id),
     groupId: uuid("group_id").references(() => groups.id),
     companyName: text("company_name"),

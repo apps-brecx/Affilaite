@@ -55,6 +55,7 @@ const applySchema = z.object({
   applyNote: z.string().optional(),
   paypalEmail: z.string().email("Enter a valid PayPal email").optional().or(z.literal("")),
   phone: z.string().optional(),
+  address: z.string().optional(),
 });
 
 export async function applyAsAffiliate(input: unknown): Promise<ActionResult & { affiliateId?: string }> {
@@ -96,6 +97,7 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
       paypalEmail: data.paypalEmail || null,
       phone: phone ?? null,
       phoneVerifiedAt: verified ? new Date() : null,
+      address: data.address?.trim() || null,
       companyName: data.companyName || null,
       channel: data.channel || null,
       audienceSize: data.audienceSize || null,
@@ -257,7 +259,10 @@ export async function updatePaypalEmail(email: string): Promise<ActionResult> {
 }
 
 const profileSchema = z.object({
-  name: z.string().min(2),
+  name: z.string().min(2, "Enter your name"),
+  email: z.string().email("Enter a valid email"),
+  phone: z.string().optional(),
+  address: z.string().optional(),
   companyName: z.string().optional(),
   instagram: z.string().optional(),
   website: z.string().optional(),
@@ -270,14 +275,32 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   const affiliateId = (session?.user as any)?.affiliateId;
   if (!userId || !affiliateId) return { ok: false, message: "Not signed in." };
   const parsed = profileSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Invalid input." };
-  const { name, companyName, instagram, website } = parsed.data;
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const { name, email, phone, address, companyName, instagram, website } = parsed.data;
 
-  await db.update(users).set({ name }).where(eq(users.id, userId));
+  const newEmail = email.toLowerCase().trim();
+  // Email is the login — enforce uniqueness before changing it.
+  const clash = await db.query.users.findFirst({ where: eq(users.email, newEmail) });
+  if (clash && clash.id !== userId) return { ok: false, message: "That email is already in use." };
+
+  const current = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+  const normalizedPhone = phone && phone.trim() ? normalizePhone(phone) : null;
+  if (phone && phone.trim() && !normalizedPhone) return { ok: false, message: "Enter a valid phone number." };
+  // Changing the number means it's no longer the verified one.
+  const phoneChanged = (normalizedPhone ?? null) !== (current?.phone ?? null);
+
+  await db.update(users).set({ name, email: newEmail }).where(eq(users.id, userId));
   await db
     .update(affiliates)
-    .set({ companyName: companyName || null, socialLinks: { instagram: instagram ?? "", website: website ?? "" } })
+    .set({
+      phone: normalizedPhone,
+      ...(phoneChanged ? { phoneVerifiedAt: null } : {}),
+      address: address?.trim() || null,
+      companyName: companyName || null,
+      socialLinks: { instagram: instagram ?? "", website: website ?? "" },
+    })
     .where(eq(affiliates.id, affiliateId));
   revalidatePath("/settings");
+  revalidatePath("/payouts");
   return { ok: true, message: "Profile updated." };
 }

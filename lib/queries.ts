@@ -102,6 +102,7 @@ function mapAffiliate(row: any, stats: any, clickCount: Map<string, number>): Af
     payoutMethod: row.aff.payoutMethod ?? "venmo",
     phone: row.aff.phone ?? null,
     phoneVerified: Boolean(row.aff.phoneVerifiedAt),
+    address: row.aff.address ?? null,
     companyName: row.aff.companyName,
     programId: row.aff.programId ?? "",
     programName: row.program?.name ?? "—",

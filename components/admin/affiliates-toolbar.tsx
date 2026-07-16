@@ -117,6 +117,8 @@ export function AffiliatesToolbar({
         name: String(fd.get("name") ?? ""),
         email: String(fd.get("email") ?? ""),
         code: String(fd.get("code") ?? "") || undefined,
+        phone: String(fd.get("phone") ?? "") || undefined,
+        address: String(fd.get("address") ?? "") || undefined,
         templateId: templateId || undefined,
       });
       toast(res.message, res.ok ? "success" : "error");
@@ -207,9 +209,19 @@ export function AffiliatesToolbar({
                 <Input name="email" type="email" required placeholder="jane@email.com" />
               </div>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Mobile number <span className="text-muted-foreground">(optional)</span></Label>
+                <Input name="phone" type="tel" placeholder="+1 555 123 4567" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Existing code <span className="text-muted-foreground">(optional)</span></Label>
+                <Input name="code" placeholder="Keep their current code, e.g. JANE20" />
+              </div>
+            </div>
             <div className="space-y-1.5">
-              <Label>Existing code <span className="text-muted-foreground">(optional)</span></Label>
-              <Input name="code" placeholder="Keep their current code, e.g. JANE20" />
+              <Label>Shipping address for samples <span className="text-muted-foreground">(optional)</span></Label>
+              <Textarea name="address" rows={2} placeholder="Street, city, state, ZIP, country" />
             </div>
             <TemplateSelect />
             <Button type="submit" className="w-full" disabled={pending}>

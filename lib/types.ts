@@ -65,6 +65,7 @@ export interface Affiliate {
   payoutMethod: "paypal" | "venmo";
   phone: string | null;
   phoneVerified: boolean;
+  address: string | null;
   companyName: string | null;
   programId: string;
   programName: string;

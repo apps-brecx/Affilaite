@@ -32,6 +32,7 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
       audienceSize: String(fd.get("audienceSize") ?? ""),
       handle: String(fd.get("handle") ?? ""),
       applyNote: String(fd.get("applyNote") ?? ""),
+      address: String(fd.get("address") ?? ""),
       phone: verifiedPhone ?? "",
     };
     start(async () => {
@@ -114,6 +115,10 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
           <div className="space-y-1.5">
             <Label>Why are you a great fit? (optional)</Label>
             <Textarea name="applyNote" placeholder="Tell us about your audience and how you'd promote Sipfluence…" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Shipping address for samples (optional)</Label>
+            <Textarea name="address" rows={2} placeholder="Street, city, state, ZIP, country — add this if you'd like to receive product samples" />
           </div>
           <div className="rounded-xl border border-hairline bg-muted/30 p-4">
             <PhoneVerify onVerified={setVerifiedPhone} />

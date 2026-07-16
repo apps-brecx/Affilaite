@@ -99,6 +99,13 @@
       "when": 1784223036323,
       "tag": "0013_message_recipients_notif_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784224999653,
+      "tag": "0014_affiliate_address",
+      "breakpoints": true
     }
   ]
 }
