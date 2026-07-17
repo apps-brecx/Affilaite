@@ -484,6 +484,48 @@ export async function listOrders(): Promise<Order[]> {
   }));
 }
 
+/**
+ * Affiliate orders that used an affiliate code (or link) but produced NO
+ * commission — self-referral blocked, affiliate not approved, campaign rules,
+ * etc. Surfaced on the ledger so an admin can see why an affiliate sale didn't
+ * pay out, instead of it vanishing silently.
+ */
+export async function listUnattributedAffiliateOrders(): Promise<Order[]> {
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(orders)
+    .where(
+      and(
+        sql`not exists (select 1 from ${commissions} where ${commissions.orderId} = ${orders.id})`,
+        sql`exists (
+          select 1
+          from jsonb_array_elements_text(coalesce(${orders.discountCodesUsed}, '[]'::jsonb)) as dc(code)
+          join discount_codes dcs on upper(dcs.code) = upper(dc.code)
+          where dcs.affiliate_id is not null
+        )`,
+      ),
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(25);
+
+  return rows.map((o) => ({
+    id: o.id,
+    shopifyOrderId: o.shopifyOrderId,
+    orderNumber: o.orderNumber ?? "—",
+    customerEmail: o.customerEmail ?? "",
+    subtotal: num(o.subtotal),
+    total: num(o.total),
+    currency: o.currency ?? "USD",
+    discountCodesUsed: o.discountCodesUsed ?? [],
+    isNewCustomer: Boolean(o.isNewCustomer),
+    financialStatus: o.financialStatus ?? "paid",
+    affiliateName: null,
+    attributionStatus: o.attributionStatus ?? null,
+    createdAt: new Date(o.createdAt ?? Date.now()).toISOString(),
+  }));
+}
+
 // ---------- Payouts ----------
 
 export async function listPayouts(): Promise<Payout[]> {
