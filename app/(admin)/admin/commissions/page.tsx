@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { CommissionsTable } from "@/components/admin/commissions-table";
+import { PayNowButton } from "@/components/admin/pay-now-button";
 import { listCommissions, listUnattributedAffiliateOrders } from "@/lib/queries";
 import { formatCurrency, relativeTime } from "@/lib/utils";
 
@@ -20,7 +21,9 @@ export default async function CommissionsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Commission ledger" description="Every earned commission — review, approve, or reverse." />
+      <PageHeader title="Commission ledger" description="Every earned commission — review, approve, or reverse.">
+        <PayNowButton />
+      </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Pending" value={sum("pending")} icon={Clock} accent="warning" />

@@ -9,9 +9,10 @@ import { paypalConfig } from "@/lib/integrations";
 export const metadata = { title: "Settings · Payments" };
 
 export default async function PaymentsSettingsPage() {
-  const [minimum, mode, pp] = await Promise.all([
+  const [minimum, mode, schedule, pp] = await Promise.all([
     getSetting("default_payout_minimum", "25"),
     getSetting("default_payout_mode", "manual"),
+    getSetting("payout_schedule", "manual"),
     paypalConfig(),
   ]);
   const paypal = Boolean(pp.clientId && pp.clientSecret);
@@ -38,7 +39,7 @@ export default async function PaymentsSettingsPage() {
         )}
       </Card>
 
-      <PaymentsSettings minimum={minimum} mode={mode} />
+      <PaymentsSettings minimum={minimum} mode={mode} schedule={schedule} />
     </div>
   );
 }

@@ -10,9 +10,18 @@ import { useToast } from "@/components/ui/toast";
 import { setSetting } from "@/app/actions/admin";
 import { cn } from "@/lib/utils";
 
-export function PaymentsSettings({ minimum, mode }: { minimum: string; mode: string }) {
+const SCHEDULES = [
+  { id: "manual", label: "Manual only" },
+  { id: "daily", label: "Every day" },
+  { id: "weekly", label: "Every week" },
+  { id: "biweekly", label: "Every 2 weeks" },
+  { id: "monthly", label: "Every month" },
+];
+
+export function PaymentsSettings({ minimum, mode, schedule }: { minimum: string; mode: string; schedule: string }) {
   const [min, setMin] = useState(minimum || "25");
   const [payMode, setPayMode] = useState(mode || "manual");
+  const [sched, setSched] = useState(schedule || "manual");
   const [pending, start] = useTransition();
   const router = useRouter();
   const toast = useToast();
@@ -20,6 +29,7 @@ export function PaymentsSettings({ minimum, mode }: { minimum: string; mode: str
   const save = () =>
     start(async () => {
       await setSetting("default_payout_minimum", min);
+      await setSetting("payout_schedule", sched);
       const res = await setSetting("default_payout_mode", payMode);
       toast(res.ok ? "Payment settings saved." : res.message, res.ok ? "success" : "error");
       if (res.ok) router.refresh();
@@ -66,6 +76,22 @@ export function PaymentsSettings({ minimum, mode }: { minimum: string; mode: str
             ))}
           </div>
           <p className="text-xs text-muted-foreground">New campaigns start with this. Each campaign can override it.</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="block">Payout schedule</Label>
+          <select
+            value={sched}
+            onChange={(e) => setSched(e.target.value)}
+            className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
+          >
+            {SCHEDULES.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            How often payouts run automatically. Scheduled runs still respect each affiliate&apos;s payout minimum — only those over it get paid.
+          </p>
         </div>
       </CardContent>
     </Card>

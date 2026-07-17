@@ -348,6 +348,34 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
   return { ok: true, message: `${rows.length} commission(s) approved.${paid ? " " + paid : ""}` };
 }
 
+const SCHEDULE_DAYS: Record<string, number> = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
+
+/**
+ * Cron: run a payout batch on the configured schedule (weekly/monthly/…). Pays
+ * every affiliate who clears their minimum — the schedule never overrides the
+ * minimum. No-op when the schedule is manual, PayPal is off, or it's not yet due.
+ */
+export async function runScheduledPayout(): Promise<string> {
+  if (!db) return "";
+  const schedule = await getSetting("payout_schedule", "manual");
+  const intervalDays = SCHEDULE_DAYS[schedule];
+  if (!intervalDays) return ""; // manual / unknown
+  if (!(await paypalReady())) return "";
+
+  const last = await getSetting("payout_last_run", "");
+  const due = !last || Date.now() - new Date(last).getTime() >= intervalDays * 86_400_000;
+  if (!due) return "";
+
+  try {
+    const res = await executePayout(); // all payable affiliates over their minimum
+    await writeSetting("payout_last_run", new Date().toISOString());
+    return res.ok ? "Scheduled payout run." : "";
+  } catch (e) {
+    console.error("[runScheduledPayout]", e);
+    return "";
+  }
+}
+
 /**
  * The effective payout mode for an affiliate: their active campaign's setting
  * wins; otherwise the global default. Returns "automatic" | "manual".
