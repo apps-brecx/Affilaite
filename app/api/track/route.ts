@@ -37,6 +37,10 @@ export async function GET(req: Request) {
   const rawTo = url.searchParams.get("to") ?? STORE;
   const to = await safeRedirect(rawTo);
 
+  // A stable visitor id, reused across clicks so last-click attribution works.
+  const jar = await cookies();
+  const vid = jar.get("_aff_vid")?.value ?? randomUUID();
+
   if (ref && db) {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "unknown";
     // Throttle click logging so a pixel/bot can't stuff the clicks table (and
@@ -44,8 +48,6 @@ export async function GET(req: Request) {
     const allowed = rateLimit(`click:${ip}:${ref}`, 12, 60_000).ok;
     const aff = allowed ? await db.query.affiliates.findFirst({ where: eq(affiliates.refCode, ref) }) : null;
     if (aff) {
-      const jar = await cookies();
-      const vid = jar.get("_aff_vid")?.value ?? randomUUID();
       // Not httpOnly on purpose: the storefront reads it to pass _aff_vid into
       // the Shopify order's note_attributes for last-click attribution.
       jar.set("_aff_vid", vid, { maxAge: 60 * 60 * 24 * 30, httpOnly: false, sameSite: "lax" });
@@ -59,5 +61,19 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.redirect(to, 302);
+  // Forward the referral onto the store URL: the storefront snippet
+  // (docs/STOREFRONT_TRACKING.md) reads ref + aff_vid and attaches them to the
+  // cart so they arrive on the order as note attributes — this is what makes
+  // link attribution work across the app-domain → store-domain boundary. The
+  // utm_* tags also make Shopify's own Conversion details show the affiliate.
+  const dest = new URL(to);
+  if (ref) {
+    dest.searchParams.set("ref", ref);
+    dest.searchParams.set("aff_vid", vid);
+    dest.searchParams.set("utm_source", "sipfluence");
+    dest.searchParams.set("utm_medium", "affiliate");
+    dest.searchParams.set("utm_campaign", ref);
+  }
+
+  return Response.redirect(dest.toString(), 302);
 }

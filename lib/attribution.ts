@@ -5,6 +5,27 @@ import { eq, inArray, gte, desc, and, sql } from "drizzle-orm";
 import { notify } from "./notifications";
 import { sendEmailSafe } from "./email";
 import { mergeConfig } from "./campaign-config";
+import { shopifyGraphQL } from "./shopify";
+
+/**
+ * Best-effort: tag the order in Shopify so affiliate sales are trackable there.
+ * Adds `affiliate:<CODE>` and `source:sipfluence` tags (searchable/filterable in
+ * the Shopify admin). Needs the write_orders scope on the Admin API token; if it
+ * isn't granted, this logs and moves on — it never fails attribution.
+ */
+async function tagOrderInShopify(order: any, refCode: string) {
+  try {
+    const id = order.admin_graphql_api_id ?? `gid://shopify/Order/${order.id}`;
+    await shopifyGraphQL(
+      `mutation affiliateTag($id: ID!, $tags: [String!]!) {
+        tagsAdd(id: $id, tags: $tags) { userErrors { message } }
+      }`,
+      { id, tags: [`affiliate:${refCode}`, "source:sipfluence"] },
+    );
+  } catch (e) {
+    console.error("[attribution] could not tag order in Shopify (needs write_orders scope?)", e);
+  }
+}
 
 const DAY = 864e5;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -104,9 +125,18 @@ export async function processOrderCreated(order: any) {
     await db.update(orders).set({ financialStatus: order.financial_status }).where(eq(orders.id, orderRow.id));
   }
 
+  // Record why an order did or didn't earn a commission, so the admin sees the
+  // outcome ("attributed → DAVID15" / "self-referral blocked") instead of a
+  // silent blank. Never throws — attribution outcome must not fail the webhook.
+  const note = (status: string) =>
+    db!.update(orders).set({ attributionStatus: status }).where(eq(orders.id, orderRow.id)).catch(() => {});
+
   // 2. Only real money earns commission — the order must actually be paid.
   //    Unpaid orders are mirrored above but wait for the orders/paid webhook.
-  if (order.financial_status !== "paid") return;
+  if (order.financial_status !== "paid") {
+    await note("waiting for payment");
+    return;
+  }
 
   // 3. PRIMARY: coupon match (source of truth)
   const usedCodes: string[] = (order.discount_codes ?? []).map((d: any) => d.code?.toUpperCase()).filter(Boolean);
@@ -123,10 +153,24 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  // 4. BACKUP: link cookie → most recent click within window (last-click)
-  if (!affiliate && Array.isArray(order.note_attributes)) {
-    const visitorId = order.note_attributes.find((a: any) => a.name === "_aff_vid")?.value;
-    if (visitorId) {
+  // 4. BACKUP: referral link carried into checkout as order note attributes by
+  //    the storefront snippet. Coupon still wins when both are present, so a
+  //    sale is only ever credited once.
+  if (!affiliate) {
+    const attrs: Array<{ name?: string; value?: string }> = Array.isArray(order.note_attributes)
+      ? order.note_attributes
+      : [];
+    const refCode = attrs.find((a) => a.name === "_aff_ref")?.value?.toUpperCase();
+    const visitorId = attrs.find((a) => a.name === "_aff_vid")?.value;
+
+    // 4a. Direct ref code — works even when the click row was never logged.
+    if (refCode) {
+      affiliate = await db.query.affiliates.findFirst({ where: eq(affiliates.refCode, refCode) });
+      if (affiliate) attributedBy = "link";
+    }
+
+    // 4b. Fall back to the visitor id → most recent click within the window.
+    if (!affiliate && visitorId) {
       const prog = await getDefaultProgram();
       const windowStart = new Date(Date.now() - (prog?.cookieWindowDays ?? 30) * DAY);
       const recentClick = await db.query.clicks.findFirst({
@@ -140,12 +184,23 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  if (!affiliate || affiliate.status !== "approved") return; // no attribution
+  if (!affiliate) {
+    await note(usedCodes.length ? "coupon not linked to an affiliate" : "no affiliate code or link");
+    return;
+  }
+  if (affiliate.status !== "approved") {
+    await note(`skipped — ${affiliate.refCode} is ${affiliate.status}, not approved`);
+    return;
+  }
 
-  // 5. Fraud: block self-referral (buyer email == affiliate email)
-  if (order.email && affiliate.userId) {
+  // 5. Fraud: block self-referral (buyer email == affiliate's own email).
+  //    Set ALLOW_SELF_REFERRAL=true (env) to permit it while testing.
+  if (process.env.ALLOW_SELF_REFERRAL !== "true" && order.email && affiliate.userId) {
     const affEmail = await getUserEmail(affiliate.userId);
-    if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) return;
+    if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) {
+      await note(`self-referral blocked — buyer is ${affiliate.refCode}'s own email`);
+      return;
+    }
   }
 
   // 6. Calculate + record commission.
@@ -174,17 +229,29 @@ export async function processOrderCreated(order: any) {
     const cfg = mergeConfig(campaign.config);
     const cond = cfg.conditions;
     // Minimum order — by subtotal amount or by the customer's lifetime order count.
-    if (cond.minOrderType === "amount" && base < Number(cond.minOrderValue || 0)) return;
-    if (cond.minOrderType === "orders" && (order.customer?.orders_count ?? 1) < Number(cond.minOrderValue || 0)) return;
+    if (cond.minOrderType === "amount" && base < Number(cond.minOrderValue || 0)) {
+      await note(`skipped — order below campaign minimum ($${cond.minOrderValue})`);
+      return;
+    }
+    if (cond.minOrderType === "orders" && (order.customer?.orders_count ?? 1) < Number(cond.minOrderValue || 0)) {
+      await note("skipped — customer below campaign minimum order count");
+      return;
+    }
     // First-purchase-only trigger.
-    if (cond.trigger === "first" && !orderRow.isNewCustomer) return;
+    if (cond.trigger === "first" && !orderRow.isNewCustomer) {
+      await note("skipped — not a first purchase (campaign rule)");
+      return;
+    }
     // Per-advocate cap: how many rewards this affiliate has already earned in this campaign.
     if (cond.maxPerAdvocateEnabled && Number(cond.maxPerAdvocate) > 0) {
       const [{ c }] = await db
         .select({ c: sql<number>`count(*)` })
         .from(commissions)
         .where(and(eq(commissions.affiliateId, affiliate.id), eq(commissions.campaignId, campaign.id), sql`${commissions.amount} >= 0`));
-      if (Number(c) >= Number(cond.maxPerAdvocate)) return;
+      if (Number(c) >= Number(cond.maxPerAdvocate)) {
+        await note("skipped — campaign per-affiliate reward cap reached");
+        return;
+      }
     }
     amount = rate(cfg.reward.valueType, Number(cfg.reward.value));
     if (cfg.reward.bonusEnabled && Number(cfg.reward.bonusValue) > 0) {
@@ -192,13 +259,22 @@ export async function processOrderCreated(order: any) {
     }
     campaignId = campaign.id;
   } else {
-    if (!program) return;
-    if (program.newCustomerOnly && !orderRow.isNewCustomer) return;
+    if (!program) {
+      await note("no commission program configured");
+      return;
+    }
+    if (program.newCustomerOnly && !orderRow.isNewCustomer) {
+      await note("skipped — returning customer (program is new-customers-only)");
+      return;
+    }
     amount = rate(program.commissionType, Number(program.commissionValue));
   }
 
   amount = Math.round(amount * 100) / 100;
-  if (!(amount > 0)) return; // nothing to pay (e.g. non-monetary custom reward)
+  if (!(amount > 0)) {
+    await note("skipped — no monetary reward");
+    return; // nothing to pay (e.g. non-monetary custom reward)
+  }
 
   // Fraud screening — flagged commissions are held for manual review and never
   // auto-approve. Heuristics run on the buyer + this affiliate's recent history.
@@ -230,7 +306,17 @@ export async function processOrderCreated(order: any) {
     .onConflictDoNothing()
     .returning({ id: commissions.id });
 
-  if (!created) return; // already attributed — don't re-notify
+  if (!created) {
+    await note(`attributed → ${affiliate.refCode} (${attributedBy})`);
+    return; // already attributed — don't re-notify
+  }
+
+  await note(
+    `attributed → ${affiliate.refCode} · ${order.currency} ${amount.toFixed(2)} (${attributedBy})${flag ? " · flagged for review" : ""}`,
+  );
+
+  // Track the affiliate sale back in Shopify so it's visible/filterable there.
+  await tagOrderInShopify(order, affiliate.refCode);
 
   await notify(
     affiliate.id,

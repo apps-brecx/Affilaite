@@ -453,6 +453,7 @@ export async function listOrders(): Promise<Order[]> {
     isNewCustomer: Boolean(r.o.isNewCustomer),
     financialStatus: r.o.financialStatus ?? "paid",
     affiliateName: r.user?.name ?? null,
+    attributionStatus: r.o.attributionStatus ?? null,
     createdAt: new Date(r.o.createdAt ?? Date.now()).toISOString(),
   }));
 }

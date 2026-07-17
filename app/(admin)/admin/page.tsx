@@ -119,7 +119,15 @@ export default async function AdminHome() {
                         <Badge variant="danger" className="ml-2">refunded</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{o.affiliateName}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {o.affiliateName ? (
+                        o.affiliateName
+                      ) : o.attributionStatus ? (
+                        <span className="text-xs">{o.attributionStatus}</span>
+                      ) : (
+                        <span className="text-xs opacity-60">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="tnum font-medium">{formatCurrency(o.total)}</TableCell>
                     <TableCell className="pr-6 text-right text-xs text-muted-foreground">
                       {relativeTime(o.createdAt)}

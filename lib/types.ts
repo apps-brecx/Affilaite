@@ -105,6 +105,7 @@ export interface Order {
   isNewCustomer: boolean;
   financialStatus: string;
   affiliateName: string | null;
+  attributionStatus: string | null;
   createdAt: string;
 }
 
