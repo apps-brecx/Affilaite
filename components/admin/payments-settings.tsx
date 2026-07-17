@@ -46,8 +46,8 @@ export function PaymentsSettings({ minimum, mode }: { minimum: string; mode: str
         </div>
 
         <div className="space-y-1.5">
-          <Label>Default payout method</Label>
-          <div className="inline-flex gap-1 rounded-lg border border-hairline bg-muted/40 p-1">
+          <Label className="block">Default payout method</Label>
+          <div className="inline-flex w-fit gap-1 rounded-lg border border-hairline bg-muted/40 p-1">
             {[
               { id: "automatic", label: "Automatic (PayPal)" },
               { id: "manual", label: "Manual" },

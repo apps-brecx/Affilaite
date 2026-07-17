@@ -3,7 +3,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -40,7 +40,7 @@ import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, 
 import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
-import { defaultConfig } from "@/lib/campaign-config";
+import { defaultConfig, mergeConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
 import { processOrderCreated, processCancelledOrder } from "@/lib/attribution";
@@ -342,24 +342,58 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
       "/performance",
     );
   }
-  // Automatic payout mode: approved money goes out right away.
-  const paid = await maybeAutoPayout();
+  // Automatic payout mode (per-campaign, else global): approved money goes out now.
+  const paid = await maybeAutoPayout(affIds);
   revalAdmin();
   return { ok: true, message: `${rows.length} commission(s) approved.${paid ? " " + paid : ""}` };
 }
 
 /**
- * When the default payout mode is "automatic" and PayPal is connected, run a
- * payout so newly-approved commissions are sent without a manual click. Returns
- * a short status string (or "" when it didn't run / nothing to pay).
+ * The effective payout mode for an affiliate: their active campaign's setting
+ * wins; otherwise the global default. Returns "automatic" | "manual".
  */
-export async function maybeAutoPayout(): Promise<string> {
+async function effectivePayoutMode(affiliateId: string, globalDefault: string): Promise<string> {
+  if (!db) return globalDefault;
+  const [row] = await db
+    .select({ config: campaigns.config })
+    .from(affiliateCampaigns)
+    .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
+    .where(and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(campaigns.status, "active")))
+    .orderBy(desc(affiliateCampaigns.createdAt))
+    .limit(1);
+  if (row) return mergeConfig(row.config).payout.mode === "automatic" ? "automatic" : "manual";
+  return globalDefault;
+}
+
+/**
+ * Pay out newly-approved commissions for affiliates whose (per-campaign, else
+ * global) payout mode is "automatic". Returns a short status string.
+ */
+export async function maybeAutoPayout(affiliateIds?: string[]): Promise<string> {
   if (!db) return "";
-  const mode = await getSetting("default_payout_mode", "manual");
-  if (mode !== "automatic") return "";
   if (!(await paypalReady())) return "";
+  const globalDefault = (await getSetting("default_payout_mode", "manual")) === "automatic" ? "automatic" : "manual";
+
+  // Candidates: the just-approved affiliates, or everyone with approved unpaid money.
+  let candidates = affiliateIds;
+  if (!candidates) {
+    const rows = await db
+      .selectDistinct({ id: commissions.affiliateId })
+      .from(commissions)
+      .where(and(eq(commissions.status, "approved"), isNull(commissions.payoutId)));
+    candidates = rows.map((r) => r.id).filter(Boolean) as string[];
+  }
+  if (!candidates.length) return "";
+
+  // Keep only those whose effective mode is automatic.
+  const autoIds: string[] = [];
+  for (const id of candidates) {
+    if ((await effectivePayoutMode(id, globalDefault)) === "automatic") autoIds.push(id);
+  }
+  if (!autoIds.length) return "";
+
   try {
-    const res = await executePayout();
+    const res = await executePayout(autoIds);
     return res.ok ? "Auto-payout sent." : "";
   } catch (e) {
     console.error("[maybeAutoPayout]", e);
@@ -946,11 +980,12 @@ export async function runPayout(): Promise<ActionResult> {
  * their minimum and has a destination. Called by runPayout (admin button) and
  * by the automatic-payout path (on approval / cron) which have their own gating.
  */
-export async function executePayout(): Promise<ActionResult> {
+export async function executePayout(scopeAffiliateIds?: string[]): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
   // Never fake a payout: without PayPal, no money can move — bail before we
   // touch any commission so nothing is ever marked paid without being sent.
   if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
+  if (scopeAffiliateIds && scopeAffiliateIds.length === 0) return { ok: false, message: "Nothing payable right now." };
 
   // Which approved affiliates clear their program minimum and have a usable
   // payout destination (Venmo phone or PayPal email, per their chosen method)?
@@ -966,7 +1001,12 @@ export async function executePayout(): Promise<ActionResult> {
     .from(commissions)
     .innerJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
     .leftJoin(programs, eq(affiliates.programId, programs.id))
-    .where(and(eq(commissions.status, "approved"), isNull(commissions.payoutId), eq(affiliates.status, "approved")))
+    .where(and(
+      eq(commissions.status, "approved"),
+      isNull(commissions.payoutId),
+      eq(affiliates.status, "approved"),
+      ...(scopeAffiliateIds ? [inArray(affiliates.id, scopeAffiliateIds)] : []),
+    ))
     .groupBy(affiliates.id, affiliates.paypalEmail, affiliates.phone, affiliates.payoutMethod, programs.payoutMinimum);
 
   const receiverOf = (r: { method: "paypal" | "venmo"; phone: string | null; paypalEmail: string | null }) =>
