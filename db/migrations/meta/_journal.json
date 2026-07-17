@@ -78,6 +78,13 @@
       "when": 1784213632276,
       "tag": "0010_phone_and_venmo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784250019107,
+      "tag": "0011_polite_blindfold",
+      "breakpoints": true
     }
   ]
 }

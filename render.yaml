@@ -55,6 +55,10 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      # Set to "true" ONLY to test with your own email — lets an affiliate's own
+      # purchases earn commission (self-referral). Leave blank/unset in production.
+      - key: ALLOW_SELF_REFERRAL
+        sync: false
 
   # Daily: mature commissions past their hold window (pending -> approved).
   - type: cron

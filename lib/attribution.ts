@@ -62,9 +62,18 @@ export async function processOrderCreated(order: any) {
     await db.update(orders).set({ financialStatus: order.financial_status }).where(eq(orders.id, orderRow.id));
   }
 
+  // Record why an order did or didn't earn a commission, so the admin sees the
+  // outcome ("attributed → DAVID15" / "self-referral blocked") instead of a
+  // silent blank. Never throws — attribution outcome must not fail the webhook.
+  const note = (status: string) =>
+    db!.update(orders).set({ attributionStatus: status }).where(eq(orders.id, orderRow.id)).catch(() => {});
+
   // 2. Only real money earns commission — the order must actually be paid.
   //    Unpaid orders are mirrored above but wait for the orders/paid webhook.
-  if (order.financial_status !== "paid") return;
+  if (order.financial_status !== "paid") {
+    await note("waiting for payment");
+    return;
+  }
 
   // 3. PRIMARY: coupon match (source of truth)
   const usedCodes: string[] = (order.discount_codes ?? []).map((d: any) => d.code?.toUpperCase()).filter(Boolean);
@@ -81,10 +90,24 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  // 4. BACKUP: link cookie → most recent click within window (last-click)
-  if (!affiliate && Array.isArray(order.note_attributes)) {
-    const visitorId = order.note_attributes.find((a: any) => a.name === "_aff_vid")?.value;
-    if (visitorId) {
+  // 4. BACKUP: referral link carried into checkout as order note attributes by
+  //    the storefront snippet. Coupon still wins when both are present, so a
+  //    sale is only ever credited once.
+  if (!affiliate) {
+    const attrs: Array<{ name?: string; value?: string }> = Array.isArray(order.note_attributes)
+      ? order.note_attributes
+      : [];
+    const refCode = attrs.find((a) => a.name === "_aff_ref")?.value?.toUpperCase();
+    const visitorId = attrs.find((a) => a.name === "_aff_vid")?.value;
+
+    // 4a. Direct ref code — works even when the click row was never logged.
+    if (refCode) {
+      affiliate = await db.query.affiliates.findFirst({ where: eq(affiliates.refCode, refCode) });
+      if (affiliate) attributedBy = "link";
+    }
+
+    // 4b. Fall back to the visitor id → most recent click within the window.
+    if (!affiliate && visitorId) {
       const prog = await getDefaultProgram();
       const windowStart = new Date(Date.now() - (prog?.cookieWindowDays ?? 30) * DAY);
       const recentClick = await db.query.clicks.findFirst({
@@ -98,18 +121,35 @@ export async function processOrderCreated(order: any) {
     }
   }
 
-  if (!affiliate || affiliate.status !== "approved") return; // no attribution
+  if (!affiliate) {
+    await note(usedCodes.length ? "coupon not linked to an affiliate" : "no affiliate code or link");
+    return;
+  }
+  if (affiliate.status !== "approved") {
+    await note(`skipped — ${affiliate.refCode} is ${affiliate.status}, not approved`);
+    return;
+  }
 
-  // 5. Fraud: block self-referral (buyer email == affiliate email)
-  if (order.email && affiliate.userId) {
+  // 5. Fraud: block self-referral (buyer email == affiliate's own email).
+  //    Set ALLOW_SELF_REFERRAL=true (env) to permit it while testing.
+  if (process.env.ALLOW_SELF_REFERRAL !== "true" && order.email && affiliate.userId) {
     const affEmail = await getUserEmail(affiliate.userId);
-    if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) return;
+    if (affEmail && affEmail.toLowerCase() === String(order.email).toLowerCase()) {
+      await note(`self-referral blocked — buyer is ${affiliate.refCode}'s own email`);
+      return;
+    }
   }
 
   // 6. Calculate + record commission
   const program = affiliate.programId ? await getProgram(affiliate.programId) : await getDefaultProgram();
-  if (!program) return;
-  if (program.newCustomerOnly && !orderRow.isNewCustomer) return;
+  if (!program) {
+    await note("no commission program configured");
+    return;
+  }
+  if (program.newCustomerOnly && !orderRow.isNewCustomer) {
+    await note("skipped — returning customer (program is new-customers-only)");
+    return;
+  }
 
   const base = Number(order.subtotal_price); // commission on subtotal, not shipping/tax
   const amount =
@@ -134,7 +174,12 @@ export async function processOrderCreated(order: any) {
     .onConflictDoNothing()
     .returning({ id: commissions.id });
 
-  if (!created) return; // already attributed — don't re-notify
+  if (!created) {
+    await note(`attributed → ${affiliate.refCode} (${attributedBy})`);
+    return; // already attributed — don't re-notify
+  }
+
+  await note(`attributed → ${affiliate.refCode} · ${order.currency} ${amount.toFixed(2)} (${attributedBy})`);
 
   await notify(
     affiliate.id,

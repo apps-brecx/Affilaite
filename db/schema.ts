@@ -170,6 +170,9 @@ export const orders = pgTable("orders", {
   discountCodesUsed: jsonb("discount_codes_used").$type<string[]>(),
   isNewCustomer: boolean("is_new_customer"),
   financialStatus: text("financial_status"),
+  // Human-readable outcome of attribution: "attributed → DAVID15" or the reason
+  // it was skipped (self-referral, not approved, no code, …). Shown in admin.
+  attributionStatus: text("attribution_status"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
