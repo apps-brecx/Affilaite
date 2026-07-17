@@ -15,6 +15,7 @@ import {
   promotions,
   commissions,
   discountCodes,
+  orders,
   payouts,
   payoutItems,
   messages,
@@ -99,7 +100,7 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
 
   let cursor: string | null = null;
   let scanned = 0;
-  let imported = 0;
+  const processedIds: string[] = [];
   // Cap the scan (most recent ~500 orders) so a large store can't run forever.
   for (let page = 0; page < 5; page++) {
     const json: any = await shopifyGraphQL<any>(query, { cursor });
@@ -110,7 +111,7 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
       scanned++;
       const codes: string[] = (o.discountCodes ?? []).map((c: string) => String(c).toUpperCase());
       if (!codes.some((c) => affiliateCodes.has(c))) continue;
-      const numericId = String(o.id).split("/").pop();
+      const numericId = String(o.id).split("/").pop()!;
       await processOrderCreated({
         id: numericId,
         admin_graphql_api_id: o.id,
@@ -126,15 +127,36 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
         customer: o.customer ? { orders_count: Number(o.customer.numberOfOrders) } : undefined,
         note_attributes: (o.customAttributes ?? []).map((a: any) => ({ name: a.key, value: a.value })),
       });
-      imported++;
+      processedIds.push(numericId);
     }
     if (!conn.pageInfo?.hasNextPage) break;
     cursor = conn.pageInfo.endCursor;
   }
 
   revalidatePath("/admin");
+  revalidatePath("/admin/affiliate-orders");
   revalidatePath("/admin/commissions");
-  return { ok: true, message: `Scanned ${scanned} recent orders · imported ${imported} affiliate order(s).` };
+
+  if (processedIds.length === 0) {
+    return { ok: true, message: `Scanned ${scanned} recent orders — none used an affiliate code.` };
+  }
+
+  // Report the outcome per order so the reason is visible immediately.
+  const outcomes = await db
+    .select({ n: orders.orderNumber, status: orders.attributionStatus })
+    .from(orders)
+    .where(inArray(orders.shopifyOrderId, processedIds));
+  const attributed = outcomes.filter((o) => o.status?.startsWith("attributed")).length;
+  const skipped = outcomes.filter((o) => !o.status?.startsWith("attributed"));
+  const reasons = skipped
+    .slice(0, 4)
+    .map((o) => `${o.n}: ${o.status ?? "not attributed"}`)
+    .join(" · ");
+  const tail = skipped.length ? ` Not attributed → ${reasons}${skipped.length > 4 ? " …" : ""}` : "";
+  return {
+    ok: true,
+    message: `Imported ${processedIds.length} affiliate order(s): ${attributed} attributed, ${skipped.length} skipped.${tail}`,
+  };
 }
 
 function revalAdmin() {
