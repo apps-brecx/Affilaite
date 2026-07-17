@@ -16,7 +16,7 @@ import {
   getRevenueSeries,
   getTopAffiliates,
   getPendingApprovals,
-  listOrders,
+  listAffiliateOrders,
 } from "@/lib/queries";
 import { formatCurrency, formatDate, relativeTime } from "@/lib/utils";
 
@@ -28,7 +28,7 @@ export default async function AdminHome() {
     getRevenueSeries(30),
     getTopAffiliates(5),
     getPendingApprovals(),
-    listOrders(),
+    listAffiliateOrders(6),
   ]);
   const revenue = series.reduce((s, p) => s + p.earnings, 0);
 
@@ -126,7 +126,12 @@ export default async function AdminHome() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {o.affiliateName ? (
-                        o.affiliateName
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{o.affiliateName}</span>
+                          {!o.commissionStatus && o.attributionStatus && (
+                            <span className="text-xs">{o.attributionStatus}</span>
+                          )}
+                        </div>
                       ) : o.attributionStatus ? (
                         <span className="text-xs">{o.attributionStatus}</span>
                       ) : (

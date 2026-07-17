@@ -30,6 +30,7 @@ import type {
   Affiliate,
   Commission,
   Order,
+  AffiliateOrder,
   Payout,
   Program,
   Group,
@@ -524,6 +525,118 @@ export async function listUnattributedAffiliateOrders(): Promise<Order[]> {
     attributionStatus: o.attributionStatus ?? null,
     createdAt: new Date(o.createdAt ?? Date.now()).toISOString(),
   }));
+}
+
+/**
+ * Every affiliate order with the affiliate resolved — from a real commission if
+ * one exists, otherwise from the affiliate discount code the order used. So even
+ * a self-referral-blocked or not-yet-approved order shows WHO the affiliate is,
+ * the reason it didn't pay, and (when attributed) the commission.
+ */
+export async function listAffiliateOrders(limit = 100): Promise<AffiliateOrder[]> {
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(orders)
+    .where(
+      or(
+        sql`exists (select 1 from ${commissions} where ${commissions.orderId} = ${orders.id})`,
+        sql`exists (
+          select 1
+          from jsonb_array_elements_text(coalesce(${orders.discountCodesUsed}, '[]'::jsonb)) as dc(code)
+          join discount_codes dcs on upper(dcs.code) = upper(dc.code)
+          where dcs.affiliate_id is not null
+        )`,
+      ),
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(limit);
+  const ids = rows.map((o) => o.id);
+
+  // Map every affiliate discount code → its affiliate (name + code).
+  const codeRows = await db
+    .select({ code: discountCodes.code, affId: discountCodes.affiliateId, name: users.name, email: users.email })
+    .from(discountCodes)
+    .leftJoin(affiliates, eq(discountCodes.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(isNotNull(discountCodes.affiliateId));
+  const codeMap = new Map<string, { affiliateId: string; name: string; code: string }>();
+  const affById = new Map<string, { name: string; code: string }>();
+  for (const c of codeRows) {
+    if (!c.affId) continue;
+    const name = c.name ?? c.email ?? "Unknown";
+    codeMap.set(c.code.toUpperCase(), { affiliateId: c.affId, name, code: c.code });
+    if (!affById.has(c.affId)) affById.set(c.affId, { name, code: c.code });
+  }
+
+  // Commissions (positive) tied to these orders — the source of a paid attribution.
+  const commMap = new Map<string, { affiliateId: string | null; name: string; amount: number; status: string }>();
+  if (ids.length) {
+    const commRows = await db
+      .select({
+        orderId: commissions.orderId,
+        affiliateId: commissions.affiliateId,
+        amount: commissions.amount,
+        status: commissions.status,
+        name: users.name,
+        email: users.email,
+      })
+      .from(commissions)
+      .leftJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
+      .leftJoin(users, eq(affiliates.userId, users.id))
+      .where(and(inArray(commissions.orderId, ids), sql`${commissions.amount} >= 0`));
+    for (const c of commRows) {
+      if (c.orderId && !commMap.has(c.orderId)) {
+        commMap.set(c.orderId, {
+          affiliateId: c.affiliateId,
+          name: c.name ?? c.email ?? "Unknown",
+          amount: num(c.amount),
+          status: c.status,
+        });
+      }
+    }
+  }
+
+  return rows.map((o) => {
+    const comm = commMap.get(o.id);
+    let affiliateId: string | null = null;
+    let affiliateName: string | null = null;
+    let affiliateCode: string | null = null;
+
+    if (comm) {
+      affiliateId = comm.affiliateId;
+      affiliateName = comm.name;
+      affiliateCode = (comm.affiliateId && affById.get(comm.affiliateId)?.code) || null;
+    } else {
+      // No commission — resolve the affiliate from the code the order used.
+      for (const code of (o.discountCodesUsed ?? []).map((c) => c.toUpperCase())) {
+        const m = codeMap.get(code);
+        if (m) {
+          affiliateId = m.affiliateId;
+          affiliateName = m.name;
+          affiliateCode = m.code;
+          break;
+        }
+      }
+    }
+
+    return {
+      id: o.id,
+      shopifyOrderId: o.shopifyOrderId,
+      orderNumber: o.orderNumber ?? "—",
+      customerEmail: o.customerEmail ?? "",
+      total: num(o.total),
+      currency: o.currency ?? "USD",
+      financialStatus: o.financialStatus ?? "paid",
+      affiliateId,
+      affiliateName,
+      affiliateCode,
+      attributionStatus: o.attributionStatus ?? null,
+      commissionAmount: comm ? comm.amount : null,
+      commissionStatus: comm ? comm.status : null,
+      createdAt: new Date(o.createdAt ?? Date.now()).toISOString(),
+    };
+  });
 }
 
 // ---------- Payouts ----------

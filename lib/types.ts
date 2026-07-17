@@ -109,6 +109,24 @@ export interface Order {
   createdAt: string;
 }
 
+/** An order tied to an affiliate — by a real commission, or by the code it used. */
+export interface AffiliateOrder {
+  id: string;
+  shopifyOrderId: string;
+  orderNumber: string;
+  customerEmail: string;
+  total: number;
+  currency: string;
+  financialStatus: string;
+  affiliateId: string | null;
+  affiliateName: string | null;
+  affiliateCode: string | null;
+  attributionStatus: string | null;
+  commissionAmount: number | null;
+  commissionStatus: string | null;
+  createdAt: string;
+}
+
 export interface Commission {
   id: string;
   orderNumber: string;
