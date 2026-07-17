@@ -945,9 +945,12 @@ export async function listAssets(): Promise<Asset[]> {
 export async function getEarningsSeries(days = 30, affiliateId?: string): Promise<TimePoint[]> {
   if (!db) return [];
   const since = new Date(Date.now() - days * DAY);
+  // Exclude reversed/rejected commissions and negative adjustment rows — a
+  // cancelled or refunded order is not affiliate-driven revenue.
+  const live = sql`${commissions.status} not in ('reversed','rejected') and ${commissions.amount} >= 0`;
   const where = affiliateId
-    ? and(gte(commissions.createdAt, since), eq(commissions.affiliateId, affiliateId))
-    : gte(commissions.createdAt, since);
+    ? and(gte(commissions.createdAt, since), eq(commissions.affiliateId, affiliateId), live)
+    : and(gte(commissions.createdAt, since), live);
   const rows = await db
     .select({
       day: sql<string>`date_trunc('day', ${commissions.createdAt})`,
@@ -988,17 +991,24 @@ export async function getAdminKpis(): Promise<AdminKpis> {
   const prevSince = new Date(Date.now() - 60 * DAY);
   const pct = (a: number, b: number) => (b > 0 ? Math.round(((a - b) / b) * 100) : a > 0 ? 100 : 0);
 
+  // Revenue from orders that earned a LIVE commission (not reversed/cancelled).
+  // EXISTS (not a join) so each order's subtotal is counted once, and a reversed
+  // commission drops the order out entirely.
+  const liveCommission = sql`exists (
+    select 1 from ${commissions}
+    where ${commissions.orderId} = ${orders.id}
+      and ${commissions.status} not in ('reversed','rejected')
+      and ${commissions.amount} >= 0
+  )`;
   const [rev] = await db
     .select({ total: sql<string>`coalesce(sum(${orders.subtotal}),0)` })
     .from(orders)
-    .innerJoin(commissions, eq(commissions.orderId, orders.id))
-    .where(gte(orders.createdAt, since));
+    .where(and(gte(orders.createdAt, since), liveCommission));
   // Prior 30-day window (30–60 days ago), to compute a real trend.
   const [revPrev] = await db
     .select({ total: sql<string>`coalesce(sum(${orders.subtotal}),0)` })
     .from(orders)
-    .innerJoin(commissions, eq(commissions.orderId, orders.id))
-    .where(and(gte(orders.createdAt, prevSince), lt(orders.createdAt, since)));
+    .where(and(gte(orders.createdAt, prevSince), lt(orders.createdAt, since), liveCommission));
 
   const [active] = await db
     .select({ cnt: sql<number>`count(*)` })
