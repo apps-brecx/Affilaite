@@ -123,14 +123,21 @@ export default async function AdminHome() {
                       {o.financialStatus === "refunded" && (
                         <Badge variant="danger" className="ml-2">refunded</Badge>
                       )}
+                      {o.financialStatus === "cancelled" && (
+                        <Badge variant="warning" className="ml-2">cancelled</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {o.affiliateName ? (
                         <div className="flex flex-col">
                           <span className="font-medium text-foreground">{o.affiliateName}</span>
-                          {!o.commissionStatus && o.attributionStatus && (
+                          {o.commissionStatus ? (
+                            <span className="text-xs">
+                              {o.commissionStatus} · {formatCurrency(o.commissionAmount ?? 0)}
+                            </span>
+                          ) : o.attributionStatus ? (
                             <span className="text-xs">{o.attributionStatus}</span>
-                          )}
+                          ) : null}
                         </div>
                       ) : o.attributionStatus ? (
                         <span className="text-xs">{o.attributionStatus}</span>

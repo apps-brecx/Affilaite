@@ -43,7 +43,7 @@ import { normalizeAddress, composeAddress } from "@/lib/address";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
-import { processOrderCreated } from "@/lib/attribution";
+import { processOrderCreated, processCancelledOrder } from "@/lib/attribution";
 import { createSampleDraftOrder } from "@/lib/samples";
 import { getEarningsSeries } from "@/lib/queries";
 import { getCatalogItemIds } from "@/lib/products";
@@ -88,7 +88,7 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
       orders(first: 100, after: $cursor, sortKey: CREATED_AT, reverse: true) {
         pageInfo { hasNextPage endCursor }
         edges { node {
-          id name email test sourceName displayFinancialStatus currencyCode
+          id name email test sourceName displayFinancialStatus currencyCode cancelledAt
           subtotalPriceSet { shopMoney { amount } }
           totalPriceSet { shopMoney { amount } }
           discountCodes
@@ -112,7 +112,7 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
       const codes: string[] = (o.discountCodes ?? []).map((c: string) => String(c).toUpperCase());
       if (!codes.some((c) => affiliateCodes.has(c))) continue;
       const numericId = String(o.id).split("/").pop()!;
-      await processOrderCreated({
+      const payload = {
         id: numericId,
         admin_graphql_api_id: o.id,
         name: o.name,
@@ -126,7 +126,10 @@ export async function importAffiliateOrders(): Promise<ActionResult> {
         discount_codes: codes.map((code) => ({ code })),
         customer: o.customer ? { orders_count: Number(o.customer.numberOfOrders) } : undefined,
         note_attributes: (o.customAttributes ?? []).map((a: any) => ({ name: a.key, value: a.value })),
-      });
+      };
+      await processOrderCreated(payload);
+      // Cancelled in Shopify → reverse the commission and mark it cancelled.
+      if (o.cancelledAt) await processCancelledOrder(payload);
       processedIds.push(numericId);
     }
     if (!conn.pageInfo?.hasNextPage) break;

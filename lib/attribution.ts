@@ -407,12 +407,21 @@ export async function processRefund(refund: any) {
   await applyClawback(orderRow.id, fraction);
 }
 
-/** orders/cancelled → treat as a full clawback (nothing was truly sold). */
+/** orders/cancelled → treat as a full clawback (nothing was truly sold) and mark
+ *  the order cancelled so it's visible as such in the admin. */
 export async function processCancelledOrder(order: any) {
   if (!db) return;
   const orderRow = await db.query.orders.findFirst({
     where: eq(orders.shopifyOrderId, String(order.id)),
   });
   if (!orderRow) return;
+  const had = await db.query.commissions.findFirst({ where: eq(commissions.orderId, orderRow.id) });
   await applyClawback(orderRow.id, 1);
+  await db
+    .update(orders)
+    .set({
+      financialStatus: "cancelled",
+      attributionStatus: had ? "cancelled — commission reversed" : "cancelled — no commission",
+    })
+    .where(eq(orders.id, orderRow.id));
 }
