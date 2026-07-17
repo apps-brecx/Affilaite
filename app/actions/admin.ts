@@ -422,6 +422,7 @@ const programSchema = z.object({
   commissionValue: z.coerce.number().positive(),
   cookieWindowDays: z.coerce.number().int().positive().default(30),
   holdDays: z.coerce.number().int().nonnegative().default(30),
+  payoutMinimum: z.coerce.number().nonnegative().default(0),
   newCustomerOnly: z.coerce.boolean().default(false),
 });
 
@@ -438,11 +439,35 @@ export async function createProgram(input: unknown): Promise<ActionResult> {
     commissionValue: d.commissionValue.toString(),
     cookieWindowDays: d.cookieWindowDays,
     holdDays: d.holdDays,
+    payoutMinimum: d.payoutMinimum.toString(),
     newCustomerOnly: d.newCustomerOnly,
     isDefault: Number(count[0]?.c ?? 0) === 0,
   });
   revalidatePath("/admin/programs");
   return { ok: true, message: "Program created." };
+}
+
+export async function updateProgram(id: string, input: unknown): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = programSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+  await db
+    .update(programs)
+    .set({
+      name: d.name,
+      commissionType: d.commissionType,
+      commissionValue: d.commissionValue.toString(),
+      cookieWindowDays: d.cookieWindowDays,
+      holdDays: d.holdDays,
+      payoutMinimum: d.payoutMinimum.toString(),
+      newCustomerOnly: d.newCustomerOnly,
+    })
+    .where(eq(programs.id, id));
+  revalidatePath("/admin/programs");
+  revalidatePath("/admin/payouts");
+  return { ok: true, message: "Program updated." };
 }
 
 export async function setDefaultProgram(id: string): Promise<ActionResult> {

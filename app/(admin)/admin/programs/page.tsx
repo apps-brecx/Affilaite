@@ -2,7 +2,7 @@ import { Star, Clock, Calendar, Percent, DollarSign, Users } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ProgramForm, SetDefaultButton } from "@/components/admin/program-form";
+import { ProgramForm, SetDefaultButton, EditProgramButton } from "@/components/admin/program-form";
 import { CreateReveal } from "@/components/admin/create-reveal";
 import { listPrograms } from "@/lib/queries";
 import { formatCurrency } from "@/lib/utils";
@@ -54,11 +54,10 @@ export default async function ProgramsPage() {
                 <Meta icon={DollarSign} label="Min payout" value={formatCurrency(p.payoutMinimum)} />
                 <Meta icon={Percent} label="New customer" value={p.newCustomerOnly ? "Only" : "All"} />
               </div>
-              {!p.isDefault && (
-                <div className="flex gap-2">
-                  <SetDefaultButton id={p.id} />
-                </div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                <SetDefaultButton id={p.id} />
+              </div>
+              <EditProgramButton program={p} />
             </CardContent>
           </Card>
         ))}
