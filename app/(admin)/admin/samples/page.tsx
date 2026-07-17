@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SampleActions } from "@/components/admin/sample-actions";
 import { SamplesCuration, SamplesBanner } from "@/components/admin/samples-settings";
-import { CreateReveal } from "@/components/admin/create-reveal";
+import { CreateReveal, RevealGroup } from "@/components/admin/create-reveal";
 import { requireAdmin } from "@/lib/session";
 import { listSampleRequests, getBanner } from "@/lib/queries";
 import { getStoreProducts, getCatalogConfig, applyCatalogConfig, getSamplesConfig } from "@/lib/products";
@@ -92,15 +92,15 @@ export default async function AdminSamplesPage() {
         description="Review affiliate sample requests. Approving creates a Shopify draft order; once you fulfill it in Shopify it's marked shipped automatically."
       />
 
-      {/* Settings collapsed behind buttons */}
-      <div className="flex flex-wrap gap-2">
+      {/* Settings collapsed behind buttons — one open at a time, click away closes */}
+      <RevealGroup className="flex flex-wrap gap-2">
         <CreateReveal label="See catalog">
           <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} shown={samplesConfig.shown} /></div>
         </CreateReveal>
         <CreateReveal label="Sample banner">
           <div className="max-w-lg pt-2"><SamplesBanner banner={banner} /></div>
         </CreateReveal>
-      </div>
+      </RevealGroup>
 
       {/* Awaiting review — the default view */}
       <Card>

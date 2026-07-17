@@ -1,5 +1,5 @@
 import { approveMaturedCommissions } from "@/lib/commissions";
-import { reconcileProcessingPayouts } from "@/app/actions/admin";
+import { reconcileProcessingPayouts, maybeAutoPayout } from "@/app/actions/admin";
 import { paypalReady } from "@/lib/integrations";
 
 // Render Cron hits this daily to mature commissions past their hold window and
@@ -15,7 +15,9 @@ export async function GET(req: Request) {
     return new Response("unauthorized", { status: 401 });
   }
   const result = await approveMaturedCommissions();
+  // In automatic mode, pay out the freshly-matured commissions.
+  const autoPaid = await maybeAutoPayout().catch(() => "");
   // Roll any still-"processing" payout batches forward from PayPal's state.
   if (await paypalReady()) await reconcileProcessingPayouts().catch(() => {});
-  return Response.json({ ok: true, ...result });
+  return Response.json({ ok: true, ...result, autoPaid: autoPaid || null });
 }

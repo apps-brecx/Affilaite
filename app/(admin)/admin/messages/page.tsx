@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { BroadcastComposer } from "@/components/admin/broadcast-composer";
 import { GroupForm } from "@/components/admin/group-form";
-import { CreateReveal } from "@/components/admin/create-reveal";
+import { CreateReveal, RevealGroup } from "@/components/admin/create-reveal";
 import { listMessages, listAffiliates, listGroups } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 
@@ -28,8 +28,8 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
     <div className="space-y-8">
       <PageHeader title="Messages & Groups" description="Message your whole community, a group, or a single affiliate — and manage your groups." />
 
-      {/* Everything behind its own button — nothing open by default */}
-      <div className="flex flex-wrap gap-2">
+      {/* Everything behind its own button — one open at a time, click away closes */}
+      <RevealGroup className="flex flex-wrap gap-2">
         <CreateReveal label="Compose broadcast" defaultOpen={!!target}>
           <div className="pt-2">
             <BroadcastComposer audiences={audiences} defaultAffiliate={target ? { id: target.id, name: target.name } : undefined} />
@@ -68,7 +68,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
             </CardContent>
           </Card>
         </CreateReveal>
-      </div>
+      </RevealGroup>
 
       {/* Groups — the default content of this tab */}
       <section className="space-y-4">

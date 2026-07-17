@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, RotateCcw, Download, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -148,14 +149,27 @@ export function CommissionsTable({ commissions }: { commissions: Commission[] })
                   />
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-2.5">
-                    <Avatar name={c.affiliateName} size={30} />
-                    <span className="font-medium">{c.affiliateName}</span>
-                  </div>
+                  {c.affiliateId ? (
+                    <Link href={`/admin/affiliates/${c.affiliateId}`} className="flex items-center gap-2.5 hover:text-primary">
+                      <Avatar name={c.affiliateName} size={30} />
+                      <span className="font-medium">{c.affiliateName}</span>
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={c.affiliateName} size={30} />
+                      <span className="font-medium">{c.affiliateName}</span>
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="font-medium">
                   <span className="inline-flex items-center gap-1.5">
-                    {c.orderNumber}
+                    {c.orderNumber && c.orderNumber !== "—" ? (
+                      <Link href={`/admin/affiliate-orders?q=${encodeURIComponent(c.orderNumber)}`} className="hover:text-primary hover:underline">
+                        {c.orderNumber}
+                      </Link>
+                    ) : (
+                      c.orderNumber
+                    )}
                     {c.flagged && (
                       <span title={c.flagReason ?? "Flagged for review"} className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium text-danger">
                         <AlertTriangle className="size-3" /> Review

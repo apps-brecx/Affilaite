@@ -45,7 +45,7 @@ import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/inte
 import { shopifyGraphQL } from "@/lib/shopify";
 import { processOrderCreated, processCancelledOrder } from "@/lib/attribution";
 import { createSampleDraftOrder } from "@/lib/samples";
-import { getEarningsSeries } from "@/lib/queries";
+import { getEarningsSeries, getSetting } from "@/lib/queries";
 import { getCatalogItemIds } from "@/lib/products";
 import { notify } from "@/lib/notifications";
 import type { TimePoint } from "@/lib/types";
@@ -342,8 +342,29 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
       "/performance",
     );
   }
+  // Automatic payout mode: approved money goes out right away.
+  const paid = await maybeAutoPayout();
   revalAdmin();
-  return { ok: true, message: `${rows.length} commission(s) approved.` };
+  return { ok: true, message: `${rows.length} commission(s) approved.${paid ? " " + paid : ""}` };
+}
+
+/**
+ * When the default payout mode is "automatic" and PayPal is connected, run a
+ * payout so newly-approved commissions are sent without a manual click. Returns
+ * a short status string (or "" when it didn't run / nothing to pay).
+ */
+export async function maybeAutoPayout(): Promise<string> {
+  if (!db) return "";
+  const mode = await getSetting("default_payout_mode", "manual");
+  if (mode !== "automatic") return "";
+  if (!(await paypalReady())) return "";
+  try {
+    const res = await executePayout();
+    return res.ok ? "Auto-payout sent." : "";
+  } catch (e) {
+    console.error("[maybeAutoPayout]", e);
+    return "";
+  }
 }
 
 export async function reverseCommissions(ids: string[]): Promise<ActionResult> {
@@ -917,6 +938,15 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
 
 export async function runPayout(): Promise<ActionResult> {
   await assertAdmin();
+  return executePayout();
+}
+
+/**
+ * The payout engine, without auth — pays every approved affiliate who clears
+ * their minimum and has a destination. Called by runPayout (admin button) and
+ * by the automatic-payout path (on approval / cron) which have their own gating.
+ */
+export async function executePayout(): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
   // Never fake a payout: without PayPal, no money can move — bail before we
   // touch any commission so nothing is ever marked paid without being sent.
