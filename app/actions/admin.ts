@@ -1029,11 +1029,21 @@ export async function runPayout(): Promise<ActionResult> {
 }
 
 /**
+ * Manual "Pay now": pays every approved affiliate right away, ignoring the
+ * payout minimum (the admin is explicitly choosing to pay). Only the minimum is
+ * bypassed — a valid payout destination and PayPal are still required.
+ */
+export async function payNowAll(): Promise<ActionResult> {
+  await assertAdmin();
+  return executePayout(undefined, { ignoreMinimum: true });
+}
+
+/**
  * The payout engine, without auth — pays every approved affiliate who clears
  * their minimum and has a destination. Called by runPayout (admin button) and
  * by the automatic-payout path (on approval / cron) which have their own gating.
  */
-export async function executePayout(scopeAffiliateIds?: string[]): Promise<ActionResult> {
+export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignoreMinimum?: boolean }): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
   // Never fake a payout: without PayPal, no money can move — bail before we
   // touch any commission so nothing is ever marked paid without being sent.
@@ -1065,9 +1075,13 @@ export async function executePayout(scopeAffiliateIds?: string[]): Promise<Actio
   const receiverOf = (r: { method: "paypal" | "venmo"; phone: string | null; paypalEmail: string | null }) =>
     r.method === "venmo" ? r.phone : r.paypalEmail;
   const payable = rows.filter(
-    (r) => receiverOf(r) && Number(r.total) >= Number(r.minimum ?? 0) && Number(r.total) > 0,
+    (r) => receiverOf(r) && (opts?.ignoreMinimum || Number(r.total) >= Number(r.minimum ?? 0)) && Number(r.total) > 0,
   );
-  if (payable.length === 0) return { ok: false, message: "Nothing payable right now." };
+  if (payable.length === 0) {
+    // Distinguish "held by the minimum" from "genuinely nothing" so the admin knows.
+    const heldByMin = rows.some((r) => receiverOf(r) && Number(r.total) > 0);
+    return { ok: false, message: heldByMin ? "Everyone approved is under their payout minimum. Use “Pay now” to pay anyway, or lower the minimum." : "Nothing payable right now." };
+  }
 
   const methodFor = new Map(
     payable.map((r) => [r.affiliateId, { method: r.method, receiver: receiverOf(r)! }] as const),
