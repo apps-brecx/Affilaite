@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RankBars } from "@/components/charts/charts";
 import { EarningsPanel } from "@/components/affiliate/earnings-panel";
 import { ApprovalQueue } from "@/components/admin/approval-queue";
+import { ImportOrdersButton } from "@/components/admin/import-orders-button";
 import { getRevenueRange } from "@/app/actions/admin";
 import {
   getAdminKpis,
@@ -89,16 +90,20 @@ export default async function AdminHome() {
         {/* Recent orders */}
         <Card className="lg:col-span-3">
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle>Recent attributed orders</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/commissions">View ledger</Link>
-            </Button>
+            <CardTitle>Affiliate orders</CardTitle>
+            <div className="flex items-center gap-1">
+              <ImportOrdersButton />
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/admin/commissions">View ledger</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className={orders.length ? "px-0 pb-2" : ""}>
             {orders.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <ShoppingBag className="size-6" />
-                No attributed orders yet. They'll appear here as sales come in from Shopify.
+                No affiliate orders yet — only orders that used an affiliate code or link show here.
+                Use “Import past orders” to pull in sales from before webhooks were connected.
               </div>
             ) : (
             <Table>

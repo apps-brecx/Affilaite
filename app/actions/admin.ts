@@ -42,6 +42,7 @@ import { normalizeAddress, composeAddress } from "@/lib/address";
 import { defaultConfig } from "@/lib/campaign-config";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
+import { processOrderCreated } from "@/lib/attribution";
 import { createSampleDraftOrder } from "@/lib/samples";
 import { getEarningsSeries } from "@/lib/queries";
 import { getCatalogItemIds } from "@/lib/products";
@@ -62,6 +63,78 @@ export type ActionResult = { ok: boolean; message: string };
 async function assertAdmin() {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") throw new Error("Unauthorized");
+}
+
+/**
+ * Backfill: pull recent orders from Shopify and run any that used an affiliate
+ * discount code through attribution. Idempotent (order mirror + commission are
+ * both idempotent), so it's safe to run repeatedly. Use it to capture affiliate
+ * sales that happened before the Shopify webhook was live.
+ */
+export async function importAffiliateOrders(): Promise<ActionResult> {
+  await assertAdmin();
+  if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
+
+  const codeRows = await db
+    .select({ code: discountCodes.code })
+    .from(discountCodes)
+    .where(isNotNull(discountCodes.affiliateId));
+  const affiliateCodes = new Set(codeRows.map((c) => c.code.toUpperCase()));
+  if (affiliateCodes.size === 0) return { ok: false, message: "No affiliate discount codes exist yet." };
+
+  const query = `
+    query($cursor: String) {
+      orders(first: 100, after: $cursor, sortKey: CREATED_AT, reverse: true) {
+        pageInfo { hasNextPage endCursor }
+        edges { node {
+          id name email test sourceName displayFinancialStatus currencyCode
+          subtotalPriceSet { shopMoney { amount } }
+          totalPriceSet { shopMoney { amount } }
+          discountCodes
+          customer { numberOfOrders }
+          customAttributes { key value }
+        } }
+      }
+    }`;
+
+  let cursor: string | null = null;
+  let scanned = 0;
+  let imported = 0;
+  // Cap the scan (most recent ~500 orders) so a large store can't run forever.
+  for (let page = 0; page < 5; page++) {
+    const json: any = await shopifyGraphQL<any>(query, { cursor });
+    const conn: any = json?.data?.orders;
+    if (!conn) break;
+    for (const edge of conn.edges ?? []) {
+      const o = edge.node;
+      scanned++;
+      const codes: string[] = (o.discountCodes ?? []).map((c: string) => String(c).toUpperCase());
+      if (!codes.some((c) => affiliateCodes.has(c))) continue;
+      const numericId = String(o.id).split("/").pop();
+      await processOrderCreated({
+        id: numericId,
+        admin_graphql_api_id: o.id,
+        name: o.name,
+        email: o.email,
+        test: o.test,
+        source_name: o.sourceName,
+        financial_status: String(o.displayFinancialStatus ?? "").toLowerCase(),
+        currency: o.currencyCode,
+        subtotal_price: o.subtotalPriceSet?.shopMoney?.amount,
+        total_price: o.totalPriceSet?.shopMoney?.amount,
+        discount_codes: codes.map((code) => ({ code })),
+        customer: o.customer ? { orders_count: Number(o.customer.numberOfOrders) } : undefined,
+        note_attributes: (o.customAttributes ?? []).map((a: any) => ({ name: a.key, value: a.value })),
+      });
+      imported++;
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/commissions");
+  return { ok: true, message: `Scanned ${scanned} recent orders · imported ${imported} affiliate order(s).` };
 }
 
 function revalAdmin() {

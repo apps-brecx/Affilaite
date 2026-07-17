@@ -1,7 +1,7 @@
 // lib/queries.ts — the data-access seam. Real Drizzle queries against Postgres.
 // Everything reflects the database; when there's no data, callers get empty
 // results and the UI shows honest empty states. No fabricated numbers.
-import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { db, isDbConfigured } from "@/db";
 import {
   affiliates,
@@ -433,28 +433,54 @@ export const getAffiliateSummary = (a: Affiliate) => affiliateSummary(a);
 
 export async function listOrders(): Promise<Order[]> {
   if (!db) return [];
+  // Affiliate orders only — never the store's ordinary Shopify orders. An order
+  // counts as an affiliate order if it earned a commission OR it used a discount
+  // code that belongs to an affiliate (so self-referral / not-yet-approved orders
+  // still surface, with their reason). The store's own promo/sample orders drop out.
   const rows = await db
-    .select({ o: orders, user: users })
+    .select()
     .from(orders)
-    .leftJoin(commissions, eq(commissions.orderId, orders.id))
-    .leftJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
-    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(
+      or(
+        sql`exists (select 1 from ${commissions} where ${commissions.orderId} = ${orders.id})`,
+        sql`exists (
+          select 1
+          from jsonb_array_elements_text(coalesce(${orders.discountCodesUsed}, '[]'::jsonb)) as dc(code)
+          join discount_codes dcs on upper(dcs.code) = upper(dc.code)
+          where dcs.affiliate_id is not null
+        )`,
+      ),
+    )
     .orderBy(desc(orders.createdAt))
     .limit(50);
-  return rows.map((r) => ({
-    id: r.o.id,
-    shopifyOrderId: r.o.shopifyOrderId,
-    orderNumber: r.o.orderNumber ?? "—",
-    customerEmail: r.o.customerEmail ?? "",
-    subtotal: num(r.o.subtotal),
-    total: num(r.o.total),
-    currency: r.o.currency ?? "USD",
-    discountCodesUsed: r.o.discountCodesUsed ?? [],
-    isNewCustomer: Boolean(r.o.isNewCustomer),
-    financialStatus: r.o.financialStatus ?? "paid",
-    affiliateName: r.user?.name ?? null,
-    attributionStatus: r.o.attributionStatus ?? null,
-    createdAt: new Date(r.o.createdAt ?? Date.now()).toISOString(),
+
+  // Attach the attributed affiliate name (positive commission) without join fan-out.
+  const ids = rows.map((o) => o.id);
+  const nameByOrder = new Map<string, string>();
+  if (ids.length) {
+    const attr = await db
+      .select({ orderId: commissions.orderId, name: users.name, email: users.email })
+      .from(commissions)
+      .leftJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
+      .leftJoin(users, eq(affiliates.userId, users.id))
+      .where(and(inArray(commissions.orderId, ids), sql`${commissions.amount} >= 0`));
+    for (const a of attr) if (a.orderId) nameByOrder.set(a.orderId, a.name ?? a.email ?? "");
+  }
+
+  return rows.map((o) => ({
+    id: o.id,
+    shopifyOrderId: o.shopifyOrderId,
+    orderNumber: o.orderNumber ?? "—",
+    customerEmail: o.customerEmail ?? "",
+    subtotal: num(o.subtotal),
+    total: num(o.total),
+    currency: o.currency ?? "USD",
+    discountCodesUsed: o.discountCodesUsed ?? [],
+    isNewCustomer: Boolean(o.isNewCustomer),
+    financialStatus: o.financialStatus ?? "paid",
+    affiliateName: nameByOrder.get(o.id) || null,
+    attributionStatus: o.attributionStatus ?? null,
+    createdAt: new Date(o.createdAt ?? Date.now()).toISOString(),
   }));
 }
 
