@@ -3,6 +3,27 @@ import { db } from "@/db";
 import { orders, commissions, discountCodes, affiliates, programs, clicks, users } from "@/db/schema";
 import { eq, inArray, gte, desc, and } from "drizzle-orm";
 import { notify } from "./notifications";
+import { shopifyGraphQL } from "./shopify";
+
+/**
+ * Best-effort: tag the order in Shopify so affiliate sales are trackable there.
+ * Adds `affiliate:<CODE>` and `source:sipfluence` tags (searchable/filterable in
+ * the Shopify admin). Needs the write_orders scope on the Admin API token; if it
+ * isn't granted, this logs and moves on — it never fails attribution.
+ */
+async function tagOrderInShopify(order: any, refCode: string) {
+  try {
+    const id = order.admin_graphql_api_id ?? `gid://shopify/Order/${order.id}`;
+    await shopifyGraphQL(
+      `mutation affiliateTag($id: ID!, $tags: [String!]!) {
+        tagsAdd(id: $id, tags: $tags) { userErrors { message } }
+      }`,
+      { id, tags: [`affiliate:${refCode}`, "source:sipfluence"] },
+    );
+  } catch (e) {
+    console.error("[attribution] could not tag order in Shopify (needs write_orders scope?)", e);
+  }
+}
 
 const DAY = 864e5;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -180,6 +201,9 @@ export async function processOrderCreated(order: any) {
   }
 
   await note(`attributed → ${affiliate.refCode} · ${order.currency} ${amount.toFixed(2)} (${attributedBy})`);
+
+  // Track the affiliate sale back in Shopify so it's visible/filterable there.
+  await tagOrderInShopify(order, affiliate.refCode);
 
   await notify(
     affiliate.id,

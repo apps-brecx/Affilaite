@@ -55,6 +55,11 @@ export async function GET(req: Request) {
   if (ref) {
     dest.searchParams.set("ref", ref);
     dest.searchParams.set("aff_vid", vid);
+    // UTM tags so Shopify's own Conversion details attribute the visit to the
+    // affiliate program (shows "sipfluence" as the source instead of "direct").
+    dest.searchParams.set("utm_source", "sipfluence");
+    dest.searchParams.set("utm_medium", "affiliate");
+    dest.searchParams.set("utm_campaign", ref);
   }
 
   return Response.redirect(dest.toString(), 302);
