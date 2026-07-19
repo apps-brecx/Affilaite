@@ -11,6 +11,21 @@ import { setAffiliateStatus } from "@/app/actions/admin";
 import { relativeTime } from "@/lib/utils";
 import type { Affiliate } from "@/lib/types";
 
+/** A quick 0–100 quality signal to help triage applicants at a glance. */
+function scoreApplicant(a: Affiliate): { score: number; tone: "high" | "mid" | "low" } {
+  let s = 40;
+  const size = (a.audienceSize ?? "").toLowerCase();
+  if (/1m|500k|100k\+|over/.test(size)) s += 35;
+  else if (/50k|100k/.test(size)) s += 25;
+  else if (/10k|25k/.test(size)) s += 15;
+  if (a.channel) s += 5;
+  const links = Object.values(a.socialLinks ?? {}).filter(Boolean).length;
+  s += Math.min(15, links * 5);
+  if (a.companyName) s += 5;
+  s = Math.min(100, s);
+  return { score: s, tone: s >= 70 ? "high" : s >= 50 ? "mid" : "low" };
+}
+
 export function ApprovalQueue({ pending: queue }: { pending: Affiliate[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -39,9 +54,14 @@ export function ApprovalQueue({ pending: queue }: { pending: Affiliate[] }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{a.name}</p>
             <p className="truncate text-xs text-muted-foreground">
-              {a.companyName ?? a.email} · applied {relativeTime(a.joinedAt)}
+              {[a.channel, a.audienceSize].filter(Boolean).join(" · ") || a.companyName || a.email} · {relativeTime(a.joinedAt)}
             </p>
           </div>
+          {(() => {
+            const { score, tone } = scoreApplicant(a);
+            const cls = tone === "high" ? "bg-success-soft text-success" : tone === "mid" ? "bg-warning-soft text-warning" : "bg-muted text-muted-foreground";
+            return <span title="Applicant quality score" className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${cls}`}>{score}</span>;
+          })()}
           <div className="flex gap-1.5">
             {busy === a.id ? (
               <Loader2 className="size-4 animate-spin text-muted-foreground" />

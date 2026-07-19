@@ -74,6 +74,8 @@ export interface Affiliate {
   country: string | null;
   samplesBanned: boolean;
   companyName: string | null;
+  channel: string | null;
+  audienceSize: string | null;
   programId: string;
   programName: string;
   payoutMinimum: number;
