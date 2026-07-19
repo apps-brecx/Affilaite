@@ -55,14 +55,19 @@ export function renderTemplate(
 }
 
 /** Wrap a plain-text/markdown-ish body in a simple branded HTML shell. */
-export function wrapEmail(body: string) {
+export function wrapEmail(body: string, cta?: { text: string; url: string }) {
   const html = body
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px;line-height:1.6;color:#1a1a17">${p.replace(/\n/g, "<br/>")}</p>`)
     .join("");
+  const button =
+    cta?.text && cta?.url
+      ? `<a href="${cta.url}" style="display:inline-block;margin-top:8px;padding:12px 26px;background:#FF5C9E;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:600">${cta.text}</a>`
+      : "";
   return `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#FFF7F1">
     <div style="font-size:22px;font-weight:700;color:#431431;margin-bottom:20px">Sip<span style="color:#FF5C9E">fluence</span></div>
     ${html}
+    ${button}
   </div>`;
 }
 
@@ -70,12 +75,13 @@ export async function sendBroadcast(
   recipients: { email: string; name?: string; code?: string; earnings?: string; link?: string }[],
   subject: string,
   body: string,
+  cta?: { text: string; url: string },
 ) {
   let sent = 0;
   let failed = 0;
   for (const r of recipients) {
     try {
-      await sendEmail(r.email, subject, `<div>${renderTemplate(body, r)}</div>`);
+      await sendEmail(r.email, subject, wrapEmail(renderTemplate(body, r), cta));
       sent++;
     } catch {
       failed++;

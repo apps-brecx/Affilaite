@@ -11,6 +11,7 @@ import {
   users,
   programs,
   groups,
+  groupMembers,
   groupMessages,
   promotions,
   commissions,
@@ -656,19 +657,27 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
       status: z.array(z.string()).optional(),
       groupIds: z.array(z.string()).optional(),
       affiliateIds: z.array(z.string()).optional(),
+      ctaText: z.string().optional(),
+      ctaUrl: z.string().url().optional().or(z.literal("")),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Add a subject and message." };
-  const { subject, body, status, groupIds, affiliateIds } = parsed.data;
+  const { subject, body, status, groupIds, affiliateIds, ctaText, ctaUrl } = parsed.data;
 
-  // Target specific affiliates, or groups, or a set of statuses (default: approved).
-  const where = affiliateIds?.length
-    ? inArray(affiliates.id, affiliateIds as any)
-    : groupIds?.length
-      ? inArray(affiliates.groupId, groupIds as any)
-      : status?.length
-        ? inArray(affiliates.status, status as any)
-        : eq(affiliates.status, "approved");
+  // Target specific affiliates, or group members, or a set of statuses (default: approved).
+  let where;
+  if (affiliateIds?.length) {
+    where = inArray(affiliates.id, affiliateIds as any);
+  } else if (groupIds?.length) {
+    const mem = await db.select({ id: groupMembers.affiliateId }).from(groupMembers).where(inArray(groupMembers.groupId, groupIds as any));
+    const ids = [...new Set(mem.map((m) => m.id))];
+    if (!ids.length) return { ok: false, message: "That group has no members yet." };
+    where = inArray(affiliates.id, ids);
+  } else if (status?.length) {
+    where = inArray(affiliates.status, status as any);
+  } else {
+    where = eq(affiliates.status, "approved");
+  }
 
   const recipients = await db
     .select({ id: affiliates.id, email: users.email, name: users.name, prefs: affiliates.notificationPrefs })
@@ -708,6 +717,7 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
         .map((r) => ({ email: r.email!, name: r.name ?? undefined })),
       subject,
       body,
+      ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
     );
   }
 

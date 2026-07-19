@@ -6,6 +6,7 @@ import { campaigns } from "@/db/schema";
 import { Avatar } from "@/components/ui/avatar";
 import { GroupAvatar } from "@/components/ui/group-avatar";
 import { NewGroupButton } from "@/components/admin/new-group-button";
+import { EmailComposer } from "@/components/admin/email-composer";
 import { GroupManage } from "@/components/admin/group-manage";
 import { MessageComposer } from "@/components/admin/message-composer";
 import { AdminChatMessage } from "@/components/admin/chat-message";
@@ -59,7 +60,10 @@ export default async function MessagesPage({
       <aside className={`${selected ? "hidden lg:flex" : "flex"} w-full flex-col border-r border-hairline lg:w-[340px]`}>
         <div className="flex items-center justify-between gap-2 border-b border-hairline p-4">
           <h1 className="font-display text-lg font-semibold">Messages</h1>
-          <NewGroupButton />
+          <div className="flex items-center gap-1">
+            <EmailComposer groups={groups.map((g) => ({ id: g.id, name: g.name }))} people={dmThreads.map((t) => ({ id: t.affiliateId, name: t.name }))} />
+            <NewGroupButton />
+          </div>
         </div>
         <div className="flex gap-1 border-b border-hairline p-2">
           {(["groups", "direct"] as const).map((t) => (
