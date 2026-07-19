@@ -45,6 +45,7 @@ export const affiliateNav: NavSection[] = [
       { label: "Links & Codes", href: "/links", icon: "links" },
       { label: "Promotions", href: "/promotions", icon: "promotions" },
       { label: "Performance", href: "/performance", icon: "performance" },
+      { label: "Leaderboard", href: "/leaderboard", icon: "campaigns" },
       { label: "Payouts", href: "/payouts", icon: "payouts" },
     ],
   },

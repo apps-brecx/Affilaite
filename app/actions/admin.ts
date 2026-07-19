@@ -1901,15 +1901,30 @@ export async function updateAffiliateCode(affiliateId: string, rawCode: string):
   if (clash && clash.affiliateId !== affiliateId) return { ok: false, message: "That code is already taken." };
 
   const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, affiliateId) });
+
+  // Sync to Shopify so the NEW code actually works at checkout (create a discount
+  // for it). Best-effort — surface the failure so the admin can push it manually.
+  let shopifyDiscountId = existing?.shopifyDiscountId ?? null;
+  let syncNote = "";
+  if (await shopifyReady()) {
+    try {
+      const percent = Number(existing?.percentage ?? 15) || 15;
+      shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+    } catch (e) {
+      console.error("[updateAffiliateCode] Shopify sync failed:", e);
+      syncNote = " (Shopify sync failed — push it from the Discount Codes page.)";
+    }
+  }
+
   if (existing) {
-    await db.update(discountCodes).set({ code }).where(eq(discountCodes.id, existing.id));
+    await db.update(discountCodes).set({ code, shopifyDiscountId }).where(eq(discountCodes.id, existing.id));
   } else {
-    await db.insert(discountCodes).values({ affiliateId, code, active: true });
+    await db.insert(discountCodes).values({ affiliateId, code, shopifyDiscountId, active: true });
   }
   // Keep the ref code aligned so links match the coupon.
   await db.update(affiliates).set({ refCode: code }).where(eq(affiliates.id, affiliateId)).catch(() => {});
   revalidatePath(`/admin/affiliates/${affiliateId}`);
-  return { ok: true, message: `Code updated to ${code}.` };
+  return { ok: true, message: `Code updated to ${code}.${syncNote}` };
 }
 
 // ---------- Sample requests ----------

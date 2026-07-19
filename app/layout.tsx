@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
@@ -30,6 +30,15 @@ export const metadata: Metadata = {
   },
   description:
     "Sipfluence is our affiliate & referral program — sip it, share it, sweeten the deal. Coupon-first attribution, native PayPal payouts, and a partner portal for our sweetest sippers.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Sipfluence", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFF7F1" },
+    { media: "(prefers-color-scheme: dark)", color: "#14110C" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

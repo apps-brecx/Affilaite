@@ -360,19 +360,23 @@ export async function processOrderCreated(order: any) {
     "/dashboard",
   );
 
-  // Email on the affiliate's FIRST sale — a real milestone worth celebrating.
+  // Real-time sale alert by email — every sale, not just the first. The first
+  // sale gets a celebratory milestone message; later ones a "cha-ching" nudge.
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(commissions)
     .where(and(eq(commissions.affiliateId, affiliate.id), sql`${commissions.amount} >= 0`));
   const prefs = (affiliate.notificationPrefs as Record<string, boolean>) ?? {};
-  if (Number(count) === 1 && affiliate.userId && prefs.newCommission !== false) {
+  if (affiliate.userId && prefs.newCommission !== false) {
     const email = await getUserEmail(affiliate.userId);
     if (email) {
+      const first = Number(count) === 1;
       await sendEmailSafe(
         email,
-        "You made your first sale 🎉",
-        `Congrats — you just earned your first commission of ${order.currency} ${amount.toFixed(2)}! Keep sharing your link and code to keep them coming.`,
+        first ? "You made your first sale 🎉" : `💰 Cha-ching! You just earned ${order.currency} ${amount.toFixed(2)}`,
+        first
+          ? `Congrats — you just earned your first commission of ${order.currency} ${amount.toFixed(2)}! Keep sharing your link and code to keep them coming.`
+          : `Another sale landed — you just earned ${order.currency} ${amount.toFixed(2)}. Your running total keeps climbing. Keep it up! 🚀`,
       );
     }
   }

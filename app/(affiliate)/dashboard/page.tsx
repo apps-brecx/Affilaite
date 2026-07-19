@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EarningsPanel } from "@/components/affiliate/earnings-panel";
+import { OnboardingChecklist } from "@/components/affiliate/onboarding";
 import { CountUp } from "@/components/ui/count-up";
 import {
   getAffiliateSummary,
@@ -42,6 +43,8 @@ export default async function DashboardPage() {
           </Link>
         </Button>
       </PageHeader>
+
+      <OnboardingChecklist me={me} />
 
       {/* Next payout banner */}
       <Card className="relative overflow-hidden border-primary/20">
