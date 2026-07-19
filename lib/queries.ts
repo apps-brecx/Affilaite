@@ -121,6 +121,8 @@ function mapAffiliate(row: any, stats: any, clickCount: Map<string, number>): Af
     companyName: row.aff.companyName,
     channel: row.aff.channel ?? null,
     audienceSize: row.aff.audienceSize ?? null,
+    handle: row.aff.handle ?? null,
+    bio: row.aff.bio ?? null,
     programId: row.aff.programId ?? "",
     programName: row.program?.name ?? "—",
     payoutMinimum: num(row.program?.payoutMinimum),

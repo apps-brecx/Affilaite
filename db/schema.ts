@@ -232,10 +232,27 @@ export const affiliates = pgTable(
     applyNote: text("apply_note"),
     socialLinks: jsonb("social_links").$type<Record<string, string>>(),
     notificationPrefs: jsonb("notification_prefs").$type<Record<string, boolean>>(),
+    // Public link-in-bio handle: /p/<handle>
+    handle: text("handle").unique(),
+    bio: text("bio"),
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({ refIdx: index("aff_ref_idx").on(t.refCode) }),
+);
+
+// --- Content posts affiliates submit (post tracking) ---
+export const posts = pgTable(
+  "posts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    url: text("url").notNull(),
+    platform: text("platform").notNull().default("instagram"), // instagram | tiktok | youtube | x | other
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ postsAffIdx: index("posts_aff_idx").on(t.affiliateId) }),
 );
 
 // --- Discount codes issued to affiliates (mirrors Shopify) ---

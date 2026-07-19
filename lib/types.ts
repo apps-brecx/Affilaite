@@ -76,6 +76,8 @@ export interface Affiliate {
   companyName: string | null;
   channel: string | null;
   audienceSize: string | null;
+  handle: string | null;
+  bio: string | null;
   programId: string;
   programName: string;
   payoutMinimum: number;

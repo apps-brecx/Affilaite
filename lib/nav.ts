@@ -52,6 +52,7 @@ export const affiliateNav: NavSection[] = [
   {
     title: "Resources",
     items: [
+      { label: "My Posts", href: "/posts", icon: "campaigns" },
       { label: "Samples", href: "/samples", icon: "samples" },
       { label: "Assets", href: "/assets", icon: "assets" },
       { label: "Community", href: "/community", icon: "groups" },
@@ -70,6 +71,7 @@ export const adminNav: NavSection[] = [
     title: "People",
     items: [
       { label: "Affiliates", href: "/admin/affiliates", icon: "affiliates" },
+      { label: "Content", href: "/admin/content", icon: "campaigns" },
       { label: "Samples", href: "/admin/samples", icon: "samples" },
       { label: "Messages & Groups", href: "/admin/messages", icon: "messages" },
     ],
