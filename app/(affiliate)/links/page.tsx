@@ -70,6 +70,8 @@ export default async function LinksPage() {
           {/* QR */}
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-hairline bg-card p-6">
             <div
+              role="img"
+              aria-label="QR code for your referral link"
               className="size-44 [&_svg]:size-full [&_svg]:text-primary"
               dangerouslySetInnerHTML={{ __html: qr }}
             />

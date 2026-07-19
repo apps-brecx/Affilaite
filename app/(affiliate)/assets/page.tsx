@@ -41,13 +41,17 @@ export default async function AssetsPage() {
                 style={{ background: a.gradient }}
               >
                 <Icon className="size-10 text-white/70" />
-                <div className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
-                  <div className="flex h-full items-center justify-center bg-black/30 backdrop-blur-[1px]">
-                    <Button variant="secondary" size="sm">
-                      <Download className="size-4" /> Download
-                    </Button>
+                {a.url && (
+                  <div className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex h-full items-center justify-center bg-black/30 backdrop-blur-[1px]">
+                      <Button variant="secondary" size="sm" asChild>
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" download>
+                          <Download className="size-4" /> Download
+                        </a>
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               <div className="flex items-center justify-between p-4">
                 <div>

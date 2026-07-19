@@ -377,7 +377,7 @@ export async function listGroups(): Promise<Group[]> {
 
 // ---------- Commissions ----------
 
-export async function listCommissions(filter?: CommissionState, affiliateId?: string): Promise<Commission[]> {
+export async function listCommissions(filter?: CommissionState, affiliateId?: string, limit?: number): Promise<Commission[]> {
   if (!db) return [];
   // NOTE: do NOT join discount_codes here — an affiliate with 2+ codes would
   // fan each commission into N rows and double-count the ledger. Attach one
@@ -386,7 +386,7 @@ export async function listCommissions(filter?: CommissionState, affiliateId?: st
     filter ? eq(commissions.status, filter) : undefined,
     affiliateId ? eq(commissions.affiliateId, affiliateId) : undefined,
   ].filter(Boolean) as any[];
-  const rows = await db
+  const base = db
     .select({ c: commissions, user: users, order: orders })
     .from(commissions)
     .leftJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
@@ -394,6 +394,7 @@ export async function listCommissions(filter?: CommissionState, affiliateId?: st
     .leftJoin(orders, eq(commissions.orderId, orders.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(commissions.createdAt));
+  const rows = await (limit ? base.limit(limit) : base);
 
   const affIds = [...new Set(rows.map((r) => r.c.affiliateId).filter(Boolean))] as string[];
   const codes = affIds.length
@@ -421,8 +422,8 @@ export async function listCommissions(filter?: CommissionState, affiliateId?: st
 }
 
 export async function getAffiliateCommissions(affiliateId: string, limit = 20): Promise<Commission[]> {
-  const rows = await listCommissions(undefined, affiliateId);
-  return rows.slice(0, limit);
+  // Bound in SQL — never load an affiliate's entire commission history.
+  return listCommissions(undefined, affiliateId, limit);
 }
 
 // Convenience aliases used by pages.
@@ -937,6 +938,7 @@ export async function listAssets(): Promise<Asset[]> {
     kind: (a.kind as Asset["kind"]) ?? "banner",
     dimensions: a.dimensions ?? "",
     gradient: grads[i % grads.length],
+    url: a.url ?? null,
   }));
 }
 

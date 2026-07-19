@@ -174,17 +174,17 @@ export function DiscountManager({
                   </div>
                   <div className="flex items-center gap-1">
                     {shopifyConnected && !c.syncedToShopify && (
-                      <Button variant="ghost" size="sm" onClick={() => push(c)} disabled={pending} title="Push to Shopify">
+                      <Button variant="ghost" size="sm" onClick={() => push(c)} disabled={pending} title="Push to Shopify" aria-label="Push to Shopify">
                         <CloudUpload className="size-4 text-primary" />
                       </Button>
                     )}
                     <Button variant="ghost" size="sm" onClick={() => toggle(c)} disabled={pending} title={c.active ? "Deactivate" : "Activate"}>
                       <Power className={cn("size-4", c.active ? "text-success" : "text-muted-foreground")} />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)} title="Edit">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)} title="Edit" aria-label="Edit code">
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setDeleting(c)} title="Delete">
+                    <Button variant="ghost" size="sm" onClick={() => setDeleting(c)} title="Delete" aria-label="Delete code">
                       <Trash2 className="size-4 text-danger" />
                     </Button>
                   </div>

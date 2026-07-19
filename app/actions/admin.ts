@@ -508,6 +508,20 @@ export async function setDefaultProgram(id: string): Promise<ActionResult> {
   return { ok: true, message: "Default program updated." };
 }
 
+export async function deleteProgram(id: string): Promise<ActionResult> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const prog = await db.query.programs.findFirst({ where: eq(programs.id, id) });
+  if (!prog) return { ok: false, message: "Program not found." };
+  if (prog.isDefault) return { ok: false, message: "You can't delete the default program. Set another default first." };
+  // Move affiliates on this program back to the default; keep their commissions.
+  const def = await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+  await db.update(affiliates).set({ programId: def?.id ?? null }).where(eq(affiliates.programId, id));
+  await db.delete(programs).where(eq(programs.id, id));
+  revalidatePath("/admin/programs");
+  return { ok: true, message: "Program deleted. Its affiliates moved to the default program." };
+}
+
 // ---------- Groups ----------
 
 export async function createGroup(input: unknown): Promise<ActionResult> {

@@ -1,7 +1,7 @@
 // lib/attribution.ts — the core engine: coupon-first, link-second, last-click.
 import { db } from "@/db";
-import { orders, commissions, discountCodes, affiliates, programs, clicks, users, campaigns, affiliateCampaigns } from "@/db/schema";
-import { eq, inArray, gte, desc, and, sql } from "drizzle-orm";
+import { orders, commissions, discountCodes, affiliates, programs, clicks, users, campaigns, affiliateCampaigns, promotions, groupMembers } from "@/db/schema";
+import { eq, inArray, gte, lte, desc, and, sql } from "drizzle-orm";
 import { notify } from "./notifications";
 import { sendEmailSafe } from "./email";
 import { mergeConfig } from "./campaign-config";
@@ -42,6 +42,34 @@ async function getProgram(id: string) {
 async function getUserEmail(userId: string) {
   const u = await db.query.users.findFirst({ where: eq(users.id, userId) });
   return u?.email ?? null;
+}
+
+/**
+ * The best active-promotion bonus for this affiliate right now. A promotion
+ * applies when the current time is within its window and it targets either
+ * everyone (no group) or a group the affiliate belongs to. Returns the single
+ * highest applicable bonus (bonuses don't stack, for predictable payouts).
+ */
+async function promotionBonus(affiliateId: string, base: number): Promise<{ bonus: number; name: string } | null> {
+  if (!db) return null;
+  const now = new Date();
+  const promos = await db.query.promotions.findMany({
+    where: and(lte(promotions.startsAt, now), gte(promotions.endsAt, now)),
+  });
+  if (!promos.length) return null;
+  const mems = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(eq(groupMembers.affiliateId, affiliateId));
+  const myGroups = new Set(mems.map((m) => m.groupId));
+  let best = 0;
+  let name = "";
+  for (const p of promos) {
+    if (p.groupId && !myGroups.has(p.groupId)) continue; // targeted at a group they're not in
+    const b = p.bonusType === "percent" ? (base * Number(p.bonusValue ?? 0)) / 100 : Number(p.bonusValue ?? 0);
+    if (b > best) {
+      best = b;
+      name = p.name;
+    }
+  }
+  return best > 0 ? { bonus: Math.round(best * 100) / 100, name } : null;
 }
 
 // Configurable thresholds (admin-tunable later via settings).
@@ -271,6 +299,12 @@ export async function processOrderCreated(order: any) {
   }
 
   amount = Math.round(amount * 100) / 100;
+
+  // Live promotion bonus: if an active promotion targets this affiliate (their
+  // group, or everyone), add its bonus on top so a launched "+X% bonus" is real.
+  const promo = await promotionBonus(affiliate.id, base);
+  if (promo) amount = Math.round((amount + promo.bonus) * 100) / 100;
+
   if (!(amount > 0)) {
     await note("skipped — no monetary reward");
     return; // nothing to pay (e.g. non-monetary custom reward)

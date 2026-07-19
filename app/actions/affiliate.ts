@@ -196,6 +196,7 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
 
   // Instant access → issue a code immediately (and push it to Shopify so it
   // actually works at checkout, not just locally).
+  let codeSyncFailed = false;
   if (instant) {
     const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
     const code = await uniqueDiscountCode(`${refCode}${percent}`);
@@ -205,6 +206,7 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
         shopifyDiscountId = await createDiscountForAffiliate(code, percent);
       } catch (e) {
         console.error("[joinCampaign] Shopify code creation failed:", e);
+        codeSyncFailed = true;
       }
     }
     await db
@@ -227,7 +229,9 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
     ok: true,
     instant,
     message: instant
-      ? "You're in! Sign in to grab your code and link."
+      ? codeSyncFailed
+        ? "You're in! Sign in to grab your link. (We're finalizing your discount code — it'll be active shortly.)"
+        : "You're in! Sign in to grab your code and link."
       : "Application received — we'll review it and email you once you're approved.",
   };
 }

@@ -12,8 +12,12 @@ async function main() {
     process.exit(1);
   }
 
-  const email = (process.env.ADMIN_EMAIL ?? "bu@brecx.com").toLowerCase();
-  const password = process.env.ADMIN_PASSWORD ?? "syruvia";
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+    console.error("Set ADMIN_EMAIL and ADMIN_PASSWORD before seeding — refusing to create a default admin account.");
+    process.exit(1);
+  }
+  const email = process.env.ADMIN_EMAIL.toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
 
   const existingAdmin = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!existingAdmin) {

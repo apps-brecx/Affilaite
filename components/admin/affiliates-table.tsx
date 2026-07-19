@@ -137,7 +137,15 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-10 pl-4" />
+              <TableHead className="w-10 pl-4">
+                <input
+                  type="checkbox"
+                  aria-label="Select all affiliates"
+                  checked={rows.length > 0 && rows.every((a) => selected.has(a.id))}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((a) => a.id)) : new Set())}
+                  className="size-4 rounded border-hairline accent-[hsl(var(--primary))]"
+                />
+              </TableHead>
               <TableHead>Affiliate</TableHead>
               <TableHead>Program</TableHead>
               <TableHead>Code</TableHead>
@@ -153,6 +161,7 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                 <TableCell className="pl-4">
                   <input
                     type="checkbox"
+                    aria-label={`Select ${a.name}`}
                     checked={selected.has(a.id)}
                     onChange={() => toggle(a.id)}
                     className="size-4 rounded border-hairline accent-[hsl(var(--primary))]"
@@ -182,24 +191,24 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     ) : a.status === "pending" ? (
                       <>
-                        <Button size="icon-sm" variant="ghost" title="Reject" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "rejected")}>
+                        <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "rejected")}>
                           <X className="size-4" />
                         </Button>
-                        <Button size="icon-sm" title="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => act(a.id, "approved")}>
+                        <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => act(a.id, "approved")}>
                           <Check className="size-4" />
                         </Button>
                       </>
                     ) : a.status === "approved" ? (
                       <>
-                        <Button size="icon-sm" variant="ghost" title="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
+                        <Button size="icon-sm" variant="ghost" title="Send portal invite" aria-label="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
                           <Mail className="size-4" />
                         </Button>
-                        <Button size="icon-sm" variant="ghost" title="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
+                        <Button size="icon-sm" variant="ghost" title="Suspend" aria-label="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
                           <Ban className="size-4" />
                         </Button>
                       </>
                     ) : (
-                      <Button size="icon-sm" variant="ghost" title="Approve" className="text-success hover:bg-success-soft" onClick={() => act(a.id, "approved")}>
+                      <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => act(a.id, "approved")}>
                         <Check className="size-4" />
                       </Button>
                     )}

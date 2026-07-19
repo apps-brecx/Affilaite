@@ -2,14 +2,39 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Star, Pencil, X } from "lucide-react";
+import { Plus, Loader2, Star, Pencil, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import { createProgram, updateProgram, setDefaultProgram } from "@/app/actions/admin";
+import { createProgram, updateProgram, setDefaultProgram, deleteProgram } from "@/app/actions/admin";
 import type { Program } from "@/lib/types";
+
+export function DeleteProgramButton({ program }: { program: Program }) {
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
+  if (program.isDefault) return null; // the default program can't be deleted
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="text-danger hover:bg-danger-soft"
+      disabled={pending}
+      onClick={() => {
+        if (!confirm(`Delete "${program.name}"? Its affiliates move to the default program.`)) return;
+        start(async () => {
+          const res = await deleteProgram(program.id);
+          toast(res.message, res.ok ? "success" : "error");
+          router.refresh();
+        });
+      }}
+    >
+      {pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Delete
+    </Button>
+  );
+}
 
 export function SetDefaultButton({ id }: { id: string }) {
   const [pending, start] = useTransition();

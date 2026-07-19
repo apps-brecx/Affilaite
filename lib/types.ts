@@ -201,6 +201,7 @@ export interface Asset {
   kind: "banner" | "image" | "copy" | "video";
   dimensions: string;
   gradient: string;
+  url: string | null;
 }
 
 export interface TimePoint {

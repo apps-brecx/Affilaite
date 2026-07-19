@@ -17,7 +17,7 @@ export default async function PayoutsPage() {
   const summary = await getAffiliateSummary(me);
   const allPayouts = await listPayouts();
   // Only payouts that included this affiliate.
-  const myPayouts = allPayouts.filter((p) => p.items.some((i) => i.affiliateEmail === me.email || i.affiliateName === me.name));
+  const myPayouts = allPayouts.filter((p) => p.items.some((i) => i.affiliateId === me.id));
   const progress = Math.min(100, (summary.approved / Math.max(summary.payoutMinimum, 1)) * 100);
   const overMin = summary.approved >= summary.payoutMinimum;
 
@@ -109,7 +109,7 @@ export default async function PayoutsPage() {
               </TableHeader>
               <TableBody>
                 {myPayouts.map((p) => {
-                  const mine = p.items.find((i) => i.affiliateEmail === me.email || i.affiliateName === me.name);
+                  const mine = p.items.find((i) => i.affiliateId === me.id);
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="pl-6 font-medium">{formatDate(p.createdAt)}</TableCell>
