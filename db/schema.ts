@@ -40,6 +40,7 @@ export const campaignType = pgEnum("campaign_type", ["affiliate", "referral"]);
 export const campaignStatus = pgEnum("campaign_status", ["active", "paused", "ended"]);
 export const campaignAccess = pgEnum("campaign_access", ["instant", "approval", "invite"]);
 export const sampleStatus = pgEnum("sample_status", ["requested", "approved", "rejected", "shipped"]);
+export const groupVisibility = pgEnum("group_visibility", ["public", "private"]);
 
 // --- Users (admin + affiliates share auth, differ by role) ---
 export const users = pgTable("users", {
@@ -99,8 +100,52 @@ export const groups = pgTable("groups", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  // WhatsApp-style profile: a switchable emoji + color, or an image URL.
+  avatarEmoji: text("avatar_emoji").default("💬"),
+  avatarColor: text("avatar_color").default("emerald"),
+  imageUrl: text("image_url"),
+  // public = affiliates can discover & self-join; private = admin adds, hidden otherwise.
+  visibility: groupVisibility("visibility").notNull().default("private"),
+  // The main group every affiliate belongs to (cannot be left or deleted).
+  isMain: boolean("is_main").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// --- Group membership (an affiliate can be in many groups) ---
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id").notNull().references(() => groups.id),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    joinedAt: timestamp("joined_at").defaultNow(),
+  },
+  (t) => ({
+    gmemGroupIdx: index("gmem_group_idx").on(t.groupId),
+    gmemAffIdx: index("gmem_aff_idx").on(t.affiliateId),
+    gmemUniq: uniqueIndex("gmem_group_aff_uniq").on(t.groupId, t.affiliateId),
+  }),
+);
+
+// --- Direct messages: 1:1 admin <-> affiliate threads (deals, invites, DMs) ---
+export const directMessages = pgTable(
+  "direct_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id), // the thread
+    fromAdmin: boolean("from_admin").notNull().default(true),
+    senderId: uuid("sender_id").references(() => users.id),
+    body: text("body"),
+    attachments: jsonb("attachments").$type<{ type: string; url: string; name?: string }[]>(),
+    // Rich card type: text | deal | invite | giveaway | competition | announcement
+    kind: text("kind").notNull().default("text"),
+    payload: jsonb("payload").$type<Record<string, any>>(),
+    readByAdminAt: timestamp("read_by_admin_at"),
+    readByAffiliateAt: timestamp("read_by_affiliate_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({ dmAffIdx: index("dm_aff_idx").on(t.affiliateId) }),
+);
 
 // --- Group chat (WhatsApp-style broadcast group) ---
 // Admins post; affiliates read (and vote on polls) but never see each other.
@@ -115,6 +160,10 @@ export const groupMessages = pgTable(
     attachments: jsonb("attachments").$type<{ type: string; url: string; name?: string }[]>(),
     // { question, options: string[] } — null when not a poll
     poll: jsonb("poll").$type<{ question: string; options: string[] }>(),
+    // Rich card type: text | deal | invite | giveaway | competition | announcement | poll
+    kind: text("kind").notNull().default("text"),
+    // Extra data for the card (e.g. { code, endsAt, prize, campaignId, url }).
+    payload: jsonb("payload").$type<Record<string, any>>(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({ gmGroupIdx: index("gm_group_idx").on(t.groupId) }),
