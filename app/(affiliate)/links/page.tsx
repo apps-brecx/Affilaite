@@ -1,4 +1,5 @@
-import { Gift, Ticket, QrCode, Share2 } from "lucide-react";
+import Link from "next/link";
+import { Gift, Ticket, QrCode, Share2, Link2, ExternalLink, ArrowRight } from "lucide-react";
 import { ShareButtons } from "@/components/affiliate/share-buttons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +80,53 @@ export default async function LinksPage() {
               <QrCode className="size-3.5" /> Scan to shop
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Link-in-bio page */}
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <Link2 className="size-5" />
+            </span>
+            <div>
+              <p className="font-medium">Your link-in-bio page</p>
+              <p className="text-sm text-muted-foreground">
+                {me.handle ? (
+                  <>One tidy page with your code &amp; links — perfect for your social bio.</>
+                ) : (
+                  <>Create a shareable page for your social bio in{" "}
+                    <Link href="/settings" className="font-medium text-primary hover:underline">Settings</Link>.</>
+                )}
+              </p>
+              {me.handle && (
+                <code className="mt-1 inline-block truncate font-mono text-xs text-muted-foreground">
+                  {APP_URL.replace(/^https?:\/\//, "")}/p/{me.handle}
+                </code>
+              )}
+            </div>
+          </div>
+          {me.handle ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <CopyButton value={`${APP_URL}/p/${me.handle}`} variant="outline" label="Copy link" />
+              <a
+                href={`/p/${me.handle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary"
+              >
+                View <ExternalLink className="size-4" />
+              </a>
+            </div>
+          ) : (
+            <Link
+              href="/settings"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02]"
+            >
+              Set it up <ArrowRight className="size-4" />
+            </Link>
+          )}
         </CardContent>
       </Card>
 
