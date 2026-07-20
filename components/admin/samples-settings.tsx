@@ -14,14 +14,17 @@ import type { Banner } from "@/lib/queries";
 interface P { id: string; title: string; image: string | null; available: boolean }
 
 /** Which products (from the promotions catalog) affiliates can sample, + order. */
-export function SamplesCuration({ products, order, shown }: { products: P[]; order: string[]; shown: string[] }) {
+export function SamplesCuration({ products, order, hidden }: { products: P[]; order: string[]; hidden: string[] }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
   const byId = new Map(products.map((p) => [p.id, p]));
   const initialOrder = [...order.filter((id) => byId.has(id)), ...products.map((p) => p.id).filter((id) => !order.includes(id))];
   const [ids, setIds] = useState<string[]>(initialOrder);
-  const [visible, setVisible] = useState<Set<string>>(new Set(shown.length ? shown.filter((id) => byId.has(id)) : products.map((p) => p.id)));
+  // Opt-out: every promo-visible product is sample-able unless the admin turned
+  // it off. `hidden` is the OFF list, so anything not in it starts ON.
+  const hiddenSet = new Set(hidden);
+  const [visible, setVisible] = useState<Set<string>>(new Set(products.map((p) => p.id).filter((id) => !hiddenSet.has(id))));
 
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
@@ -38,7 +41,8 @@ export function SamplesCuration({ products, order, shown }: { products: P[]; ord
     });
   const save = () =>
     start(async () => {
-      const res = await saveSamplesConfig({ order: ids, shown: [...visible] });
+      const hiddenIds = ids.filter((id) => !visible.has(id));
+      const res = await saveSamplesConfig({ order: ids, hidden: hiddenIds });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) router.refresh();
     });

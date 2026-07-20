@@ -173,8 +173,30 @@ async function readConfig(key: string): Promise<CatalogConfig> {
 
 export const getCatalogConfig = () => readConfig("catalog_config");
 export const getCollectionConfig = () => readConfig("collection_config");
-// Samples have their own curation, independent of the promotions catalog.
-export const getSamplesConfig = () => readConfig("samples_catalog_config");
+
+// Samples curation sits on top of the promotions catalog: every promo-visible
+// product is sample-able by DEFAULT, and the admin turns specific ones OFF.
+// We store the OFF list (`hidden`) rather than an allow-list so newly-visible
+// products stay sample-able automatically and stale ids are harmless.
+export interface SamplesConfig {
+  order: string[];
+  hidden: string[]; // product ids explicitly excluded from sampling
+}
+
+export async function getSamplesConfig(): Promise<SamplesConfig> {
+  if (!db) return { order: [], hidden: [] };
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, "samples_catalog_config") });
+  if (!row?.value) return { order: [], hidden: [] };
+  try {
+    const c = JSON.parse(row.value);
+    return {
+      order: Array.isArray(c.order) ? c.order : [],
+      hidden: Array.isArray(c.hidden) ? c.hidden : [],
+    };
+  } catch {
+    return { order: [], hidden: [] };
+  }
+}
 
 /** Apply the admin's curation: only show allowlisted items, in the saved order. */
 export function applyConfig<T extends { id: string }>(items: T[], config: CatalogConfig): T[] {

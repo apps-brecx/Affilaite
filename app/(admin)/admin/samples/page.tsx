@@ -96,7 +96,7 @@ export default async function AdminSamplesPage() {
       {/* Settings collapsed behind buttons — one open at a time, click away closes */}
       <RevealGroup className="flex flex-wrap gap-2">
         <CreateReveal label="See catalog">
-          <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} shown={samplesConfig.shown} /></div>
+          <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} hidden={samplesConfig.hidden} /></div>
         </CreateReveal>
         <CreateReveal label="Sample banner">
           <div className="max-w-lg pt-2"><SamplesBanner banner={banner} /></div>

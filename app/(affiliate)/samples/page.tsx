@@ -34,9 +34,8 @@ export default async function SamplesPage() {
   // exact same visibility rules as the Promotions catalog. Then the samples
   // curation narrows/orders that set; out-of-stock sinks to the bottom.
   const promoShown = resolveVisibleProducts(catalog.products, visibility);
-  let shown = samplesConfig.shown.length
-    ? promoShown.filter((p) => samplesConfig.shown.includes(p.id))
-    : promoShown;
+  // Opt-out: sample-able = promo-visible minus anything the admin switched off.
+  let shown = promoShown.filter((p) => !samplesConfig.hidden.includes(p.id));
   if (samplesConfig.order.length) {
     const pos = new Map(samplesConfig.order.map((id, i) => [id, i] as const));
     shown = [...shown].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));

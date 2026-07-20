@@ -1714,11 +1714,15 @@ export async function saveCatalogVisibility(input: unknown): Promise<ActionResul
   return { ok: true, message: "Catalog visibility updated." };
 }
 
-/** Which products (and their order) affiliates can request as samples. */
+/**
+ * Which products affiliates can request as samples (and their order). Every
+ * promo-visible product is sample-able by default; `hidden` is the opt-out list
+ * of ids the admin has switched off, so new products stay sample-able.
+ */
 export async function saveSamplesConfig(input: unknown): Promise<ActionResult> {
   await assertAdmin("samples");
   if (!db) return { ok: false, message: "Database not configured." };
-  const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
+  const parsed = z.object({ order: z.array(z.string()), hidden: z.array(z.string()) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid samples settings." };
   await writeSetting("samples_catalog_config", JSON.stringify(parsed.data));
   revalidatePath("/samples");
