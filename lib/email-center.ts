@@ -1,0 +1,342 @@
+// lib/email-center.ts — the Affiliate Notification Center.
+//
+// One registry of every automatic ("lifecycle") email the app sends. Admins can
+// turn each on/off, rewrite the subject & body, add a call-to-action button and
+// a hero image, and preview/test it — all stored in app_settings under
+// `email:<key>` so no migration is needed.
+import { db } from "@/db";
+import { appSettings } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { getBrand } from "@/lib/queries";
+import { sendEmail } from "@/lib/email";
+import type { BrandSettings } from "@/lib/campaign-config";
+
+export type EmailCategory = "Onboarding" | "Sales" | "Payouts" | "Security";
+
+export interface EmailVar {
+  token: string; // e.g. "{{name}}"
+  label: string;
+}
+
+export interface EmailType {
+  key: string;
+  label: string;
+  description: string;
+  category: EmailCategory;
+  /** Plain-English description of when this fires. */
+  whenText: string;
+  /** A short best-practice tip shown to the admin. */
+  recommendation: string;
+  /** Merge variables available in this email. */
+  variables: EmailVar[];
+  /** Security emails (password reset) can't be switched off. */
+  togglable: boolean;
+  /** notificationPrefs key that also gates this per-affiliate (null = always). */
+  prefKey: string | null;
+  defaultSubject: string;
+  defaultBody: string;
+  defaultCtaText: string;
+  defaultCtaUrl: string; // may contain {{loginUrl}} etc.
+}
+
+/** The admin-editable overlay stored per email type. */
+export interface EmailTemplate {
+  enabled: boolean;
+  subject: string;
+  body: string;
+  ctaText: string;
+  ctaUrl: string;
+  imageUrl: string;
+}
+
+const V = {
+  name: { token: "{{name}}", label: "Partner's first name" },
+  code: { token: "{{code}}", label: "Their discount code" },
+  amount: { token: "{{amount}}", label: "Amount (e.g. 12.50)" },
+  currency: { token: "{{currency}}", label: "Currency (e.g. USD)" },
+  earnings: { token: "{{earnings}}", label: "Total earned so far" },
+  loginUrl: { token: "{{loginUrl}}", label: "Sign-in link" },
+  dashboardUrl: { token: "{{dashboardUrl}}", label: "Dashboard link" },
+  link: { token: "{{link}}", label: "Action link" },
+} as const;
+
+/** Every lifecycle email, in the order shown in the Notification Center. */
+export const EMAIL_TYPES: EmailType[] = [
+  {
+    key: "application_received",
+    label: "Application received",
+    description: "Confirms we got a new partner application (approval-based signups).",
+    category: "Onboarding",
+    whenText: "Immediately after someone applies and is awaiting review.",
+    recommendation: "Set expectations — tell them how long review takes so they don't wonder.",
+    variables: [V.name],
+    togglable: true,
+    prefKey: null,
+    defaultSubject: "We got your application 🎉",
+    defaultBody:
+      "Hi {{name}},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.",
+    defaultCtaText: "",
+    defaultCtaUrl: "",
+  },
+  {
+    key: "instant_welcome",
+    label: "Instant welcome",
+    description: "Welcomes partners who join a campaign that approves instantly.",
+    category: "Onboarding",
+    whenText: "Right after joining a campaign with instant approval.",
+    recommendation: "Get them to their code fast — a clear sign-in button lifts first-share rates.",
+    variables: [V.name, V.loginUrl],
+    togglable: true,
+    prefKey: null,
+    defaultSubject: "You're in! 🎉",
+    defaultBody:
+      "Hi {{name}},\n\nYour Sipfluence partner account is ready. Sign in to grab your code and referral link, and start earning.",
+    defaultCtaText: "Sign in & get started",
+    defaultCtaUrl: "{{loginUrl}}",
+  },
+  {
+    key: "approved",
+    label: "Application approved",
+    description: "Tells a pending partner they've been approved.",
+    category: "Onboarding",
+    whenText: "When an admin approves a pending application.",
+    recommendation: "Include their discount code so they can share the moment they read it.",
+    variables: [V.name, V.code, V.loginUrl],
+    togglable: true,
+    prefKey: null,
+    defaultSubject: "You're approved 🎉",
+    defaultBody:
+      "Hi {{name}},\n\nYour Sipfluence partner account is approved. Sign in to grab your link and start earning. Your discount code is {{code}}.",
+    defaultCtaText: "Sign in & start earning",
+    defaultCtaUrl: "{{loginUrl}}",
+  },
+  {
+    key: "first_sale",
+    label: "First sale 🎉",
+    description: "A celebratory milestone email for a partner's very first commission.",
+    category: "Sales",
+    whenText: "The first time a sale is attributed to a partner.",
+    recommendation: "Celebrate hard — the first sale is the biggest retention moment you have.",
+    variables: [V.name, V.amount, V.currency, V.earnings],
+    togglable: true,
+    prefKey: "newCommission",
+    defaultSubject: "You made your first sale 🎉",
+    defaultBody:
+      "Congrats {{name}} — you just earned your first commission of {{currency}} {{amount}}! Keep sharing your link and code to keep them coming.",
+    defaultCtaText: "View my dashboard",
+    defaultCtaUrl: "{{dashboardUrl}}",
+  },
+  {
+    key: "repeat_sale",
+    label: "New sale (cha-ching)",
+    description: "The everyday 'you earned a commission' alert for repeat sales.",
+    category: "Sales",
+    whenText: "Every attributed sale after the first.",
+    recommendation: "Keep it short and momentum-y. Show the running total to reinforce the habit.",
+    variables: [V.name, V.amount, V.currency, V.earnings],
+    togglable: true,
+    prefKey: "newCommission",
+    defaultSubject: "💰 Cha-ching! You just earned {{currency}} {{amount}}",
+    defaultBody:
+      "Another sale landed, {{name}} — you just earned {{currency}} {{amount}}. Your running total keeps climbing. Keep it up! 🚀",
+    defaultCtaText: "View my dashboard",
+    defaultCtaUrl: "{{dashboardUrl}}",
+  },
+  {
+    key: "payout_sent",
+    label: "Payout sent 💸",
+    description: "Notifies a partner that money is on the way.",
+    category: "Payouts",
+    whenText: "When a payout is issued to the partner.",
+    recommendation: "Reassure — state the amount and that it's on its way. Trust drives loyalty.",
+    variables: [V.name, V.amount, V.currency],
+    togglable: true,
+    prefKey: "payoutSent",
+    defaultSubject: "Your payout is on its way 💸",
+    defaultBody:
+      "Good news {{name}} — a payout of {{currency}} {{amount}} is on its way to you. Thanks for driving sales!",
+    defaultCtaText: "",
+    defaultCtaUrl: "",
+  },
+  {
+    key: "password_reset",
+    label: "Password reset",
+    description: "The security email with a reset link. Always on — can't be disabled.",
+    category: "Security",
+    whenText: "When someone requests a password reset.",
+    recommendation: "Keep {{link}} in the body — it's the reset link. Don't remove it.",
+    variables: [V.name, V.link],
+    togglable: false,
+    prefKey: null,
+    defaultSubject: "Reset your Sipfluence password",
+    defaultBody:
+      "Hi {{name}},\n\nWe got a request to reset your password. Click the button below to choose a new one. If you didn't ask for this, you can safely ignore this email.",
+    defaultCtaText: "Reset my password",
+    defaultCtaUrl: "{{link}}",
+  },
+];
+
+export function emailTypeByKey(key: string): EmailType | undefined {
+  return EMAIL_TYPES.find((t) => t.key === key);
+}
+
+function settingKey(key: string) {
+  return `email:${key}`;
+}
+
+/** Defaults for a type as a full EmailTemplate. */
+export function defaultTemplate(t: EmailType): EmailTemplate {
+  return {
+    enabled: true,
+    subject: t.defaultSubject,
+    body: t.defaultBody,
+    ctaText: t.defaultCtaText,
+    ctaUrl: t.defaultCtaUrl,
+    imageUrl: "",
+  };
+}
+
+/** The effective template = stored overrides merged onto defaults. */
+export async function getEmailTemplate(key: string): Promise<{ type: EmailType; tpl: EmailTemplate } | null> {
+  const type = emailTypeByKey(key);
+  if (!type) return null;
+  const base = defaultTemplate(type);
+  if (!db) return { type, tpl: base };
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, settingKey(key)) });
+  if (!row?.value) return { type, tpl: base };
+  try {
+    const stored = JSON.parse(row.value) as Partial<EmailTemplate>;
+    return {
+      type,
+      tpl: {
+        enabled: type.togglable ? stored.enabled !== false : true,
+        subject: stored.subject ?? base.subject,
+        body: stored.body ?? base.body,
+        ctaText: stored.ctaText ?? base.ctaText,
+        ctaUrl: stored.ctaUrl ?? base.ctaUrl,
+        imageUrl: stored.imageUrl ?? base.imageUrl,
+      },
+    };
+  } catch {
+    return { type, tpl: base };
+  }
+}
+
+/** All templates for the admin center. */
+export async function getAllEmailTemplates(): Promise<{ type: EmailType; tpl: EmailTemplate }[]> {
+  const out: { type: EmailType; tpl: EmailTemplate }[] = [];
+  for (const type of EMAIL_TYPES) {
+    const r = await getEmailTemplate(type.key);
+    if (r) out.push(r);
+  }
+  return out;
+}
+
+/** Replace every {{token}} present in vars; leave unknown tokens blank. */
+export function fillVars(str: string, vars: Record<string, string | undefined>): string {
+  return str.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+}
+
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * Render a full branded HTML email from a body + optional CTA/image, using the
+ * store's brand (logo text + primary colour). Body newlines become paragraphs.
+ */
+export function renderRichEmail(opts: {
+  body: string;
+  brand: BrandSettings;
+  cta?: { text: string; url: string };
+  imageUrl?: string;
+}): string {
+  const { body, brand, cta, imageUrl } = opts;
+  const primary = /^#[0-9a-f]{6}$/i.test(brand.primaryColor) ? brand.primaryColor : "#FF5C9E";
+  const paras = body
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 16px;line-height:1.65;color:#1a1a17;font-size:15px">${esc(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  const hero =
+    imageUrl && /^https?:\/\//i.test(imageUrl)
+      ? `<img src="${esc(imageUrl)}" alt="" style="display:block;width:100%;max-width:472px;border-radius:14px;margin:0 0 20px" />`
+      : "";
+  const safeCtaUrl = cta?.url && /^(https?:|mailto:)/i.test(cta.url.trim()) ? cta.url.trim() : "";
+  const button =
+    cta?.text && safeCtaUrl
+      ? `<a href="${esc(safeCtaUrl)}" style="display:inline-block;margin-top:6px;padding:13px 28px;background:${primary};color:#ffffff;text-decoration:none;border-radius:12px;font-weight:600;font-size:15px">${esc(cta.text)}</a>`
+      : "";
+  const logo = esc(brand.logoText || "Sipfluence");
+  return `<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;background:#FFF7F1">
+  <div style="font-size:22px;font-weight:800;color:#431431;margin-bottom:22px">${logo}</div>
+  ${hero}
+  ${paras}
+  ${button}
+  <hr style="border:none;border-top:1px solid #efe4da;margin:28px 0 14px" />
+  <p style="margin:0;font-size:12px;color:#9a8f86;line-height:1.5">You're receiving this because you're a ${logo} partner. Manage your email preferences in your dashboard settings.</p>
+</div>`;
+}
+
+/**
+ * Render a lifecycle email (subject + html) for a given type and merge vars,
+ * applying the admin's overrides. Returns null if the type is unknown.
+ */
+export async function renderEmailForType(
+  key: string,
+  vars: Record<string, string | undefined>,
+): Promise<{ subject: string; html: string; enabled: boolean } | null> {
+  const r = await getEmailTemplate(key);
+  if (!r) return null;
+  const brand = await getBrand();
+  const subject = fillVars(r.tpl.subject, vars);
+  const ctaText = r.tpl.ctaText.trim();
+  const ctaUrl = fillVars(r.tpl.ctaUrl, vars).trim();
+  const html = renderRichEmail({
+    body: fillVars(r.tpl.body, vars),
+    brand,
+    cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+    imageUrl: r.tpl.imageUrl,
+  });
+  return { subject, html, enabled: r.tpl.enabled };
+}
+
+/** Render an unsaved draft (for the editor's live preview). */
+export async function renderDraft(
+  draft: Pick<EmailTemplate, "subject" | "body" | "ctaText" | "ctaUrl" | "imageUrl">,
+  vars: Record<string, string | undefined>,
+): Promise<{ subject: string; html: string }> {
+  const brand = await getBrand();
+  const ctaText = (draft.ctaText ?? "").trim();
+  const ctaUrl = fillVars(draft.ctaUrl ?? "", vars).trim();
+  return {
+    subject: fillVars(draft.subject ?? "", vars),
+    html: renderRichEmail({
+      body: fillVars(draft.body ?? "", vars),
+      brand,
+      cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+      imageUrl: draft.imageUrl,
+    }),
+  };
+}
+
+/**
+ * The single entry point for sending a lifecycle email. Honours the admin's
+ * on/off switch and content overrides. Never throws — returns true only when a
+ * message was actually handed to Resend.
+ */
+export async function dispatchEmail(
+  key: string,
+  to: string,
+  vars: Record<string, string | undefined> = {},
+): Promise<boolean> {
+  if (!to) return false;
+  try {
+    const rendered = await renderEmailForType(key, vars);
+    if (!rendered) return false;
+    if (!rendered.enabled) return false; // admin switched this email off
+    const res: any = await sendEmail(to, rendered.subject, rendered.html);
+    return !res?.skipped;
+  } catch (e) {
+    console.error(`[email-center] dispatch "${key}" failed:`, e);
+    return false;
+  }
+}

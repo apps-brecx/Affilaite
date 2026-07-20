@@ -37,7 +37,8 @@ import {
 } from "@/lib/discounts";
 import { upsertShopifyCustomer } from "@/lib/shopify-customers";
 import { createPayoutBatch, getPayoutBatch, parsePayoutBatch, rollupBatchStatus } from "@/lib/paypal";
-import { sendBroadcast as sendEmails, sendEmail, sendEmailSafe, renderTemplate, wrapEmail } from "@/lib/email";
+import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
+import { dispatchEmail } from "@/lib/email-center";
 import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
@@ -219,11 +220,11 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
   // Email the affiliate — the apply screen promises "we'll email you once approved".
   const approvedUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
   if (approvedUser?.email) {
-    await sendEmailSafe(
-      approvedUser.email,
-      "You're approved 🎉",
-      `Hi ${approvedUser.name ?? "there"},\n\nYour Sipfluence partner account is approved${issuedCode ? ` and your discount code is ${issuedCode}` : ""}. Sign in to grab your link and start earning.\n\n${APP_URL}/login`,
-    );
+    await dispatchEmail("approved", approvedUser.email, {
+      name: approvedUser.name ?? "there",
+      code: issuedCode ?? "",
+      loginUrl: `${APP_URL}/login`,
+    });
   }
 
   // Create (or link an existing) Shopify customer for this affiliate.
@@ -1041,7 +1042,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   );
   const payoutUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
   if (payoutUser?.email && (aff.notificationPrefs as Record<string, boolean> | null)?.payoutSent !== false) {
-    await sendEmailSafe(payoutUser.email, "Your payout is on its way 💸", `A payout of $${amount.toFixed(2)} is on its way to you. Thanks for driving sales!`);
+    await dispatchEmail("payout_sent", payoutUser.email, { name: payoutUser.name ?? "there", amount: amount.toFixed(2), currency: "USD" });
   }
   revalAdmin();
   return { ok: true, message: `Custom payout of $${amount.toFixed(2)} submitted.` };
@@ -1216,13 +1217,14 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
   const recAffs = await db.query.affiliates.findMany({ where: inArray(affiliates.id, recAffIds) });
   const recUsers = recAffs.length ? await db.query.users.findMany({ where: inArray(users.id, recAffs.map((a) => a.userId)) }) : [];
   const emailByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.email ?? null]));
+  const nameByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.name ?? "there"]));
   const prefsByAff = new Map(recAffs.map((a) => [a.id, (a.notificationPrefs as Record<string, boolean>) ?? {}]));
   for (const affiliateId of recAffIds) {
     await notify(affiliateId, "payouts", "Payout sent 💸", "Your commission is on its way to you.", "/payouts");
     const total = recipients.filter((r) => r.affiliateId === affiliateId).reduce((s, r) => s + Number(r.amount), 0);
     const email = emailByAff.get(affiliateId);
     if (email && prefsByAff.get(affiliateId)?.payoutSent !== false) {
-      await sendEmailSafe(email, "Your payout is on its way 💸", `Good news — a payout of ${total.toFixed(2)} is on its way to you. Thanks for driving sales!`);
+      await dispatchEmail("payout_sent", email, { name: nameByAff.get(affiliateId) ?? "there", amount: total.toFixed(2), currency: "USD" });
     }
   }
 

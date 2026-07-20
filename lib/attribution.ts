@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { orders, commissions, discountCodes, affiliates, programs, clicks, users, campaigns, affiliateCampaigns, promotions, groupMembers } from "@/db/schema";
 import { eq, inArray, gte, lte, desc, and, sql } from "drizzle-orm";
 import { notify } from "./notifications";
-import { sendEmailSafe } from "./email";
+import { dispatchEmail } from "./email-center";
+import { APP_URL } from "./links";
 import { mergeConfig } from "./campaign-config";
 import { shopifyGraphQL } from "./shopify";
 
@@ -368,16 +369,16 @@ export async function processOrderCreated(order: any) {
     .where(and(eq(commissions.affiliateId, affiliate.id), sql`${commissions.amount} >= 0`));
   const prefs = (affiliate.notificationPrefs as Record<string, boolean>) ?? {};
   if (affiliate.userId && prefs.newCommission !== false) {
-    const email = await getUserEmail(affiliate.userId);
-    if (email) {
+    const user = await db.query.users.findFirst({ where: eq(users.id, affiliate.userId) });
+    if (user?.email) {
       const first = Number(count) === 1;
-      await sendEmailSafe(
-        email,
-        first ? "You made your first sale 🎉" : `💰 Cha-ching! You just earned ${order.currency} ${amount.toFixed(2)}`,
-        first
-          ? `Congrats — you just earned your first commission of ${order.currency} ${amount.toFixed(2)}! Keep sharing your link and code to keep them coming.`
-          : `Another sale landed — you just earned ${order.currency} ${amount.toFixed(2)}. Your running total keeps climbing. Keep it up! 🚀`,
-      );
+      // Routed through the Notification Center so admins can edit/disable it.
+      await dispatchEmail(first ? "first_sale" : "repeat_sale", user.email, {
+        name: user.name ?? "there",
+        amount: amount.toFixed(2),
+        currency: order.currency,
+        dashboardUrl: `${APP_URL}/dashboard`,
+      });
     }
   }
 }

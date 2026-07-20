@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users, passwordResetTokens } from "@/db/schema";
-import { sendEmail, wrapEmail } from "@/lib/email";
+import { dispatchEmail } from "@/lib/email-center";
 import { APP_URL } from "@/lib/links";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
@@ -35,19 +35,8 @@ export async function requestPasswordReset(input: unknown): Promise<Result> {
   });
 
   const link = `${APP_URL}/reset-password?token=${token}`;
-  const body = `Hi ${user.name ?? "there"},
-
-We received a request to reset your Sipfluence partner portal password. Click the link below to choose a new one. This link expires in 1 hour and can be used once.
-
-${link}
-
-If you didn't request this, you can safely ignore this email — your password won't change.`;
-
-  try {
-    await sendEmail(user.email, "Reset your Sipfluence password", wrapEmail(body));
-  } catch (e) {
-    console.error("[requestPasswordReset] email failed:", e);
-  }
+  // Routed through the Notification Center (admin-editable, but always on).
+  await dispatchEmail("password_reset", user.email, { name: user.name ?? "there", link });
   return generic;
 }
 

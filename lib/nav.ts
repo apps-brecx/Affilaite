@@ -74,6 +74,7 @@ export const adminNav: NavSection[] = [
       { label: "Content", href: "/admin/content", icon: "campaigns" },
       { label: "Samples", href: "/admin/samples", icon: "samples" },
       { label: "Messages & Groups", href: "/admin/messages", icon: "messages" },
+      { label: "Notification Center", href: "/admin/notifications", icon: "notifications" },
     ],
   },
   {

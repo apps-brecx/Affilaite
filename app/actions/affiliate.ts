@@ -12,7 +12,7 @@ import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } fr
 import { normalizeAddress, composeAddress } from "@/lib/address";
 import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
 import { shopifyReady } from "@/lib/integrations";
-import { sendEmailSafe } from "@/lib/email";
+import { dispatchEmail } from "@/lib/email-center";
 import { APP_URL } from "@/lib/links";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import type { TimePoint } from "@/lib/types";
@@ -123,11 +123,7 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
       })
       .returning();
 
-    await sendEmailSafe(
-      data.email,
-      "We got your application 🎉",
-      `Hi ${data.name},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.`,
-    );
+    await dispatchEmail("application_received", data.email, { name: data.name });
 
     revalidatePath("/admin/affiliates");
     revalidatePath("/admin");
@@ -215,13 +211,10 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
       .onConflictDoNothing();
   }
 
-  await sendEmailSafe(
-    email,
-    instant ? "You're in! 🎉" : "We got your application 🎉",
-    instant
-      ? `Hi ${data.name},\n\nYour Sipfluence partner account is ready. Sign in to grab your code and referral link.\n\n${APP_URL}/login`
-      : `Hi ${data.name},\n\nThanks for applying — we're reviewing your details and will email you once you're approved.`,
-  );
+  await dispatchEmail(instant ? "instant_welcome" : "application_received", email, {
+    name: data.name,
+    loginUrl: `${APP_URL}/login`,
+  });
 
   revalidatePath("/admin/affiliates");
   revalidatePath(`/admin/campaigns/${campaign.id}`);
