@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Gift, MapPin, PackageOpen, Clock, Check, X, Truck } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SampleCatalog } from "@/components/affiliate/sample-catalog";
 import { PromoBanner } from "@/components/ui/promo-banner";
+import { RevealSection } from "@/components/ui/reveal-section";
 import { requireAffiliate } from "@/lib/session";
 import { getMySampleRequests, getBanner } from "@/lib/queries";
 import { getStoreProducts, getCatalogVisibility, resolveVisibleProducts, getSamplesConfig } from "@/lib/products";
@@ -50,12 +51,13 @@ export default async function SamplesPage() {
 
   return (
     <div className="space-y-8">
+      {/* Full-bleed hero banner across the top of the screen */}
+      <PromoBanner banner={banner} fullBleed />
+
       <PageHeader
         title="Request samples"
         description="Get the products in your hands so you can create authentic content. Request a sample and we'll ship it to you after a quick review."
       />
-
-      <PromoBanner banner={banner} />
 
       {banned && (
         <Card className="border-danger/30 bg-danger-soft/30">
@@ -90,15 +92,11 @@ export default async function SamplesPage() {
         </Card>
       )}
 
-      {/* Request history */}
+      {/* Request history — tucked behind a button */}
       {mine.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gift className="size-4 text-primary" /> Your requests
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <RevealSection label="Your requests" icon={Gift} count={mine.length}>
+          <Card>
+          <CardContent className="space-y-3 pt-6">
             {mine.map((r) => {
               const s = STATUS[r.status] ?? STATUS.requested;
               const Icon = s.icon;
@@ -136,7 +134,8 @@ export default async function SamplesPage() {
               );
             })}
           </CardContent>
-        </Card>
+          </Card>
+        </RevealSection>
       )}
 
       {/* Catalog */}
