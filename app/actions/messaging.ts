@@ -23,8 +23,13 @@ export type ActionResult = { ok: boolean; message: string };
 
 async function adminId(): Promise<string> {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") throw new Error("Unauthorized");
-  return (session?.user as any)?.id ?? "";
+  const u = session?.user as any;
+  if (u?.role !== "admin") throw new Error("Unauthorized");
+  // All admin messaging actions live in the "Messages & Groups" area.
+  if (!u.isOwner && !(Array.isArray(u.permissions) && u.permissions.includes("messages"))) {
+    throw new Error("You don't have access to Messages & Groups.");
+  }
+  return u?.id ?? "";
 }
 async function myAffiliateId(): Promise<string | null> {
   const session = await auth();

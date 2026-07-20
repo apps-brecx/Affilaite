@@ -16,7 +16,11 @@ async function myAffiliateId(): Promise<string | null> {
 }
 async function assertAdmin() {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") throw new Error("Unauthorized");
+  const u = session?.user as any;
+  if (u?.role !== "admin") throw new Error("Unauthorized");
+  if (!u.isOwner && !(Array.isArray(u.permissions) && u.permissions.includes("content"))) {
+    throw new Error("You don't have access to Content.");
+  }
 }
 
 // ---------- Post tracking ----------

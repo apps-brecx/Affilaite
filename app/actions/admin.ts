@@ -63,9 +63,15 @@ export async function getRevenueRange(range: EarningsRange): Promise<TimePoint[]
 
 export type ActionResult = { ok: boolean; message: string };
 
-async function assertAdmin() {
+async function assertAdmin(area?: string) {
   const session = await auth();
-  if ((session?.user as any)?.role !== "admin") throw new Error("Unauthorized");
+  const u = session?.user as any;
+  if (u?.role !== "admin") throw new Error("Unauthorized");
+  // Owners bypass; team members need the specific area. `undefined` area means
+  // "any admin" (self-service actions like managing your own account).
+  if (area && !u.isOwner && !(Array.isArray(u.permissions) && u.permissions.includes(area))) {
+    throw new Error("You don't have access to this area.");
+  }
 }
 
 /**
@@ -75,7 +81,7 @@ async function assertAdmin() {
  * sales that happened before the Shopify webhook was live.
  */
 export async function importAffiliateOrders(): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("orders");
   if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
 
   const codeRows = await db
@@ -174,7 +180,7 @@ function revalAdmin() {
 // ---------- Affiliates ----------
 
 export async function approveAffiliate(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
 
   const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, id) });
@@ -248,7 +254,7 @@ export async function setAffiliateStatus(
   id: string,
   status: "approved" | "rejected" | "suspended" | "pending",
 ): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   if (status === "approved") return approveAffiliate(id);
   await db.update(affiliates).set({ status }).where(eq(affiliates.id, id));
@@ -258,7 +264,7 @@ export async function setAffiliateStatus(
 
 /** Admin edit of an affiliate's contact/payout info (name, email, phone, address, PayPal). */
 export async function updateAffiliateInfo(id: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -315,7 +321,7 @@ export async function updateAffiliateInfo(id: string, input: unknown): Promise<A
 }
 
 export async function assignProgram(affiliateId: string, programId: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(affiliates).set({ programId }).where(eq(affiliates.id, affiliateId));
   revalidatePath(`/admin/affiliates/${affiliateId}`);
@@ -325,7 +331,7 @@ export async function assignProgram(affiliateId: string, programId: string): Pro
 // ---------- Commissions ----------
 
 export async function approveCommissions(ids: string[]): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("commissions");
   if (!db || ids.length === 0) return { ok: false, message: "Nothing to approve." };
   // Only pending/reversed commissions can be approved — never touch paid ones.
   const rows = await db
@@ -432,7 +438,7 @@ export async function maybeAutoPayout(affiliateIds?: string[]): Promise<string> 
 }
 
 export async function reverseCommissions(ids: string[]): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("commissions");
   if (!db || ids.length === 0) return { ok: false, message: "Nothing to reverse." };
   // Only pending/approved commissions can be reversed — paid ones are settled.
   const rows = await db
@@ -457,7 +463,7 @@ const programSchema = z.object({
 });
 
 export async function createProgram(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("programs");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = programSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -478,7 +484,7 @@ export async function createProgram(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateProgram(id: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("programs");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = programSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -501,7 +507,7 @@ export async function updateProgram(id: string, input: unknown): Promise<ActionR
 }
 
 export async function setDefaultProgram(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("programs");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(programs).set({ isDefault: false });
   await db.update(programs).set({ isDefault: true }).where(eq(programs.id, id));
@@ -510,7 +516,7 @@ export async function setDefaultProgram(id: string): Promise<ActionResult> {
 }
 
 export async function deleteProgram(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("programs");
   if (!db) return { ok: false, message: "Database not configured." };
   const prog = await db.query.programs.findFirst({ where: eq(programs.id, id) });
   if (!prog) return { ok: false, message: "Program not found." };
@@ -526,7 +532,7 @@ export async function deleteProgram(id: string): Promise<ActionResult> {
 // ---------- Groups ----------
 
 export async function createGroup(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("messages");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z.object({ name: z.string().min(2), description: z.string().optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a group name." };
@@ -537,7 +543,7 @@ export async function createGroup(input: unknown): Promise<ActionResult> {
 
 /** Post a message (text / attachments / poll) to a group's chat. */
 export async function sendGroupMessage(groupId: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("messages");
   const senderId = ((await auth())?.user as any)?.id ?? null;
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
@@ -581,7 +587,7 @@ export async function sendGroupMessage(groupId: string, input: unknown): Promise
 }
 
 export async function updateGroup(id: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("messages");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z.object({ name: z.string().min(2), description: z.string().optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a group name." };
@@ -595,7 +601,7 @@ export async function updateGroup(id: string, input: unknown): Promise<ActionRes
 }
 
 export async function deleteGroup(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("messages");
   if (!db) return { ok: false, message: "Database not configured." };
   // Detach members first (their group_id references this group).
   await db.update(affiliates).set({ groupId: null }).where(eq(affiliates.groupId, id));
@@ -605,7 +611,7 @@ export async function deleteGroup(id: string): Promise<ActionResult> {
 }
 
 export async function setAffiliateGroup(affiliateId: string, groupId: string | null): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(affiliates).set({ groupId }).where(eq(affiliates.id, affiliateId));
   revalidatePath("/admin/groups");
@@ -616,7 +622,7 @@ export async function setAffiliateGroup(affiliateId: string, groupId: string | n
 // ---------- Promotions ----------
 
 export async function createPromotion(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("promotions");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -663,7 +669,7 @@ export async function createPromotion(input: unknown): Promise<ActionResult> {
 // ---------- Broadcast ----------
 
 export async function sendBroadcast(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("messages");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -748,7 +754,7 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
 // ---------- Bulk discount codes ----------
 
 export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   const approved = await db.query.affiliates.findMany({ where: eq(affiliates.status, "approved") });
   const shopifyOn = await shopifyReady();
@@ -780,7 +786,7 @@ export async function bulkCreateDiscounts(percent: number, prefix = ""): Promise
 
 /** Create one discount code for a single affiliate (also pushes to Shopify when connected). */
 export async function createSingleDiscount(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -823,7 +829,7 @@ export async function createSingleDiscount(input: unknown): Promise<ActionResult
 
 /** Change a code's text or percentage — syncs to Shopify if the code is linked. */
 export async function updateDiscountCode(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -860,7 +866,7 @@ export async function updateDiscountCode(input: unknown): Promise<ActionResult> 
 
 /** Enable or disable a code — deactivates in Shopify without deleting. */
 export async function toggleDiscountCode(id: string, active: boolean): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
   if (!existing) return { ok: false, message: "Code not found." };
@@ -878,7 +884,7 @@ export async function toggleDiscountCode(id: string, active: boolean): Promise<A
 
 /** Permanently delete a code — removes it from Shopify too. */
 export async function deleteDiscountCode(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
   if (!existing) return { ok: false, message: "Code not found." };
@@ -896,7 +902,7 @@ export async function deleteDiscountCode(id: string): Promise<ActionResult> {
 
 /** Make every Shopify-linked code stackable (fixes codes a VIP couldn't use). */
 export async function makeAllCodesCombinable(): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
   const codes = await db.select().from(discountCodes).where(isNotNull(discountCodes.shopifyDiscountId));
@@ -918,7 +924,7 @@ export async function makeAllCodesCombinable(): Promise<ActionResult> {
 
 /** Push a local-only code up to Shopify (for codes created before Shopify was connected). */
 export async function pushDiscountToShopify(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("codes");
   if (!db) return { ok: false, message: "Database not configured." };
   if (!(await shopifyReady())) return { ok: false, message: "Connect Shopify first (Settings → Integrations)." };
   const existing = await db.query.discountCodes.findFirst({ where: eq(discountCodes.id, id) });
@@ -989,7 +995,7 @@ export async function reconcileProcessingPayouts(): Promise<void> {
 }
 
 export async function runCustomPayout(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("payouts");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({ affiliateId: z.string().min(1), amount: z.coerce.number().positive("Enter an amount") })
@@ -1053,7 +1059,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
 }
 
 export async function runPayout(): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("payouts");
   return executePayout();
 }
 
@@ -1063,7 +1069,7 @@ export async function runPayout(): Promise<ActionResult> {
  * bypassed — a valid payout destination and PayPal are still required.
  */
 export async function payNowAll(): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("payouts");
   return executePayout(undefined, { ignoreMinimum: true });
 }
 
@@ -1337,7 +1343,7 @@ async function createAndInvite(
 }
 
 export async function inviteAffiliate(input: unknown): Promise<ActionResult & { tempPassword?: string; emailed?: boolean }> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -1367,7 +1373,7 @@ export async function bulkInviteAffiliates(
   rows: { name?: string; email: string; code?: string }[],
   templateId?: string,
 ): Promise<ActionResult & { created: number; emailed: number; skipped: number }> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured.", created: 0, emailed: 0, skipped: 0 };
   const clean = (rows ?? []).filter((r) => /.+@.+\..+/.test(r.email ?? ""));
   let created = 0,
@@ -1396,7 +1402,7 @@ export async function sendPortalInvite(
   affiliateIds: string[],
   templateId?: string,
 ): Promise<ActionResult & { emailed: number }> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db || affiliateIds.length === 0) return { ok: false, message: "No affiliates selected.", emailed: 0 };
 
   const tpl = templateId
@@ -1451,7 +1457,7 @@ export async function sendPortalInvite(
 const tplSchema = z.object({ name: z.string().min(2), subject: z.string().min(1), body: z.string().min(1) });
 
 export async function createInviteTemplate(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = tplSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -1462,7 +1468,7 @@ export async function createInviteTemplate(input: unknown): Promise<ActionResult
 }
 
 export async function updateInviteTemplate(id: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = tplSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -1472,7 +1478,7 @@ export async function updateInviteTemplate(id: string, input: unknown): Promise<
 }
 
 export async function deleteInviteTemplate(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.delete(inviteTemplates).where(eq(inviteTemplates.id, id));
   revalidatePath("/admin/settings");
@@ -1480,7 +1486,7 @@ export async function deleteInviteTemplate(id: string): Promise<ActionResult> {
 }
 
 export async function setDefaultInviteTemplate(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(inviteTemplates).set({ isDefault: false });
   await db.update(inviteTemplates).set({ isDefault: true }).where(eq(inviteTemplates.id, id));
@@ -1526,7 +1532,7 @@ const campaignSchema = z.object({
 });
 
 export async function createCampaign(input: unknown): Promise<ActionResult & { id?: string }> {
-  await assertAdmin();
+  await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = campaignSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
@@ -1570,7 +1576,7 @@ export async function createCampaign(input: unknown): Promise<ActionResult & { i
 }
 
 export async function updateCampaign(id: string, input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = campaignSchema.partial().safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid input." };
@@ -1604,7 +1610,7 @@ export async function updateCampaign(id: string, input: unknown): Promise<Action
 }
 
 export async function setSetting(key: string, value: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   await db
     .insert(appSettings)
@@ -1616,7 +1622,7 @@ export async function setSetting(key: string, value: string): Promise<ActionResu
 
 /** Save the full rewards & rules config for a campaign. */
 export async function updateCampaignConfig(id: string, config: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   if (!config || typeof config !== "object") return { ok: false, message: "Invalid config." };
   await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
@@ -1646,7 +1652,7 @@ const INTEGRATION_KEYS: Record<string, string[]> = {
 };
 
 export async function saveIntegration(service: string, fields: Record<string, string>): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   if (service === "shopify") {
     if (fields.domain !== undefined) await writeSetting("int_shopify_domain", fields.domain.trim());
@@ -1675,7 +1681,7 @@ export async function saveIntegration(service: string, fields: Record<string, st
 
 /** Save which products affiliates see in the catalog, and in what order. */
 export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("samples");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({ order: z.array(z.string()), shown: z.array(z.string()) })
@@ -1689,7 +1695,7 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
 
 /** Which products (and their order) affiliates can request as samples. */
 export async function saveSamplesConfig(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("samples");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid samples settings." };
@@ -1701,7 +1707,7 @@ export async function saveSamplesConfig(input: unknown): Promise<ActionResult> {
 
 /** Save (or clear) the promo banner shown on the samples or promotions page. */
 export async function saveBanner(placement: "samples" | "promotions", input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin(placement === "samples" ? "samples" : "promotions");
   if (!db) return { ok: false, message: "Database not configured." };
   if (placement !== "samples" && placement !== "promotions") return { ok: false, message: "Unknown banner." };
   const parsed = z
@@ -1723,7 +1729,7 @@ export async function saveBanner(placement: "samples" | "promotions", input: unk
 
 /** Ban / unban an affiliate from requesting product samples. */
 export async function setSamplesBanned(affiliateId: string, banned: boolean): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(affiliates).set({ samplesBanned: banned }).where(eq(affiliates.id, affiliateId));
   revalidatePath(`/admin/affiliates/${affiliateId}`);
@@ -1733,7 +1739,7 @@ export async function setSamplesBanned(affiliateId: string, banned: boolean): Pr
 
 /** Mark all current Shopify products & collections as "seen" (clears the new-item dot). */
 export async function markCatalogSeen(): Promise<void> {
-  await assertAdmin();
+  await assertAdmin("samples");
   if (!db) return;
   const ids = await getCatalogItemIds();
   await writeSetting("catalog_seen_products", JSON.stringify(ids.products));
@@ -1742,7 +1748,7 @@ export async function markCatalogSeen(): Promise<void> {
 
 /** Save which collections affiliates see, and in what order. */
 export async function saveCollectionConfig(input: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("samples");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid collection settings." };
@@ -1754,7 +1760,7 @@ export async function saveCollectionConfig(input: unknown): Promise<ActionResult
 
 /** Ping Shopify with the saved credentials so admins can verify the token works. */
 export async function testShopifyConnection(): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!(await shopifyReady())) return { ok: false, message: "Enter a store domain and access token first." };
   try {
     const json = await shopifyGraphQL<any>(`{ shop { name myshopifyDomain } }`);
@@ -1768,7 +1774,7 @@ export async function testShopifyConnection(): Promise<ActionResult> {
 
 /** Send a real Twilio Verify code so the admin can confirm the setup works. */
 export async function testSms(phoneRaw: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false, message: "Enter a valid phone number to test." };
   const res = await sendVerification(phone);
@@ -1779,7 +1785,7 @@ export async function testSms(phoneRaw: string): Promise<ActionResult> {
 
 /** Send a test email so the admin can confirm Resend + the from-address work. */
 export async function testEmail(to: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   const address = (to ?? "").trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return { ok: false, message: "Enter a valid email to test." };
   if (!(await emailReady())) return { ok: false, message: "Connect Resend (add an API key) first." };
@@ -1795,7 +1801,7 @@ export async function testEmail(to: string): Promise<ActionResult> {
 }
 
 export async function disconnectIntegration(service: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   const keys = INTEGRATION_KEYS[service];
   if (!keys) return { ok: false, message: "Unknown integration." };
@@ -1842,7 +1848,7 @@ export async function changeAdminPassword(input: unknown): Promise<ActionResult>
 
 /** Save brand/theme settings (stored as JSON under the "brand" key). */
 export async function saveBrand(brand: unknown): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("settings");
   if (!db) return { ok: false, message: "Database not configured." };
   const value = JSON.stringify(brand ?? {});
   await db
@@ -1855,7 +1861,7 @@ export async function saveBrand(brand: unknown): Promise<ActionResult> {
 }
 
 export async function setCampaignStatus(id: string, status: "active" | "paused" | "ended"): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
   revalidatePath(`/admin/campaigns/${id}`);
@@ -1864,7 +1870,7 @@ export async function setCampaignStatus(id: string, status: "active" | "paused" 
 }
 
 export async function deleteCampaign(id: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   await db.delete(affiliateCampaigns).where(eq(affiliateCampaigns.campaignId, id));
   await db.delete(campaigns).where(eq(campaigns.id, id));
@@ -1873,7 +1879,7 @@ export async function deleteCampaign(id: string): Promise<ActionResult> {
 }
 
 export async function assignAffiliateToCampaign(affiliateId: string, campaignId: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   const existing = await db.query.affiliateCampaigns.findFirst({
     where: and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)),
@@ -1886,7 +1892,7 @@ export async function assignAffiliateToCampaign(affiliateId: string, campaignId:
 }
 
 export async function removeAffiliateFromCampaign(affiliateId: string, campaignId: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   await db
     .delete(affiliateCampaigns)
@@ -1900,7 +1906,7 @@ export async function removeAffiliateFromCampaign(affiliateId: string, campaignI
 // ---------- Edit an affiliate's discount code ----------
 
 export async function updateAffiliateCode(affiliateId: string, rawCode: string): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
   const code = rawCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (code.length < 3) return { ok: false, message: "Code must be at least 3 characters." };
@@ -1945,7 +1951,7 @@ export async function decideSampleRequest(
   action: "approve" | "reject" | "ship",
   tracking?: { carrier?: string; trackingNumber?: string; trackingUrl?: string },
 ): Promise<ActionResult> {
-  await assertAdmin();
+  await assertAdmin("samples");
   if (!db) return { ok: false, message: "Database not configured." };
   const req = await db.query.sampleRequests.findFirst({ where: eq(sampleRequests.id, id) });
   if (!req) return { ok: false, message: "Request not found." };
