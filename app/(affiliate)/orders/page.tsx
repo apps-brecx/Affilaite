@@ -86,7 +86,10 @@ function OrderCard({ o }: { o: MyOrder }) {
 
 export default async function MyOrdersPage() {
   const me = await requireAffiliate();
-  const { connected, accountFound, orders, error } = await getMyStoreOrders(me.email, 30);
+  const { connected, accountFound, orders, error } = await getMyStoreOrders(
+    { email: me.email, customerId: me.shopifyCustomerId },
+    30,
+  );
 
   return (
     <div className="space-y-8">

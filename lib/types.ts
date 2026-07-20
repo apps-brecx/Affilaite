@@ -58,6 +58,7 @@ export interface Affiliate {
   id: string;
   name: string;
   email: string;
+  shopifyCustomerId: string | null;
   refCode: string;
   code: string; // discount code
   status: AffiliateState;

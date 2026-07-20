@@ -103,6 +103,7 @@ function mapAffiliate(row: any, stats: any, clickCount: Map<string, number>): Af
     id: row.aff.id,
     name: row.user?.name ?? row.user?.email ?? "Unknown",
     email: row.user?.email ?? "",
+    shopifyCustomerId: row.aff.shopifyCustomerId ?? null,
     refCode: row.aff.refCode,
     code: row.code?.code ?? row.aff.refCode,
     status: row.aff.status,
