@@ -53,6 +53,7 @@ export const affiliateNav: NavSection[] = [
     title: "Resources",
     items: [
       { label: "My Posts", href: "/posts", icon: "campaigns" },
+      { label: "My Orders", href: "/orders", icon: "performance" },
       { label: "Samples", href: "/samples", icon: "samples" },
       { label: "Assets", href: "/assets", icon: "assets" },
       { label: "Community", href: "/community", icon: "groups" },
