@@ -169,6 +169,13 @@
       "when": 1784484008492,
       "tag": "0023_absent_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784490000000,
+      "tag": "0024_team_access",
+      "breakpoints": true
     }
   ]
 }

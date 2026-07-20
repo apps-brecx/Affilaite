@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
 import { getAffiliate } from "./queries";
+import { canAccessArea } from "./permissions";
 import type { Affiliate } from "./types";
 
 export async function currentUser() {
@@ -12,6 +13,21 @@ export async function requireAdmin() {
   const user = await currentUser();
   if (!user) redirect("/login");
   if ((user as any).role !== "admin") redirect("/dashboard");
+  return user;
+}
+
+/** Guard a specific admin area at the page level (belt-and-suspenders with the
+ * middleware). Redirects owners/permitted through; bounces others to /admin. */
+export async function requireArea(area: string) {
+  const user = await requireAdmin();
+  if (!canAccessArea(user as any, area)) redirect("/admin");
+  return user;
+}
+
+/** Owner-only guard (team management, etc.). */
+export async function requireOwner() {
+  const user = await requireAdmin();
+  if (!(user as any).isOwner) redirect("/admin");
   return user;
 }
 

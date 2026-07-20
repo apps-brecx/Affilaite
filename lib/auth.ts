@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Bootstrap admin from env when no DB user exists yet.
         if (!db) {
           if (email === (process.env.ADMIN_EMAIL ?? "").toLowerCase() && password === process.env.ADMIN_PASSWORD) {
-            return { id: "admin", email, name: "Administrator", role: "admin" } as any;
+            return { id: "admin", email, name: "Administrator", role: "admin", isOwner: true, permissions: null } as any;
           }
           return null;
         }
@@ -46,7 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const passwordHash = await bcrypt.hash(password, 10);
           const [created] = await db
             .insert(users)
-            .values({ email, name: "Sipfluence Admin", passwordHash, role: "admin" })
+            .values({ email, name: "Sipfluence Admin", passwordHash, role: "admin", isOwner: true })
             .returning();
           user = created;
 
@@ -86,7 +86,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.userId, user.id) });
           affiliateId = aff?.id ?? null;
         }
-        return { id: user.id, email: user.email, name: user.name ?? email, role: user.role, affiliateId } as any;
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? email,
+          role: user.role,
+          affiliateId,
+          isOwner: !!(user as any).isOwner,
+          permissions: ((user as any).permissions as string[] | null) ?? null,
+        } as any;
       },
     }),
   ],

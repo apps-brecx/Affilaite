@@ -49,6 +49,10 @@ export const users = pgTable("users", {
   name: text("name"),
   passwordHash: text("password_hash"),
   role: roleEnum("role").notNull().default("affiliate"),
+  // Admin team access: the founding admin is the owner (full access, manages the
+  // team). Other admins get a subset of area keys in `permissions`.
+  isOwner: boolean("is_owner").default(false),
+  permissions: jsonb("permissions").$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

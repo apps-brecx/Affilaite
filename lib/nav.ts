@@ -103,6 +103,7 @@ export const adminNav: NavSection[] = [
         icon: "settings",
         children: [
           { label: "General", href: "/admin/settings", icon: "general" },
+          { label: "Team & access", href: "/admin/settings/team", icon: "affiliates" },
           { label: "Integrations", href: "/admin/settings/integrations", icon: "integrations" },
           { label: "Payments", href: "/admin/settings/payments", icon: "payments" },
           { label: "Brand & theme", href: "/admin/settings/brand", icon: "brand" },
