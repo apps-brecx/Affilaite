@@ -93,60 +93,73 @@ export default async function AdminSamplesPage() {
         description="Review affiliate sample requests. Approving creates a Shopify draft order; once you fulfill it in Shopify it's marked shipped automatically."
       />
 
-      {/* Settings collapsed behind buttons — one open at a time, click away closes */}
-      <RevealGroup className="flex flex-wrap gap-2">
-        <CreateReveal label="See catalog">
-          <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} hidden={samplesConfig.hidden} /></div>
-        </CreateReveal>
-        <CreateReveal label="Sample banner">
-          <div className="max-w-lg pt-2"><SamplesBanner banner={banner} /></div>
-        </CreateReveal>
-      </RevealGroup>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left — the requests / orders */}
+        <div className="space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Clock className="size-4" /> Requests
+          </h2>
 
-      {/* Awaiting review — the default view */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="size-4 text-warning" /> Awaiting review
-            {open.length > 0 && <Badge variant="warning">{open.length}</Badge>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {open.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No requests waiting for review.</p>
-          ) : (
-            open.map((r) => <Row key={r.id} r={r} />)
+          {/* Awaiting review — the default view */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="size-4 text-warning" /> Awaiting review
+                {open.length > 0 && <Badge variant="warning">{open.length}</Badge>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {open.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No requests waiting for review.</p>
+              ) : (
+                open.map((r) => <Row key={r.id} r={r} />)
+              )}
+            </CardContent>
+          </Card>
+
+          <RevealGroup className="flex flex-wrap gap-2">
+            {approved.length > 0 && (
+              <CreateReveal label={`Approved orders (${approved.length})`} icon={null}>
+                <Card className="mt-2">
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Check className="size-4 text-success" /> Approved — awaiting Shopify fulfillment</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">{approved.map((r) => <Row key={r.id} r={r} />)}</CardContent>
+                </Card>
+              </CreateReveal>
+            )}
+            {rest.length > 0 && (
+              <CreateReveal label={`History (${rest.length})`} icon={null}>
+                <Card className="mt-2">
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Gift className="size-4 text-primary" /> History</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">{rest.map((r) => <Row key={r.id} r={r} />)}</CardContent>
+                </Card>
+              </CreateReveal>
+            )}
+          </RevealGroup>
+
+          {requests.length === 0 && (
+            <EmptyState
+              icon={Gift}
+              title="No sample requests yet"
+              description="When affiliates request product samples, they'll show up here for your review."
+            />
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Approved / awaiting fulfillment — behind a button */}
-      {approved.length > 0 && (
-        <CreateReveal label={`Approved orders (${approved.length})`}>
-          <Card className="mt-2">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Check className="size-4 text-success" /> Approved — awaiting Shopify fulfillment</CardTitle></CardHeader>
-            <CardContent className="space-y-3">{approved.map((r) => <Row key={r.id} r={r} />)}</CardContent>
-          </Card>
-        </CreateReveal>
-      )}
-
-      {/* Shipped / rejected history — behind a button */}
-      {rest.length > 0 && (
-        <CreateReveal label={`History (${rest.length})`}>
-          <Card className="mt-2">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Gift className="size-4 text-primary" /> History</CardTitle></CardHeader>
-            <CardContent className="space-y-3">{rest.map((r) => <Row key={r.id} r={r} />)}</CardContent>
-          </Card>
-        </CreateReveal>
-      )}
-
-      {requests.length === 0 && (
-        <EmptyState
-          icon={Gift}
-          title="No sample requests yet"
-          description="When affiliates request product samples, they'll show up here for your review."
-        />
-      )}
+        {/* Right — catalog & banner controls */}
+        <div className="space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Gift className="size-4" /> Catalog &amp; banner
+          </h2>
+          <RevealGroup className="flex flex-wrap gap-2">
+            <CreateReveal label="See catalog" icon={null}>
+              <div className="pt-2"><SamplesCuration products={catalogForSettings} order={samplesConfig.order} hidden={samplesConfig.hidden} /></div>
+            </CreateReveal>
+            <CreateReveal label="Sample banner">
+              <div className="pt-2"><SamplesBanner banner={banner} /></div>
+            </CreateReveal>
+          </RevealGroup>
+        </div>
+      </div>
     </div>
   );
 }

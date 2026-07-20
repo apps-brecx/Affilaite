@@ -24,7 +24,18 @@ export function RevealGroup({ children, className }: { children: React.ReactNode
  * Collapses a create form behind a button. Closes when you click outside it, and
  * inside a RevealGroup opening one closes the others.
  */
-export function CreateReveal({ label, children, defaultOpen = false }: { label: string; children: React.ReactNode; defaultOpen?: boolean }) {
+export function CreateReveal({
+  label,
+  children,
+  defaultOpen = false,
+  icon,
+}: {
+  label: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  /** Leading icon on the button. Defaults to a "+" (for create-new actions); pass null to hide it. */
+  icon?: React.ReactNode;
+}) {
   const ctx = useContext(RevealCtx);
   const id = useId();
   const [localOpen, setLocalOpen] = useState(defaultOpen);
@@ -50,9 +61,11 @@ export function CreateReveal({ label, children, defaultOpen = false }: { label: 
   }, [open]);
 
   if (!open) {
+    const leading = icon === undefined ? <Plus className="size-4" /> : icon;
     return (
       <Button onClick={() => setOpen(true)}>
-        <Plus className="size-4" /> {label}
+        {leading}
+        {label}
       </Button>
     );
   }
