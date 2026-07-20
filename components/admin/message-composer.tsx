@@ -59,7 +59,7 @@ export function MessageComposer({
           title: fields.title || special?.title,
           code: fields.code,
           endsAt: fields.endsAt || undefined,
-          ...(special ? { productTitle: special.title, productImage: special.image, productUrl: special.url } : {}),
+          ...(special ? { productTitle: special.title, productImage: special.image, productUrl: special.url, promoName: special.promoName, bonus: special.bonus } : {}),
         };
         if (!payload.title) return toast("Pick a special or add a deal title.", "error");
       }

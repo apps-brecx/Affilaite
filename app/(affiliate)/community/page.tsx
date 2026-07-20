@@ -148,10 +148,14 @@ export default async function CommunityPage({
                               <img src={m.payload.productImage} alt="" className="h-28 w-full max-w-[220px] object-cover" />
                             </Link>
                           )}
+                          {(m.payload?.promoName || m.payload?.bonus) && (
+                            <p className="mb-0.5 text-xs">🔥 {m.payload.promoName}{m.payload.bonus ? ` · +${m.payload.bonus} extra` : ""}</p>
+                          )}
+                          {m.payload?.code && <p className="mb-0.5 text-xs">Use code <span className="font-mono font-semibold">{m.payload.code}</span></p>}
+                          {m.payload?.endsAt && <p className="mb-0.5 text-[11px] opacity-80">Ends {new Date(m.payload.endsAt).toLocaleDateString()}</p>}
                           {(m.payload?.productImage || m.payload?.productUrl) && (
                             <Link href="/promotions" className={`mb-0.5 inline-block text-xs font-medium underline ${m.fromAdmin ? "text-primary" : ""}`}>Get your link →</Link>
                           )}
-                          {m.payload?.code && <p className="mb-0.5 font-mono text-xs font-semibold">Code: {m.payload.code}</p>}
                         </>
                       )}
                       {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}

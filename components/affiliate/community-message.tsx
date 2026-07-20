@@ -51,18 +51,27 @@ export function CommunityMessage({
                 <img src={p.productImage} alt={p.productTitle || ""} className="h-32 w-full object-cover" />
               </a>
             )}
+            {(p.promoName || p.bonus) && (
+              <p className="flex flex-wrap items-center gap-1.5 text-sm">
+                🔥 {p.promoName && <span className="font-medium">{p.promoName}</span>}
+                {p.bonus && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">+{p.bonus} extra</span>}
+              </p>
+            )}
+            {msg.body && <p className="text-muted-foreground">{msg.body}</p>}
+            {p.code && (
+              <div className="text-xs text-muted-foreground">
+                Use code{" "}
+                <button onClick={() => { navigator.clipboard?.writeText(p.code); toast("Code copied!"); }} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-primary/40 bg-background px-2 py-0.5 font-mono font-semibold tracking-wide text-foreground">
+                  {p.code} <Copy className="size-3 opacity-60" />
+                </button>
+              </div>
+            )}
+            {p.endsAt && <p className="text-xs text-muted-foreground">Ends {new Date(p.endsAt).toLocaleDateString()}</p>}
             {(p.productImage || p.productUrl) && (
               <a href="/promotions" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                 Get your link for {p.productTitle || "this item"} →
               </a>
             )}
-            {msg.body && <p className="text-muted-foreground">{msg.body}</p>}
-            {p.code && (
-              <button onClick={() => { navigator.clipboard?.writeText(p.code); toast("Code copied!"); }} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-primary/40 bg-background px-3 py-1 font-mono font-semibold tracking-wide">
-                {p.code} <Copy className="size-3.5 opacity-60" />
-              </button>
-            )}
-            {p.endsAt && <p className="text-xs text-muted-foreground">Ends {new Date(p.endsAt).toLocaleDateString()}</p>}
           </div>
         )}
 
