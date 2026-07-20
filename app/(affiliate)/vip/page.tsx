@@ -1,13 +1,15 @@
-import { Crown, Gem, Sparkles, TrendingUp, PiggyBank } from "lucide-react";
+import { Crown, Gem, Sparkles, TrendingUp, PiggyBank, ExternalLink } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireAffiliate } from "@/lib/session";
 import { getMyVip } from "@/lib/vip";
+import { STORE_URL } from "@/lib/links";
 
 export const metadata = { title: "VIP" };
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const REWARDS_URL = `${STORE_URL}/apps/vip/rewards`;
 
 export default async function VipPage() {
   const me = await requireAffiliate();
@@ -63,6 +65,14 @@ export default async function VipPage() {
               </div>
             </div>
           </div>
+          <a
+            href={REWARDS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-5 py-3 font-semibold text-gold-foreground shadow-card transition-transform hover:scale-[1.02]"
+          >
+            View full rewards <ExternalLink className="size-4" />
+          </a>
         </CardContent>
       </Card>
 
