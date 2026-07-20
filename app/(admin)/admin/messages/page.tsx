@@ -22,6 +22,7 @@ import {
   competitionLeaderboard,
   type LeaderRow,
 } from "@/lib/messaging";
+import { listPromotions } from "@/lib/queries";
 import { relativeTime } from "@/lib/utils";
 
 export const metadata = { title: "Messages & Groups" };
@@ -39,6 +40,19 @@ export default async function MessagesPage({
   ]);
   const campReward = (c: any) => (c.rewardType === "percent" ? `${Number(c.rewardValue) || 0}%` : `$${Number(c.rewardValue) || 0}`);
   const campsForComposer = camps.map((c: any) => ({ id: c.id, name: c.name, reward: campReward(c) }));
+
+  // "Specials" for a Deal = featured products from promotions that haven't ended.
+  const promos = await listPromotions();
+  const deals = promos
+    .filter((p) => p.status !== "ended" && p.product)
+    .map((p) => ({
+      productId: p.product!.id,
+      title: p.product!.title,
+      image: p.product!.image,
+      url: p.product!.url,
+      promoName: p.name,
+      bonus: p.bonusType === "percent" ? `${p.bonusValue}% bonus` : `$${p.bonusValue} bonus`,
+    }));
 
   const selected = g || dm;
   const activeTab = dm ? "direct" : tab;
@@ -122,7 +136,7 @@ export default async function MessagesPage({
               {thread.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Send the first one below.</p>}
               {thread.map((m) => <AdminChatMessage key={m.id} msg={m} leaderboard={leaderboards[m.id]} />)}
             </div>
-            <MessageComposer target={{ type: "group", id: group.id }} campaigns={campsForComposer} />
+            <MessageComposer target={{ type: "group", id: group.id }} campaigns={campsForComposer} deals={deals} />
           </>
         ) : dmThread ? (
           <>
@@ -145,7 +159,7 @@ export default async function MessagesPage({
                 </div>
               ))}
             </div>
-            <MessageComposer target={{ type: "dm", id: dmThread.affiliateId }} campaigns={campsForComposer} />
+            <MessageComposer target={{ type: "dm", id: dmThread.affiliateId }} campaigns={campsForComposer} deals={deals} />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground">

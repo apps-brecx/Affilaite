@@ -20,12 +20,16 @@ const GROUP_KINDS: { key: Kind; label: string; icon: any }[] = [
 ];
 const DM_KINDS: Kind[] = ["text", "deal", "invite"];
 
+type DealSpecial = { productId: string; title: string; image: string | null; url: string; promoName: string; bonus: string };
+
 export function MessageComposer({
   target,
   campaigns,
+  deals = [],
 }: {
   target: { type: "group" | "dm"; id: string };
   campaigns: { id: string; name: string; reward?: string }[];
+  deals?: DealSpecial[];
 }) {
   const [kind, setKind] = useState<Kind>("text");
   const [body, setBody] = useState("");
@@ -49,7 +53,16 @@ export function MessageComposer({
     start(async () => {
       let payload: Record<string, any> | undefined;
       let poll: { question: string; options: string[] } | null = null;
-      if (kind === "deal") payload = { title: fields.title, code: fields.code, endsAt: fields.endsAt || undefined };
+      if (kind === "deal") {
+        const special = deals.find((d) => d.productId === fields.dealProductId);
+        payload = {
+          title: fields.title || special?.title,
+          code: fields.code,
+          endsAt: fields.endsAt || undefined,
+          ...(special ? { productTitle: special.title, productImage: special.image, productUrl: special.url } : {}),
+        };
+        if (!payload.title) return toast("Pick a special or add a deal title.", "error");
+      }
       if (kind === "invite") {
         const camp = campaigns.find((c) => c.id === fields.campaignId);
         if (!camp) return toast("Pick a campaign to invite to.", "error");
@@ -96,10 +109,48 @@ export function MessageComposer({
       {/* Kind-specific fields */}
       <div className="space-y-2">
         {kind === "deal" && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input placeholder="Deal title (e.g. Weekend 20% off)" value={fields.title ?? ""} onChange={(e) => set("title", e.target.value)} />
-            <Input placeholder="Code (optional)" value={fields.code ?? ""} onChange={(e) => set("code", e.target.value)} />
-            <Input type="date" value={fields.endsAt ?? ""} onChange={(e) => set("endsAt", e.target.value)} />
+          <div className="space-y-2">
+            {deals.length > 0 ? (
+              <select
+                value={fields.dealProductId ?? ""}
+                onChange={(e) => {
+                  const d = deals.find((x) => x.productId === e.target.value);
+                  set("dealProductId", e.target.value);
+                  if (d) set("title", d.title);
+                }}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Pick a special from Promotions…</option>
+                {deals.map((d) => (
+                  <option key={d.productId} value={d.productId}>{d.title} — {d.promoName} ({d.bonus})</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-muted-foreground">Tip: add a featured product to a promotion to send it as a special.</p>
+            )}
+            {/* Selected special preview */}
+            {(() => {
+              const d = deals.find((x) => x.productId === fields.dealProductId);
+              return d ? (
+                <div className="flex items-center gap-3 rounded-lg border border-hairline bg-muted/30 p-2">
+                  {d.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={d.image} alt="" className="size-10 rounded-md object-cover" />
+                  ) : (
+                    <span className="grid size-10 place-items-center rounded-md bg-muted"><Ticket className="size-4 text-muted-foreground" /></span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{d.promoName} · {d.bonus}</p>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input placeholder="Deal title (or keep the product name)" value={fields.title ?? ""} onChange={(e) => set("title", e.target.value)} />
+              <Input placeholder="Code (optional)" value={fields.code ?? ""} onChange={(e) => set("code", e.target.value)} />
+              <Input type="date" value={fields.endsAt ?? ""} onChange={(e) => set("endsAt", e.target.value)} />
+            </div>
           </div>
         )}
         {kind === "invite" && (

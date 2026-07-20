@@ -138,8 +138,22 @@ export default async function CommunityPage({
                 ) : (
                   <div key={m.id} className={`flex ${m.fromAdmin ? "justify-start" : "justify-end"}`}>
                     <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${m.fromAdmin ? "rounded-tl-sm bg-accent" : "rounded-tr-sm bg-primary text-primary-foreground"}`}>
-                      {m.kind === "deal" && <p className="mb-0.5 text-xs font-semibold opacity-80">🎟️ Deal{m.payload?.code ? ` · ${m.payload.code}` : ""}</p>}
-                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                      {m.kind === "deal" && (
+                        <>
+                          <p className="mb-1 text-xs font-semibold opacity-90">🎟️ {m.payload?.title || "Special deal"}</p>
+                          {m.payload?.productImage && (
+                            <a href={m.payload.productUrl || "#"} target="_blank" rel="noopener noreferrer" className="mb-1.5 block overflow-hidden rounded-lg">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={m.payload.productImage} alt="" className="h-28 w-full max-w-[220px] object-cover" />
+                            </a>
+                          )}
+                          {m.payload?.productUrl && (
+                            <a href={m.payload.productUrl} target="_blank" rel="noopener noreferrer" className={`mb-0.5 inline-block text-xs font-medium underline ${m.fromAdmin ? "text-primary" : ""}`}>Shop now →</a>
+                          )}
+                          {m.payload?.code && <p className="mb-0.5 font-mono text-xs font-semibold">Code: {m.payload.code}</p>}
+                        </>
+                      )}
+                      {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                       <p className={`mt-0.5 text-right text-[10px] ${m.fromAdmin ? "text-muted-foreground" : "text-primary-foreground/60"}`}>{relativeTime(m.createdAt)}</p>
                     </div>
                   </div>

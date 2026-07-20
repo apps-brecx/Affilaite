@@ -45,6 +45,17 @@ export function CommunityMessage({
         {msg.kind === "deal" && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-primary"><Ticket className="size-4" /> {p.title || "Special deal"}</div>
+            {p.productImage && (
+              <a href={p.productUrl || "#"} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-hairline">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.productImage} alt={p.productTitle || ""} className="h-32 w-full object-cover" />
+              </a>
+            )}
+            {p.productUrl && (
+              <a href={p.productUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                Shop {p.productTitle || "this item"} →
+              </a>
+            )}
             {msg.body && <p className="text-muted-foreground">{msg.body}</p>}
             {p.code && (
               <button onClick={() => { navigator.clipboard?.writeText(p.code); toast("Code copied!"); }} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-primary/40 bg-background px-3 py-1 font-mono font-semibold tracking-wide">
