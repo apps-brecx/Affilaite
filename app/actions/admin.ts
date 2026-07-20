@@ -1631,6 +1631,33 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
   return { ok: true, message: "Rewards & rules saved." };
 }
 
+/** Save the per-campaign theme (merged into the campaign's config JSON). */
+export async function saveCampaignTheme(id: string, brand: unknown): Promise<ActionResult> {
+  await assertAdmin("campaigns");
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      enabled: z.coerce.boolean().default(false),
+      logoText: z.string().max(60).optional().default(""),
+      logoImage: z.string().max(2_600_000).optional().default(""),
+      primaryColor: z.string().max(9).optional().default("#FF5C9E"),
+      accentColor: z.string().max(9).optional().default("#FFC94D"),
+      heroImage: z.string().max(2_600_000).optional().default(""),
+      headline: z.string().max(120).optional().default(""),
+      subtext: z.string().max(400).optional().default(""),
+      approvedMessage: z.string().max(400).optional().default(""),
+    })
+    .safeParse(brand);
+  if (!parsed.success) return { ok: false, message: "Invalid theme." };
+  const current = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!current) return { ok: false, message: "Campaign not found." };
+  const config = { ...mergeConfig(current.config), brand: parsed.data };
+  await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
+  revalidatePath(`/admin/campaigns/${id}`);
+  if (current.slug) revalidatePath(`/join/${current.slug}`);
+  return { ok: true, message: parsed.data.enabled ? "Theme saved." : "Theme saved — using the global brand until enabled." };
+}
+
 // ---------- Integrations (connect from the UI) ----------
 
 async function writeSetting(key: string, value: string) {

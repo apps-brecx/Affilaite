@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { JoinForm } from "@/components/marketing/join-form";
 import { BrandScope } from "@/components/marketing/brand-scope";
 import { getCampaignBySlug, getBrand } from "@/lib/queries";
+import { mergeCampaignBrand } from "@/lib/campaign-config";
 import { phoneVerificationRequired } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +20,24 @@ function reward(v: number, t: string) {
 
 export default async function JoinCampaignPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [campaign, brand] = await Promise.all([getCampaignBySlug(slug), getBrand()]);
+  const [campaign, globalBrand] = await Promise.all([getCampaignBySlug(slug), getBrand()]);
   if (!campaign) notFound();
+
+  // Per-campaign theme overrides the global brand when enabled.
+  const cb = mergeCampaignBrand(campaign.config.brand);
+  const brand = cb.enabled
+    ? {
+        ...globalBrand,
+        logoText: cb.logoText || globalBrand.logoText,
+        primaryColor: cb.primaryColor,
+        accentColor: cb.accentColor,
+        signupHeadline: cb.headline || globalBrand.signupHeadline,
+        signupSubtext: cb.subtext || globalBrand.signupSubtext,
+        approvedMessage: cb.approvedMessage || globalBrand.approvedMessage,
+      }
+    : globalBrand;
+  const heroImage = cb.enabled ? cb.heroImage : "";
+  const logoImage = cb.enabled ? cb.logoImage : "";
 
   const inviteOnly = campaign.access === "invite";
   const paused = campaign.status !== "active";
@@ -30,9 +47,18 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
   return (
     <BrandScope brand={brand}>
     <div className="relative min-h-screen">
+      {heroImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={heroImage} alt="" className="relative h-40 w-full object-cover sm:h-52" />
+      )}
       <div className="aurora pointer-events-none absolute inset-0 h-96" />
       <header className="relative mx-auto flex max-w-5xl items-center justify-between px-4 py-6 sm:px-6">
-        <Logo href="/" text={brand.logoText} />
+        {logoImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <a href="/"><img src={logoImage} alt={brand.logoText || campaign.name} className="h-8 w-auto object-contain" /></a>
+        ) : (
+          <Logo href="/" text={brand.logoText} />
+        )}
         <ThemeToggle />
       </header>
 

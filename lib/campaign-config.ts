@@ -44,6 +44,40 @@ export interface CampaignConfig {
   // How commissions from this campaign clear: "auto" matures after the hold
   // window; "manual" requires an admin to approve each one.
   approval: { mode: "auto" | "manual" };
+  // Per-campaign theme for the pages partners see (/join/<slug>). Overrides the
+  // global brand. `enabled` off falls back to the global theme.
+  brand?: CampaignBrand;
+}
+
+// Per-campaign theme/branding for the /join landing page.
+export interface CampaignBrand {
+  enabled: boolean;
+  logoText: string;
+  logoImage: string; // data URL (optional)
+  primaryColor: string; // hex
+  accentColor: string; // hex
+  heroImage: string; // data URL (optional) — background/hero on the join page
+  headline: string;
+  subtext: string;
+  approvedMessage: string;
+}
+
+export function defaultCampaignBrand(): CampaignBrand {
+  return {
+    enabled: false,
+    logoText: "",
+    logoImage: "",
+    primaryColor: "#FF5C9E",
+    accentColor: "#FFC94D",
+    heroImage: "",
+    headline: "",
+    subtext: "",
+    approvedMessage: "",
+  };
+}
+
+export function mergeCampaignBrand(stored: any): CampaignBrand {
+  return { ...defaultCampaignBrand(), ...(stored && typeof stored === "object" ? stored : {}) };
 }
 
 export function defaultConfig(): CampaignConfig {
@@ -54,6 +88,7 @@ export function defaultConfig(): CampaignConfig {
     friend: { kind: "coupon", valueType: "percent", value: 10, minOrder: 0, promoDescription: "", promoUrl: "", promoExpires: false },
     payout: { mode: "manual" },
     approval: { mode: "auto" },
+    brand: defaultCampaignBrand(),
   };
 }
 
@@ -68,6 +103,7 @@ export function mergeConfig(stored: any): CampaignConfig {
     friend: { ...d.friend, ...(stored.friend ?? {}) },
     payout: { ...d.payout, ...(stored.payout ?? {}) },
     approval: { ...d.approval, ...(stored.approval ?? {}) },
+    brand: mergeCampaignBrand(stored.brand),
   };
 }
 

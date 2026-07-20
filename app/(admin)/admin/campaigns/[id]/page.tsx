@@ -140,7 +140,7 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">Logo, colors and copy for the pages partners see.</p>
                 <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link href="/admin/settings">Edit theme</Link>
+                  <Link href={`${base}/theme`}>Edit theme</Link>
                 </Button>
               </CardContent>
             </Card>

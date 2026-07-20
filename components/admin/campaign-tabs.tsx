@@ -11,6 +11,7 @@ export function CampaignTabs({ id }: { id: string }) {
     { label: "Overview", href: base },
     { label: "Affiliates", href: `${base}/affiliates` },
     { label: "Rewards & rules", href: `${base}/rewards` },
+    { label: "Theme", href: `${base}/theme` },
     { label: "Settings", href: `${base}/settings` },
   ];
   return (
