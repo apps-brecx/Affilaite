@@ -54,7 +54,15 @@ function ValueInput({
 }) {
   return (
     <div className="flex gap-2">
-      <Input type="number" step="0.01" value={value} onChange={(e) => onValueChange(Number(e.target.value))} className="w-32" />
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        value={value === 0 ? "" : value}
+        placeholder="0"
+        onChange={(e) => onValueChange(e.target.value === "" ? 0 : Number(e.target.value))}
+        className="w-32"
+      />
       <Segmented
         value={valueType}
         onChange={onTypeChange}
@@ -182,8 +190,9 @@ export function CampaignRewards({ campaign }: { campaign: Campaign }) {
             {cfg.conditions.minOrderType !== "none" && (
               <Input
                 type="number"
-                value={cfg.conditions.minOrderValue}
-                onChange={(e) => upd("conditions", { minOrderValue: Number(e.target.value) })}
+                min="0"
+                value={cfg.conditions.minOrderValue === 0 ? "" : cfg.conditions.minOrderValue}
+                onChange={(e) => upd("conditions", { minOrderValue: e.target.value === "" ? 0 : Number(e.target.value) })}
                 className="mt-2 w-40"
                 placeholder={cfg.conditions.minOrderType === "amount" ? "$ minimum" : "min orders"}
               />
@@ -207,7 +216,7 @@ export function CampaignRewards({ campaign }: { campaign: Campaign }) {
           <div className="rounded-lg border border-hairline p-3">
             <Switch checked={cfg.conditions.maxPerAdvocateEnabled} onCheckedChange={(v) => upd("conditions", { maxPerAdvocateEnabled: v })} label="Cap reward per affiliate" description="Maximum total reward each affiliate can earn" />
             {cfg.conditions.maxPerAdvocateEnabled && (
-              <Input type="number" value={cfg.conditions.maxPerAdvocate} onChange={(e) => upd("conditions", { maxPerAdvocate: Number(e.target.value) })} className="mt-3 w-40" placeholder="$ cap" />
+              <Input type="number" min="0" value={cfg.conditions.maxPerAdvocate === 0 ? "" : cfg.conditions.maxPerAdvocate} onChange={(e) => upd("conditions", { maxPerAdvocate: e.target.value === "" ? 0 : Number(e.target.value) })} className="mt-3 w-40" placeholder="$ cap" />
             )}
           </div>
         </Section>
@@ -265,7 +274,7 @@ export function CampaignRewards({ campaign }: { campaign: Campaign }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Minimum order (optional)</Label>
-                <Input type="number" value={cfg.friend.minOrder} onChange={(e) => upd("friend", { minOrder: Number(e.target.value) })} className="w-40" placeholder="$0" />
+                <Input type="number" min="0" value={cfg.friend.minOrder === 0 ? "" : cfg.friend.minOrder} onChange={(e) => upd("friend", { minOrder: e.target.value === "" ? 0 : Number(e.target.value) })} className="w-40" placeholder="$0" />
               </div>
             </>
           )}

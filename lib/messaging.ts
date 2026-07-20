@@ -14,9 +14,31 @@ import {
   affiliateCampaigns,
 } from "@/db/schema";
 import { and, desc, eq, inArray, isNull, sql, gte, lte } from "drizzle-orm";
+import { mergeConfig } from "./campaign-config";
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
+
+/**
+ * Rewrite campaign-invite messages so they show the campaign's CURRENT reward,
+ * not whatever was snapshotted when the invite was sent. Keeps chat invites in
+ * sync when the admin edits a campaign's numbers.
+ */
+async function withLiveInvites<T extends { kind: string; payload: Record<string, any> | null }>(msgs: T[]): Promise<T[]> {
+  if (!db) return msgs;
+  const ids = [...new Set(msgs.filter((m) => m.kind === "invite" && m.payload?.campaignId).map((m) => m.payload!.campaignId as string))];
+  if (ids.length === 0) return msgs;
+  const rows = await db.select({ id: campaigns.id, name: campaigns.name, config: campaigns.config }).from(campaigns).where(inArray(campaigns.id, ids));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return msgs.map((m) => {
+    if (m.kind !== "invite" || !m.payload?.campaignId) return m;
+    const c = byId.get(m.payload.campaignId);
+    if (!c) return m;
+    const reward = mergeConfig(c.config).reward;
+    const label = reward.valueType === "percent" ? `${Number(reward.value) || 0}%` : `$${Number(reward.value) || 0}`;
+    return { ...m, payload: { ...m.payload, campaignName: c.name, reward: label } };
+  });
+}
 
 export type MessageKind = "text" | "deal" | "invite" | "giveaway" | "competition" | "announcement" | "poll";
 
@@ -265,7 +287,7 @@ export async function listDmThreads(): Promise<DmThreadSummary[]> {
 export async function getDmThread(affiliateId: string, viewer: "admin" | "affiliate"): Promise<DmMessage[]> {
   if (!db) return [];
   const rows = await db.select().from(directMessages).where(eq(directMessages.affiliateId, affiliateId)).orderBy(directMessages.createdAt);
-  return rows.map((m) => ({
+  const msgs = rows.map((m) => ({
     id: m.id,
     fromAdmin: m.fromAdmin,
     body: m.body ?? null,
@@ -274,6 +296,7 @@ export async function getDmThread(affiliateId: string, viewer: "admin" | "affili
     createdAt: iso(m.createdAt)!,
     seenByAffiliate: !!m.readByAffiliateAt,
   }));
+  return withLiveInvites(msgs);
 }
 
 // ---------------- Affiliate ----------------
@@ -341,7 +364,7 @@ export async function getGroupThreadForAffiliate(groupId: string, affiliateId: s
   const ids = msgs.map((r) => r.m.id);
   const votes = await db.select().from(pollVotes).where(inArray(pollVotes.messageId, ids));
   const myVotes = new Map(votes.filter((v) => v.affiliateId === affiliateId).map((v) => [v.messageId, v.optionIndex]));
-  return msgs.map(({ m, senderName }) => ({
+  const mapped = msgs.map(({ m, senderName }) => ({
     id: m.id,
     kind: (m.kind ?? "text") as MessageKind,
     body: m.body ?? null,
@@ -355,6 +378,7 @@ export async function getGroupThreadForAffiliate(groupId: string, affiliateId: s
     myVote: myVotes.has(m.id) ? myVotes.get(m.id)! : null,
     entered: myVotes.has(m.id), // for giveaways, a vote == an entry
   }));
+  return withLiveInvites(mapped);
 }
 
 // ---------------- Competitions (live leaderboard) ----------------

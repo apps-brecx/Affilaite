@@ -27,20 +27,34 @@ export default async function LinksPage() {
       />
 
       {earning && (
-        <div className="flex flex-col gap-1 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-gold/5 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-gilded">
-              <Percent className="size-5" />
-            </span>
-            <div>
-              <p className="text-sm text-muted-foreground">You earn</p>
-              <p className="font-display text-2xl font-semibold tracking-tight">{earning.label}</p>
+        <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-gold/5 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-gilded">
+                <Percent className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm text-muted-foreground">You earn</p>
+                <p className="font-display text-2xl font-semibold tracking-tight">{earning.label}</p>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground sm:text-right">
+              {earning.source === "campaign" ? <>Through the <span className="font-medium text-foreground">{earning.sourceName}</span> campaign</> : <>On the <span className="font-medium text-foreground">{earning.sourceName}</span> program</>}
+              <br className="hidden sm:block" /> on every eligible sale.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground sm:text-right">
-            {earning.source === "campaign" ? <>Through the <span className="font-medium text-foreground">{earning.sourceName}</span> campaign</> : <>On the <span className="font-medium text-foreground">{earning.sourceName}</span> program</>}
-            <br className="hidden sm:block" /> on every eligible sale.
-          </p>
+          {earning.campaigns.length > 1 && (
+            <div className="mt-4 border-t border-primary/15 pt-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">You&apos;re in {earning.campaigns.length} campaigns — the most recent one sets your rate:</p>
+              <div className="flex flex-wrap gap-2">
+                {earning.campaigns.map((c) => (
+                  <span key={c.name} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${c.applied ? "border-primary/40 bg-primary/10 font-medium text-foreground" : "border-hairline text-muted-foreground"}`}>
+                    {c.name} · {c.label}{c.applied && " · active"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

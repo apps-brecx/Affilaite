@@ -334,28 +334,44 @@ export interface EarningRate {
   sourceName: string;
   /** Pretty label, e.g. "15%" or "$5 per sale". */
   label: string;
+  /** All active campaigns the affiliate is in (the applied one flagged). */
+  campaigns: { name: string; label: string; applied: boolean }[];
 }
 
+const rateLabel = (t: "percent" | "flat", v: number) => (t === "percent" ? `${v}%` : `$${v} per sale`);
+
 /**
- * The rate an affiliate actually earns — mirrors attribution: an active campaign
- * they've joined wins, otherwise their program (or the default program).
+ * The rate an affiliate actually earns — mirrors attribution: when they're in
+ * one or more active campaigns, the most recently JOINED one applies (that's
+ * exactly how attribution picks it); otherwise their program rate applies.
  */
 export async function getEarningRate(affiliateId: string): Promise<EarningRate | null> {
   if (!db) return null;
-  const fmt = (t: "percent" | "flat", v: number) => (t === "percent" ? `${v}%` : `$${v} per sale`);
 
-  const campRow = await db
+  // All active campaigns they're in — newest join first (attribution's order).
+  const campRows = await db
     .select({ camp: campaigns })
     .from(affiliateCampaigns)
     .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
     .where(and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(campaigns.status, "active")))
-    .orderBy(desc(campaigns.createdAt))
-    .limit(1);
-  if (campRow[0]?.camp) {
-    const cfg = mergeConfig(campRow[0].camp.config);
-    const valueType = cfg.reward.valueType === "percent" ? "percent" : "flat";
-    const value = Number(cfg.reward.value) || 0;
-    return { valueType, value, source: "campaign", sourceName: campRow[0].camp.name, label: fmt(valueType, value) };
+    .orderBy(desc(affiliateCampaigns.createdAt));
+
+  if (campRows.length > 0) {
+    const list = campRows.map(({ camp }) => {
+      const cfg = mergeConfig(camp.config);
+      const valueType = cfg.reward.valueType === "percent" ? "percent" : "flat";
+      const value = Number(cfg.reward.value) || 0;
+      return { name: camp.name, valueType: valueType as "percent" | "flat", value };
+    });
+    const applied = list[0]; // most recently joined wins
+    return {
+      valueType: applied.valueType,
+      value: applied.value,
+      source: "campaign",
+      sourceName: applied.name,
+      label: rateLabel(applied.valueType, applied.value),
+      campaigns: list.map((c, i) => ({ name: c.name, label: rateLabel(c.valueType, c.value), applied: i === 0 })),
+    };
   }
 
   const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
@@ -365,7 +381,7 @@ export async function getEarningRate(affiliateId: string): Promise<EarningRate |
   if (!program) return null;
   const valueType = program.commissionType === "percent" ? "percent" : "flat";
   const value = Number(program.commissionValue) || 0;
-  return { valueType, value, source: "program", sourceName: program.name, label: fmt(valueType, value) };
+  return { valueType, value, source: "program", sourceName: program.name, label: rateLabel(valueType, value), campaigns: [] };
 }
 
 /** Campaign IDs an affiliate belongs to. */
