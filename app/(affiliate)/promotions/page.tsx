@@ -10,11 +10,9 @@ import { requireAffiliate } from "@/lib/session";
 import { getPromotionsForAffiliate, getDefaultDestination, getBanner } from "@/lib/queries";
 import {
   getStoreProducts,
-  getCatalogConfig,
-  applyCatalogConfig,
   getStoreCollections,
-  getCollectionConfig,
-  applyCollectionConfig,
+  getCatalogVisibility,
+  resolveVisibleProducts,
 } from "@/lib/products";
 import { buildReferralLink } from "@/lib/links";
 import { formatDate } from "@/lib/utils";
@@ -23,30 +21,36 @@ export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
   const me = await requireAffiliate();
-  const [promos, catalog, config, collectionsRaw, collectionConfig, website, banner] = await Promise.all([
+  const [promos, catalog, collectionsRaw, visibility, website, banner] = await Promise.all([
     getPromotionsForAffiliate(me),
-    getStoreProducts(100),
-    getCatalogConfig(),
-    getStoreCollections(100),
-    getCollectionConfig(),
+    getStoreProducts(1000),
+    getStoreCollections(250),
+    getCatalogVisibility(),
     getDefaultDestination(),
     getBanner("promotions"),
   ]);
 
-  const visibleProducts = applyCatalogConfig(catalog.products, config).map((p) => ({
+  const resolved = resolveVisibleProducts(catalog.products, visibility);
+  const visibleProducts = resolved.map((p) => ({
     id: p.id,
     title: p.title,
     image: p.image,
     price: p.price,
     currency: p.currency,
     available: p.available,
+    collectionIds: p.collectionIds,
     shareLink: buildReferralLink(me.refCode, p.url),
   }));
 
-  const visibleCollections = applyCollectionConfig(collectionsRaw.collections, collectionConfig).map((c) => ({
-    ...c,
-    shareLink: buildReferralLink(me.refCode, c.url),
-  }));
+  // Only collections the admin allowed AND that actually contain visible products.
+  const allowed = new Set(visibility.allowedCollections);
+  const usedCollectionIds = new Set(resolved.flatMap((p) => p.collectionIds));
+  const visibleCollections = collectionsRaw.collections
+    .filter((c) => allowed.has(c.id))
+    .map((c) => ({ ...c, shareLink: buildReferralLink(me.refCode, c.url) }));
+  const filterCollections = visibleCollections
+    .filter((c) => usedCollectionIds.has(c.id))
+    .map((c) => ({ id: c.id, title: c.title }));
 
   return (
     <div className="space-y-8">
@@ -153,7 +157,7 @@ export default async function PromotionsPage() {
           />
         </section>
       ) : (
-        <CatalogBrowser products={visibleProducts} collections={visibleCollections} />
+        <CatalogBrowser products={visibleProducts} collections={visibleCollections} filterCollections={filterCollections} />
       )}
     </div>
   );

@@ -5,35 +5,22 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { PromotionForm } from "@/components/admin/promotion-form";
 import { CreateReveal } from "@/components/admin/create-reveal";
 import { PromotionsTabs } from "@/components/admin/promotions-tabs";
-import { CatalogControlTab } from "@/components/admin/catalog-control-tab";
-import { CurationList } from "@/components/admin/curation-list";
-import { saveCatalogConfig, saveCollectionConfig } from "@/app/actions/admin";
+import { CatalogManager } from "@/components/admin/catalog-manager";
 import { listPromotions } from "@/lib/queries";
-import {
-  getStoreProducts,
-  getCatalogConfig,
-  getStoreCollections,
-  getCollectionConfig,
-  getSeenProducts,
-  getSeenCollections,
-} from "@/lib/products";
+import { getStoreProducts, getStoreCollections, getCatalogVisibility } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Promotions" };
 
-export default async function PromotionsPage() {
-  const [promos, catalog, catalogConfig, collections, collectionConfig, seenP, seenC] = await Promise.all([
-    listPromotions(),
-    getStoreProducts(100),
-    getCatalogConfig(),
-    getStoreCollections(100),
-    getCollectionConfig(),
-    getSeenProducts(),
-    getSeenCollections(),
-  ]);
+const CATALOG_CAP = 1000;
 
-  const newProductIds = catalog.products.filter((p) => !seenP.has(p.id)).map((p) => p.id);
-  const newCollectionIds = collections.collections.filter((c) => !seenC.has(c.id)).map((c) => c.id);
+export default async function PromotionsPage() {
+  const [promos, catalog, collections, visibility] = await Promise.all([
+    listPromotions(),
+    getStoreProducts(CATALOG_CAP),
+    getStoreCollections(250),
+    getCatalogVisibility(),
+  ]);
 
   const promotionsPanel = (
     <div className="space-y-6">
@@ -95,42 +82,26 @@ export default async function PromotionsPage() {
       <PromotionsTabs
         promotionsPanel={promotionsPanel}
         catalogPanel={
-          <CatalogControlTab
-            newProducts={newProductIds.length}
-            newCollections={newCollectionIds.length}
-            productsPanel={
-              <CurationList
-                noun="products"
-                connected={catalog.connected}
-                config={catalogConfig}
-                save={saveCatalogConfig}
-                error={catalog.error}
-                newIds={newProductIds}
-                items={catalog.products.map((p) => ({
-                  id: p.id,
-                  title: p.title,
-                  image: p.image,
-                  subtitle: p.price ? `${p.currency === "USD" ? "$" : ""}${p.price}` : "—",
-                }))}
-              />
-            }
-            collectionsPanel={
-              <CurationList
-                noun="collections"
-                connected={collections.connected}
-                config={collectionConfig}
-                save={saveCollectionConfig}
-                error={collections.error}
-                newIds={newCollectionIds}
-                items={collections.collections.map((c) => ({
-                  id: c.id,
-                  title: c.title,
-                  image: c.image,
-                  subtitle: c.productsCount > 0 ? `${c.productsCount} product${c.productsCount === 1 ? "" : "s"}` : "Collection",
-                }))}
-              />
-            }
-          />
+          !catalog.connected ? (
+            <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
+              Connect Shopify in Settings → Integrations to manage the product catalog.
+            </p>
+          ) : (
+            <CatalogManager
+              products={catalog.products.map((p) => ({
+                id: p.id,
+                title: p.title,
+                image: p.image,
+                price: p.price,
+                currency: p.currency,
+                available: p.available,
+                collectionIds: p.collectionIds,
+              }))}
+              collections={collections.collections.map((c) => ({ id: c.id, title: c.title, productsCount: c.productsCount }))}
+              initial={visibility}
+              capped={catalog.products.length >= CATALOG_CAP}
+            />
+          )
         }
       />
     </div>

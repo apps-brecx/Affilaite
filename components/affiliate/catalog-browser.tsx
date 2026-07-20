@@ -16,6 +16,7 @@ export interface CatalogItem {
   currency: string | null;
   available: boolean;
   shareLink: string;
+  collectionIds?: string[];
 }
 
 export interface CollectionItem {
@@ -29,20 +30,30 @@ export interface CollectionItem {
 export function CatalogBrowser({
   products,
   collections,
+  filterCollections = [],
+  defaultOpen = true,
 }: {
   products: CatalogItem[];
   collections: CollectionItem[];
+  filterCollections?: { id: string; title: string }[];
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [view, setView] = useState<"products" | "collections">(products.length ? "products" : "collections");
   const [q, setQ] = useState("");
+  const [colFilter, setColFilter] = useState<string | null>(null);
   const showTabs = products.length > 0 && collections.length > 0;
   const active = view === "collections" && collections.length ? "collections" : products.length ? "products" : "collections";
 
   const term = q.trim().toLowerCase();
   const filteredProducts = useMemo(
-    () => (term ? products.filter((p) => p.title.toLowerCase().includes(term)) : products),
-    [products, term],
+    () =>
+      products.filter(
+        (p) =>
+          (!term || p.title.toLowerCase().includes(term)) &&
+          (!colFilter || (p.collectionIds ?? []).includes(colFilter)),
+      ),
+    [products, term, colFilter],
   );
   const filteredCollections = useMemo(
     () => (term ? collections.filter((c) => c.title.toLowerCase().includes(term)) : collections),
@@ -126,6 +137,27 @@ export function CatalogBrowser({
               />
             </div>
           </div>
+
+          {/* Collection filter chips (products view) */}
+          {active === "products" && filterCollections.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setColFilter(null)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${!colFilter ? "border-primary bg-primary/10 text-primary" : "border-hairline text-muted-foreground hover:text-foreground"}`}
+              >
+                All
+              </button>
+              {filterCollections.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setColFilter((cur) => (cur === c.id ? null : c.id))}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${colFilter === c.id ? "border-primary bg-primary/10 text-primary" : "border-hairline text-muted-foreground hover:text-foreground"}`}
+                >
+                  {c.title}
+                </button>
+              ))}
+            </div>
+          )}
 
           {active === "collections" ? (
             filteredCollections.length === 0 ? (

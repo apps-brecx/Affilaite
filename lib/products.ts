@@ -14,6 +14,7 @@ export interface StoreProduct {
   price: string | null;
   currency: string | null;
   available: boolean;
+  collectionIds: string[]; // collections this product belongs to
 }
 
 const PRODUCTS_QUERY = `
@@ -26,10 +27,12 @@ const PRODUCTS_QUERY = `
           title
           handle
           status
+          publishedAt
           onlineStoreUrl
           totalInventory
           featuredImage { url }
           priceRangeV2 { minVariantPrice { amount currencyCode } }
+          collections(first: 25) { edges { node { id } } }
         }
       }
     }
@@ -61,7 +64,9 @@ export async function getStoreProducts(
       const conn = json.data?.products;
       for (const e of conn?.edges ?? []) {
         const n = e.node;
-        if (!n || n.status === "ARCHIVED") continue;
+        // Only surface products that are live on the store — active status AND
+        // published to the online store. Drafts/archived never reach affiliates.
+        if (!n || n.status !== "ACTIVE" || !n.publishedAt) continue;
         const price = n.priceRangeV2?.minVariantPrice;
         products.push({
           id: n.id,
@@ -72,6 +77,7 @@ export async function getStoreProducts(
           price: price?.amount ? Number(price.amount).toFixed(2) : null,
           currency: price?.currencyCode ?? null,
           available: (n.totalInventory ?? 0) > 0 || n.totalInventory == null,
+          collectionIds: (n.collections?.edges ?? []).map((c: any) => c.node?.id).filter(Boolean),
         });
       }
       if (!conn?.pageInfo?.hasNextPage) break;
@@ -183,6 +189,66 @@ export function applyConfig<T extends { id: string }>(items: T[], config: Catalo
 
 export const applyCatalogConfig = applyConfig;
 export const applyCollectionConfig = applyConfig;
+
+// ---------- Collection-aware visibility (the affiliate catalog model) ----------
+// A product is visible to affiliates when it's live AND
+//   (it belongs to an allowed collection OR is explicitly allowed)
+//   AND is NOT explicitly hidden.
+// Explicit hide always wins; explicit show works even outside allowed collections.
+
+export interface CatalogVisibility {
+  allowedCollections: string[]; // collection ids fully allowed (all their products show)
+  allowedProducts: string[]; // product ids explicitly allowed
+  hiddenProducts: string[]; // product ids explicitly hidden (override — always wins)
+  featured: string[]; // product ids to surface first, in this order
+  order: string[]; // optional manual order for the rest
+}
+
+const strArr = (x: unknown): string[] => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string") : []);
+
+export async function getCatalogVisibility(): Promise<CatalogVisibility> {
+  const empty: CatalogVisibility = { allowedCollections: [], allowedProducts: [], hiddenProducts: [], featured: [], order: [] };
+  if (!db) return empty;
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, "catalog_visibility") });
+  if (!row?.value) return empty;
+  try {
+    const c = JSON.parse(row.value);
+    return {
+      allowedCollections: strArr(c.allowedCollections),
+      allowedProducts: strArr(c.allowedProducts),
+      hiddenProducts: strArr(c.hiddenProducts),
+      featured: strArr(c.featured),
+      order: strArr(c.order),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** Is a product visible to affiliates under the given rules? */
+export function isProductVisible(p: StoreProduct, vis: CatalogVisibility): boolean {
+  if (vis.hiddenProducts.includes(p.id)) return false;
+  if (vis.allowedProducts.includes(p.id)) return true;
+  const allowed = new Set(vis.allowedCollections);
+  return p.collectionIds.some((c) => allowed.has(c));
+}
+
+/** The affiliate-visible products, ordered: featured first, then manual order, then title. */
+export function resolveVisibleProducts(products: StoreProduct[], vis: CatalogVisibility): StoreProduct[] {
+  const featPos = new Map(vis.featured.map((id, i) => [id, i] as const));
+  const orderPos = new Map(vis.order.map((id, i) => [id, i] as const));
+  return products
+    .filter((p) => isProductVisible(p, vis))
+    .sort((a, b) => {
+      const fa = featPos.has(a.id), fb = featPos.has(b.id);
+      if (fa && fb) return featPos.get(a.id)! - featPos.get(b.id)!;
+      if (fa) return -1;
+      if (fb) return 1;
+      const oa = orderPos.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const ob = orderPos.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return oa !== ob ? oa - ob : a.title.localeCompare(b.title);
+    });
+}
 
 // ---------- "New in Shopify" detection (drives the admin notification dot) ----------
 

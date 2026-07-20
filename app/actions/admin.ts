@@ -1681,7 +1681,7 @@ export async function saveIntegration(service: string, fields: Record<string, st
 
 /** Save which products affiliates see in the catalog, and in what order. */
 export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
-  await assertAdmin("samples");
+  await assertAdmin("promotions");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({ order: z.array(z.string()), shown: z.array(z.string()) })
@@ -1691,6 +1691,26 @@ export async function saveCatalogConfig(input: unknown): Promise<ActionResult> {
   revalidatePath("/promotions");
   revalidatePath("/admin/promotions");
   return { ok: true, message: "Catalog updated." };
+}
+
+/** The collection-aware visibility rules for the affiliate product catalog. */
+export async function saveCatalogVisibility(input: unknown): Promise<ActionResult> {
+  await assertAdmin("promotions");
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = z
+    .object({
+      allowedCollections: z.array(z.string()).default([]),
+      allowedProducts: z.array(z.string()).default([]),
+      hiddenProducts: z.array(z.string()).default([]),
+      featured: z.array(z.string()).default([]),
+      order: z.array(z.string()).default([]),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid catalog settings." };
+  await writeSetting("catalog_visibility", JSON.stringify(parsed.data));
+  revalidatePath("/promotions");
+  revalidatePath("/admin/promotions");
+  return { ok: true, message: "Catalog visibility updated." };
 }
 
 /** Which products (and their order) affiliates can request as samples. */
@@ -1739,7 +1759,7 @@ export async function setSamplesBanned(affiliateId: string, banned: boolean): Pr
 
 /** Mark all current Shopify products & collections as "seen" (clears the new-item dot). */
 export async function markCatalogSeen(): Promise<void> {
-  await assertAdmin("samples");
+  await assertAdmin("promotions");
   if (!db) return;
   const ids = await getCatalogItemIds();
   await writeSetting("catalog_seen_products", JSON.stringify(ids.products));
@@ -1748,7 +1768,7 @@ export async function markCatalogSeen(): Promise<void> {
 
 /** Save which collections affiliates see, and in what order. */
 export async function saveCollectionConfig(input: unknown): Promise<ActionResult> {
-  await assertAdmin("samples");
+  await assertAdmin("promotions");
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z.object({ order: z.array(z.string()), shown: z.array(z.string()) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid collection settings." };
