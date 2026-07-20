@@ -27,6 +27,7 @@ export function EmailComposer({
   const [body, setBody] = useState("");
   const [ctaText, setCtaText] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [pending, start] = useTransition();
   const router = useRouter();
   const toast = useToast();
@@ -49,11 +50,11 @@ export function EmailComposer({
         mode === "pending" ? { status: ["pending"] } :
         { status: ["approved"] };
       if (mode === "people" && picked.size === 0) return toast("Pick at least one partner.", "error");
-      const res = await sendBroadcast({ subject, body, ...target, ctaText, ctaUrl });
+      const res = await sendBroadcast({ subject, body, ...target, ctaText, ctaUrl, imageUrl });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
         setOpen(false);
-        setSubject(""); setBody(""); setCtaText(""); setCtaUrl(""); setPicked(new Set());
+        setSubject(""); setBody(""); setCtaText(""); setCtaUrl(""); setImageUrl(""); setPicked(new Set());
         router.refresh();
       }
     });
@@ -98,6 +99,7 @@ export function EmailComposer({
             <Input placeholder="Button text (optional)" value={ctaText} onChange={(e) => setCtaText(e.target.value)} />
             <Input placeholder="Button link (https://…)" value={ctaUrl} onChange={(e) => setCtaUrl(e.target.value)} />
           </div>
+          <Input placeholder="Header image URL (optional)" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
           <Button className="w-full" disabled={pending} onClick={send}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : <><Mail className="size-4" /> Send email</>}
           </Button>

@@ -319,6 +319,66 @@ export async function renderDraft(
 }
 
 /**
+ * Render an ad-hoc branded email (broadcasts, invites) in the same shell as
+ * lifecycle emails, so everything the store sends looks consistent.
+ */
+export async function renderBrandedEmail(
+  subject: string,
+  body: string,
+  vars: Record<string, string | undefined> = {},
+  opts?: { cta?: { text: string; url: string }; imageUrl?: string },
+): Promise<{ subject: string; html: string }> {
+  const brand = await getBrand();
+  const ctaText = opts?.cta?.text?.trim();
+  const ctaUrl = opts?.cta?.url ? fillVars(opts.cta.url, vars).trim() : "";
+  return {
+    subject: fillVars(subject, vars),
+    html: renderRichEmail({
+      body: fillVars(body, vars),
+      brand,
+      cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+      imageUrl: opts?.imageUrl,
+    }),
+  };
+}
+
+/**
+ * Send a broadcast to many recipients using the branded shell, personalizing
+ * {{name}}/{{code}}/{{earnings}}/{{link}} per recipient. Brand is fetched once.
+ */
+export async function sendRichBroadcast(
+  recipients: { email: string; name?: string; code?: string; earnings?: string; link?: string }[],
+  subject: string,
+  body: string,
+  opts?: { cta?: { text: string; url: string }; imageUrl?: string },
+): Promise<{ sent: number; failed: number }> {
+  const brand = await getBrand();
+  const ctaText = opts?.cta?.text?.trim();
+  let sent = 0;
+  let failed = 0;
+  for (const r of recipients) {
+    const vars = { name: r.name || "there", code: r.code, earnings: r.earnings, link: r.link };
+    const ctaUrl = opts?.cta?.url ? fillVars(opts.cta.url, vars).trim() : "";
+    try {
+      await sendEmail(
+        r.email,
+        fillVars(subject, vars),
+        renderRichEmail({
+          body: fillVars(body, vars),
+          brand,
+          cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+          imageUrl: opts?.imageUrl,
+        }),
+      );
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+  return { sent, failed };
+}
+
+/**
  * The single entry point for sending a lifecycle email. Honours the admin's
  * on/off switch and content overrides. Never throws — returns true only when a
  * message was actually handed to Resend.

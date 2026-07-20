@@ -37,8 +37,8 @@ import {
 } from "@/lib/discounts";
 import { upsertShopifyCustomer } from "@/lib/shopify-customers";
 import { createPayoutBatch, getPayoutBatch, parsePayoutBatch, rollupBatchStatus } from "@/lib/paypal";
-import { sendBroadcast as sendEmails, sendEmail, renderTemplate, wrapEmail } from "@/lib/email";
-import { dispatchEmail } from "@/lib/email-center";
+import { sendEmail } from "@/lib/email";
+import { dispatchEmail, renderBrandedEmail, sendRichBroadcast } from "@/lib/email-center";
 import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
@@ -674,10 +674,11 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
       affiliateIds: z.array(z.string()).optional(),
       ctaText: z.string().optional(),
       ctaUrl: z.string().url().optional().or(z.literal("")),
+      imageUrl: z.string().url().optional().or(z.literal("")),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Add a subject and message." };
-  const { subject, body, status, groupIds, affiliateIds, ctaText, ctaUrl } = parsed.data;
+  const { subject, body, status, groupIds, affiliateIds, ctaText, ctaUrl, imageUrl } = parsed.data;
 
   // Target specific affiliates, or group members, or a set of statuses (default: approved).
   let where;
@@ -726,13 +727,16 @@ export async function sendBroadcast(input: unknown): Promise<ActionResult> {
 
   if (await emailReady()) {
     // In-app notification goes to everyone; email respects the "Program updates" opt-out.
-    await sendEmails(
+    await sendRichBroadcast(
       recipients
         .filter((r) => r.email && (r.prefs as Record<string, boolean> | null)?.programUpdates !== false)
         .map((r) => ({ email: r.email!, name: r.name ?? undefined })),
       subject,
       body,
-      ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+      {
+        cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
+        imageUrl: imageUrl || undefined,
+      },
     );
   }
 
@@ -1321,7 +1325,8 @@ async function createAndInvite(
   if (tpl && (await emailReady())) {
     const vars = { name: name || "there", code, loginUrl: `${APP_URL}/login`, link: `${APP_URL}/api/track?ref=${refCode}`, tempPassword };
     try {
-      await sendEmail(email, renderTemplate(tpl.subject, vars), wrapEmail(renderTemplate(tpl.body, vars)));
+      const r = await renderBrandedEmail(tpl.subject, tpl.body, vars);
+      await sendEmail(email, r.subject, r.html);
       emailed = true;
     } catch (e) {
       console.error("[invite] email:", e);
@@ -1421,7 +1426,8 @@ export async function sendPortalInvite(
         tempPassword,
       };
       try {
-        await sendEmail(user.email, renderTemplate(tpl.subject, vars), wrapEmail(renderTemplate(tpl.body, vars)));
+        const r = await renderBrandedEmail(tpl.subject, tpl.body, vars);
+        await sendEmail(user.email, r.subject, r.html);
         emailed++;
       } catch (e) {
         console.error("[sendPortalInvite]", user.email, e);
@@ -1779,7 +1785,8 @@ export async function testEmail(to: string): Promise<ActionResult> {
   if (!(await emailReady())) return { ok: false, message: "Connect Resend (add an API key) first." };
   try {
     const body = "This is a test email from Sipfluence. If you're reading this, transactional email is working. 🎉";
-    const res: any = await sendEmail(address, "Sipfluence test email", wrapEmail(body));
+    const r = await renderBrandedEmail("Sipfluence test email", body);
+    const res: any = await sendEmail(address, r.subject, r.html);
     if (res?.skipped) return { ok: false, message: "Email is not connected." };
     return { ok: true, message: `Test email sent to ${address}.` };
   } catch (e: any) {
