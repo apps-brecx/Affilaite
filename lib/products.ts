@@ -38,13 +38,20 @@ const PRODUCTS_QUERY = `
     }
   }`;
 
+// Short-lived in-memory cache so pages that pull the full catalog (Samples,
+// Promotions — all request up to 1000) don't hit Shopify's cost-throttled
+// products query on every load. The catalog changes rarely; 60s is plenty.
+type ProductsResult = { connected: boolean; products: StoreProduct[]; error?: string };
+const PRODUCTS_TTL = 60_000;
+const _productsCache = new Map<number, { at: number; data: ProductsResult }>();
+
 /**
  * Fetch the live product catalog. Returns `connected: false` when Shopify
  * isn't set up so the UI can show a friendly placeholder instead of an error.
  */
-export async function getStoreProducts(
-  limit = 24,
-): Promise<{ connected: boolean; products: StoreProduct[]; error?: string }> {
+export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
+  const cached = _productsCache.get(limit);
+  if (cached && Date.now() - cached.at < PRODUCTS_TTL) return cached.data;
   if (!(await shopifyReady())) return { connected: false, products: [] };
   try {
     const { domain } = await shopifyConfig();
@@ -83,7 +90,9 @@ export async function getStoreProducts(
       if (!conn?.pageInfo?.hasNextPage) break;
       after = conn.pageInfo.endCursor;
     }
-    return { connected: true, products: products.slice(0, limit) };
+    const data: ProductsResult = { connected: true, products: products.slice(0, limit) };
+    _productsCache.set(limit, { at: Date.now(), data });
+    return data;
   } catch (e: any) {
     console.error("[getStoreProducts]", e);
     return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };
@@ -116,9 +125,12 @@ const COLLECTIONS_TIERS = [
   node(""),
 ];
 
-export async function getStoreCollections(
-  limit = 50,
-): Promise<{ connected: boolean; collections: StoreCollection[]; error?: string }> {
+type CollectionsResult = { connected: boolean; collections: StoreCollection[]; error?: string };
+const _collectionsCache = new Map<number, { at: number; data: CollectionsResult }>();
+
+export async function getStoreCollections(limit = 50): Promise<CollectionsResult> {
+  const cached = _collectionsCache.get(limit);
+  if (cached && Date.now() - cached.at < PRODUCTS_TTL) return cached.data;
   if (!(await shopifyReady())) return { connected: false, collections: [] };
   try {
     const { domain } = await shopifyConfig();
@@ -143,7 +155,9 @@ export async function getStoreCollections(
         image: n.image?.url ?? null,
         productsCount: typeof n.productsCount === "object" ? n.productsCount?.count ?? 0 : (n.productsCount ?? 0),
       }));
-    return { connected: true, collections };
+    const data: CollectionsResult = { connected: true, collections };
+    _collectionsCache.set(limit, { at: Date.now(), data });
+    return data;
   } catch (e: any) {
     console.error("[getStoreCollections]", e);
     return { connected: true, collections: [], error: e?.message ?? "Could not reach Shopify" };
