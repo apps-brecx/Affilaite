@@ -1626,8 +1626,25 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
   await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };
   if (!config || typeof config !== "object") return { ok: false, message: "Invalid config." };
-  await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
+  // Keep the top-level reward columns (shown on the campaigns list, overview
+  // KPIs, join page and chat invites) in sync with what's saved in the config,
+  // so editing the amount here updates everywhere — not just attribution.
+  const cfg = mergeConfig(config);
+  const toColType = (t: string) => (t === "percent" ? "percent" : "flat");
+  await db
+    .update(campaigns)
+    .set({
+      config: config as any,
+      rewardType: toColType(cfg.reward.valueType) as any,
+      rewardValue: String(cfg.reward.value ?? 0),
+      friendRewardType: toColType(cfg.friend.valueType) as any,
+      friendRewardValue: String(cfg.friend.kind === "none" ? 0 : cfg.friend.value ?? 0),
+    })
+    .where(eq(campaigns.id, id));
   revalidatePath(`/admin/campaigns/${id}`);
+  revalidatePath("/admin/campaigns");
+  const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (c?.slug) revalidatePath(`/join/${c.slug}`);
   return { ok: true, message: "Rewards & rules saved." };
 }
 
