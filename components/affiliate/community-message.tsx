@@ -59,6 +59,7 @@ export function CommunityMessage({
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 font-semibold text-primary"><Rocket className="size-4" /> Campaign invite</div>
             <p className="font-medium">{p.campaignName || "New campaign"}</p>
+            {p.reward && <p className="text-sm">Earn <span className="font-semibold text-primary">{p.reward}</span> on every sale.</p>}
             {msg.body && <p className="text-muted-foreground">{msg.body}</p>}
             <Button size="sm" disabled={pending} onClick={() => run(() => joinCampaignFromInvite(p.campaignId))}>
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />} Join campaign

@@ -25,7 +25,7 @@ export function MessageComposer({
   campaigns,
 }: {
   target: { type: "group" | "dm"; id: string };
-  campaigns: { id: string; name: string }[];
+  campaigns: { id: string; name: string; reward?: string }[];
 }) {
   const [kind, setKind] = useState<Kind>("text");
   const [body, setBody] = useState("");
@@ -53,7 +53,7 @@ export function MessageComposer({
       if (kind === "invite") {
         const camp = campaigns.find((c) => c.id === fields.campaignId);
         if (!camp) return toast("Pick a campaign to invite to.", "error");
-        payload = { campaignId: camp.id, campaignName: camp.name };
+        payload = { campaignId: camp.id, campaignName: camp.name, reward: camp.reward ?? "" };
       }
       if (kind === "giveaway") payload = { prize: fields.prize };
       if (kind === "competition")

@@ -353,6 +353,11 @@ export async function joinCampaignFromInvite(campaignId: string): Promise<Action
     where: and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)),
   });
   if (!existing) await db.insert(affiliateCampaigns).values({ affiliateId, campaignId });
+  // Joining changes the affiliate's effective commission + payout (attribution
+  // uses the active campaign's reward), so refresh the pages that show it.
   revalidatePath("/community");
-  return { ok: true, message: `Joined ${camp.name}! 🚀` };
+  revalidatePath("/links");
+  revalidatePath("/dashboard");
+  revalidatePath("/promotions");
+  return { ok: true, message: existing ? `You're already in ${camp.name}.` : `Joined ${camp.name}! Your rate now follows this campaign. 🚀` };
 }

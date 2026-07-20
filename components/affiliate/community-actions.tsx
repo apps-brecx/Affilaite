@@ -2,11 +2,32 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, LogOut, Send } from "lucide-react";
+import { Loader2, Plus, LogOut, Send, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { joinGroup, leaveGroup, replyDirectMessage, markGroupRead, markDmReadByAffiliate } from "@/app/actions/messaging";
+import { joinGroup, leaveGroup, replyDirectMessage, markGroupRead, markDmReadByAffiliate, joinCampaignFromInvite } from "@/app/actions/messaging";
+
+export function JoinCampaignButton({ campaignId }: { campaignId: string }) {
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const toast = useToast();
+  return (
+    <Button
+      size="sm"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const res = await joinCampaignFromInvite(campaignId);
+          toast(res.message, res.ok ? "success" : "error");
+          if (res.ok) router.refresh();
+        })
+      }
+    >
+      {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />} Join campaign
+    </Button>
+  );
+}
 
 export function JoinGroupButton({ groupId }: { groupId: string }) {
   const [pending, start] = useTransition();

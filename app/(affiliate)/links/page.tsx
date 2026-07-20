@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
 import { requireAffiliate } from "@/lib/session";
 import { buildReferralLink, qrDataUrl, APP_URL } from "@/lib/links";
-import { getDefaultDestination } from "@/lib/queries";
+import { getDefaultDestination, getEarningRate } from "@/lib/queries";
+import { Percent } from "lucide-react";
 
 export const metadata = { title: "Links & Codes" };
 
 export default async function LinksPage() {
   const me = await requireAffiliate();
-  const destination = await getDefaultDestination();
+  const [destination, earning] = await Promise.all([getDefaultDestination(), getEarningRate(me.id)]);
   const link = buildReferralLink(me.refCode, destination);
   const qr = await qrDataUrl(link);
 
@@ -24,6 +25,24 @@ export default async function LinksPage() {
         title="Your links & codes"
         description="Share these anywhere. Every sale from your code or link is tracked to you — automatically."
       />
+
+      {earning && (
+        <div className="flex flex-col gap-1 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-gold/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-gilded">
+              <Percent className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm text-muted-foreground">You earn</p>
+              <p className="font-display text-2xl font-semibold tracking-tight">{earning.label}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground sm:text-right">
+            {earning.source === "campaign" ? <>Through the <span className="font-medium text-foreground">{earning.sourceName}</span> campaign</> : <>On the <span className="font-medium text-foreground">{earning.sourceName}</span> program</>}
+            <br className="hidden sm:block" /> on every eligible sale.
+          </p>
+        </div>
+      )}
 
       {/* Hero reward card */}
       <Card className="relative overflow-hidden">

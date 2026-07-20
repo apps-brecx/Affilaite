@@ -35,8 +35,10 @@ export default async function MessagesPage({
   const [groups, dmThreads, camps] = await Promise.all([
     listGroupsAdmin(),
     listDmThreads(),
-    db ? db.select({ id: campaigns.id, name: campaigns.name }).from(campaigns).where(eq(campaigns.status, "active")) : Promise.resolve([]),
+    db ? db.select({ id: campaigns.id, name: campaigns.name, rewardType: campaigns.rewardType, rewardValue: campaigns.rewardValue }).from(campaigns).where(eq(campaigns.status, "active")) : Promise.resolve([]),
   ]);
+  const campReward = (c: any) => (c.rewardType === "percent" ? `${Number(c.rewardValue) || 0}%` : `$${Number(c.rewardValue) || 0}`);
+  const campsForComposer = camps.map((c: any) => ({ id: c.id, name: c.name, reward: campReward(c) }));
 
   const selected = g || dm;
   const activeTab = dm ? "direct" : tab;
@@ -120,7 +122,7 @@ export default async function MessagesPage({
               {thread.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Send the first one below.</p>}
               {thread.map((m) => <AdminChatMessage key={m.id} msg={m} leaderboard={leaderboards[m.id]} />)}
             </div>
-            <MessageComposer target={{ type: "group", id: group.id }} campaigns={camps} />
+            <MessageComposer target={{ type: "group", id: group.id }} campaigns={campsForComposer} />
           </>
         ) : dmThread ? (
           <>
@@ -143,7 +145,7 @@ export default async function MessagesPage({
                 </div>
               ))}
             </div>
-            <MessageComposer target={{ type: "dm", id: dmThread.affiliateId }} campaigns={camps} />
+            <MessageComposer target={{ type: "dm", id: dmThread.affiliateId }} campaigns={campsForComposer} />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground">

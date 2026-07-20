@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, MessageSquare, Compass, Users, Lock, Globe } from "lucide-react";
 import { GroupAvatar } from "@/components/ui/group-avatar";
 import { CommunityMessage } from "@/components/affiliate/community-message";
-import { JoinGroupButton, LeaveGroupButton, DmReply, MarkGroupRead, MarkDmRead } from "@/components/affiliate/community-actions";
+import { JoinGroupButton, LeaveGroupButton, DmReply, MarkGroupRead, MarkDmRead, JoinCampaignButton } from "@/components/affiliate/community-actions";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import { requireAffiliate } from "@/lib/session";
 import {
@@ -123,16 +123,28 @@ export default async function CommunityPage({
             </header>
             <div className="flex-1 space-y-2 overflow-y-auto p-4">
               {dmMsgs.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Say hello 👋</p>}
-              {dmMsgs.map((m) => (
-                <div key={m.id} className={`flex ${m.fromAdmin ? "justify-start" : "justify-end"}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${m.fromAdmin ? "rounded-tl-sm bg-accent" : "rounded-tr-sm bg-primary text-primary-foreground"}`}>
-                    {m.kind === "deal" && <p className="mb-0.5 text-xs font-semibold opacity-80">🎟️ Deal{m.payload?.code ? ` · ${m.payload.code}` : ""}</p>}
-                    {m.kind === "invite" && <p className="mb-0.5 text-xs font-semibold opacity-80">🚀 Invite · {m.payload?.campaignName}</p>}
-                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className={`mt-0.5 text-right text-[10px] ${m.fromAdmin ? "text-muted-foreground" : "text-primary-foreground/60"}`}>{relativeTime(m.createdAt)}</p>
+              {dmMsgs.map((m) =>
+                m.kind === "invite" && m.fromAdmin && m.payload?.campaignId ? (
+                  <div key={m.id} className="flex justify-start">
+                    <div className="max-w-[80%] space-y-2 rounded-2xl rounded-tl-sm border border-primary/25 bg-primary/[0.06] px-3.5 py-3 text-sm">
+                      <p className="flex items-center gap-1.5 font-semibold text-primary">🚀 Campaign invite</p>
+                      <p className="font-medium">{m.payload.campaignName || "New campaign"}</p>
+                      {m.payload.reward && <p>Earn <span className="font-semibold text-primary">{m.payload.reward}</span> on every sale.</p>}
+                      {m.body && <p className="text-muted-foreground">{m.body}</p>}
+                      <JoinCampaignButton campaignId={m.payload.campaignId} />
+                      <p className="text-[10px] text-muted-foreground">{relativeTime(m.createdAt)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ) : (
+                  <div key={m.id} className={`flex ${m.fromAdmin ? "justify-start" : "justify-end"}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${m.fromAdmin ? "rounded-tl-sm bg-accent" : "rounded-tr-sm bg-primary text-primary-foreground"}`}>
+                      {m.kind === "deal" && <p className="mb-0.5 text-xs font-semibold opacity-80">🎟️ Deal{m.payload?.code ? ` · ${m.payload.code}` : ""}</p>}
+                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                      <p className={`mt-0.5 text-right text-[10px] ${m.fromAdmin ? "text-muted-foreground" : "text-primary-foreground/60"}`}>{relativeTime(m.createdAt)}</p>
+                    </div>
+                  </div>
+                ),
+              )}
             </div>
             <DmReply />
           </>

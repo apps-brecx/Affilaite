@@ -327,6 +327,47 @@ export async function getBrand(): Promise<BrandSettings> {
   }
 }
 
+export interface EarningRate {
+  valueType: "percent" | "flat";
+  value: number;
+  source: "campaign" | "program";
+  sourceName: string;
+  /** Pretty label, e.g. "15%" or "$5 per sale". */
+  label: string;
+}
+
+/**
+ * The rate an affiliate actually earns — mirrors attribution: an active campaign
+ * they've joined wins, otherwise their program (or the default program).
+ */
+export async function getEarningRate(affiliateId: string): Promise<EarningRate | null> {
+  if (!db) return null;
+  const fmt = (t: "percent" | "flat", v: number) => (t === "percent" ? `${v}%` : `$${v} per sale`);
+
+  const campRow = await db
+    .select({ camp: campaigns })
+    .from(affiliateCampaigns)
+    .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
+    .where(and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(campaigns.status, "active")))
+    .orderBy(desc(campaigns.createdAt))
+    .limit(1);
+  if (campRow[0]?.camp) {
+    const cfg = mergeConfig(campRow[0].camp.config);
+    const valueType = cfg.reward.valueType === "percent" ? "percent" : "flat";
+    const value = Number(cfg.reward.value) || 0;
+    return { valueType, value, source: "campaign", sourceName: campRow[0].camp.name, label: fmt(valueType, value) };
+  }
+
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+  const program = aff?.programId
+    ? await db.query.programs.findFirst({ where: eq(programs.id, aff.programId) })
+    : await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
+  if (!program) return null;
+  const valueType = program.commissionType === "percent" ? "percent" : "flat";
+  const value = Number(program.commissionValue) || 0;
+  return { valueType, value, source: "program", sourceName: program.name, label: fmt(valueType, value) };
+}
+
 /** Campaign IDs an affiliate belongs to. */
 export async function getAffiliateCampaignIds(affiliateId: string): Promise<string[]> {
   if (!db) return [];
