@@ -1,13 +1,20 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { EmailCenter } from "@/components/admin/email-center";
+import { EmailBrandingCard } from "@/components/admin/email-branding";
 import { currentUser } from "@/lib/session";
-import { getAllEmailTemplates } from "@/lib/email-center";
+import { getAllEmailTemplates, getEmailBrand, listCustomEmails } from "@/lib/email-center";
 import { emailReady } from "@/lib/integrations";
 
 export const metadata = { title: "Notification Center" };
 
 export default async function NotificationCenterPage() {
-  const [items, user, ready] = await Promise.all([getAllEmailTemplates(), currentUser(), emailReady()]);
+  const [items, brand, customs, user, ready] = await Promise.all([
+    getAllEmailTemplates(),
+    getEmailBrand(),
+    listCustomEmails(),
+    currentUser(),
+    emailReady(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -23,7 +30,9 @@ export default async function NotificationCenterPage() {
         </div>
       )}
 
-      <EmailCenter items={items} adminEmail={user?.email ?? ""} />
+      <EmailBrandingCard brand={brand} />
+
+      <EmailCenter items={items} customs={customs} adminEmail={user?.email ?? ""} />
     </div>
   );
 }

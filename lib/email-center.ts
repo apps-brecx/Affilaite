@@ -9,7 +9,6 @@ import { appSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getBrand } from "@/lib/queries";
 import { sendEmail } from "@/lib/email";
-import type { BrandSettings } from "@/lib/campaign-config";
 
 export type EmailCategory = "Onboarding" | "Sales" | "Payouts" | "Security";
 
@@ -47,6 +46,16 @@ export interface EmailTemplate {
   ctaText: string;
   ctaUrl: string;
   imageUrl: string;
+  buttonColor: string; // per-email hex override; "" = use the global brand
+}
+
+/** Global email branding — logo, colours, and one footer for every email. */
+export interface EmailBrand {
+  logoText: string;
+  logoUrl: string; // image URL; when set, shown instead of the text logo
+  primaryColor: string; // hex — headings/accents
+  buttonColor: string; // hex — default CTA button background
+  footerText: string; // shown at the foot of every email ({{logo}} allowed)
 }
 
 const V = {
@@ -193,7 +202,37 @@ export function defaultTemplate(t: EmailType): EmailTemplate {
     ctaText: t.defaultCtaText,
     ctaUrl: t.defaultCtaUrl,
     imageUrl: "",
+    buttonColor: "",
   };
+}
+
+const DEFAULT_FOOTER = "You're receiving this because you're a {{logo}} partner. Manage your email preferences in your dashboard settings.";
+
+/** Global email branding, merged from app_settings onto the store brand. */
+export async function getEmailBrand(): Promise<EmailBrand> {
+  const store = await getBrand();
+  const base: EmailBrand = {
+    logoText: store.logoText || "Sipfluence",
+    logoUrl: "",
+    primaryColor: store.primaryColor || "#FF5C9E",
+    buttonColor: store.primaryColor || "#FF5C9E",
+    footerText: DEFAULT_FOOTER,
+  };
+  if (!db) return base;
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, "email_brand") });
+  if (!row?.value) return base;
+  try {
+    const s = JSON.parse(row.value) as Partial<EmailBrand>;
+    return {
+      logoText: s.logoText?.trim() || base.logoText,
+      logoUrl: s.logoUrl?.trim() ?? base.logoUrl,
+      primaryColor: s.primaryColor?.trim() || base.primaryColor,
+      buttonColor: s.buttonColor?.trim() || base.buttonColor,
+      footerText: s.footerText ?? base.footerText,
+    };
+  } catch {
+    return base;
+  }
 }
 
 /** The effective template = stored overrides merged onto defaults. */
@@ -215,6 +254,7 @@ export async function getEmailTemplate(key: string): Promise<{ type: EmailType; 
         ctaText: stored.ctaText ?? base.ctaText,
         ctaUrl: stored.ctaUrl ?? base.ctaUrl,
         imageUrl: stored.imageUrl ?? base.imageUrl,
+        buttonColor: stored.buttonColor ?? base.buttonColor,
       },
     };
   } catch {
@@ -237,21 +277,67 @@ export function fillVars(str: string, vars: Record<string, string | undefined>):
   return str.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+// ---------- Custom (admin-authored) emails ----------
+
+export interface CustomEmail {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  ctaText: string;
+  ctaUrl: string;
+  imageUrl: string;
+  buttonColor: string;
+}
+
+const CUSTOM_KEY = "email_custom";
+
+export async function listCustomEmails(): Promise<CustomEmail[]> {
+  if (!db) return [];
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, CUSTOM_KEY) });
+  if (!row?.value) return [];
+  try {
+    const arr = JSON.parse(row.value);
+    return Array.isArray(arr) ? (arr as CustomEmail[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getCustomEmail(id: string): Promise<CustomEmail | null> {
+  return (await listCustomEmails()).find((c) => c.id === id) ?? null;
+}
+
+/** Persist the full custom-email list (write path used by the actions). */
+export async function writeCustomEmails(list: CustomEmail[]): Promise<void> {
+  if (!db) return;
+  await db
+    .insert(appSettings)
+    .values({ key: CUSTOM_KEY, value: JSON.stringify(list) })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: JSON.stringify(list), updatedAt: new Date() } });
+}
+
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+const hex = (c: string | undefined, fallback: string) => (c && /^#[0-9a-f]{6}$/i.test(c.trim()) ? c.trim() : fallback);
+
 /**
  * Render a full branded HTML email from a body + optional CTA/image, using the
- * store's brand (logo text + primary colour). Body newlines become paragraphs.
+ * global email brand (logo, colours, footer). `buttonColor` overrides the
+ * brand's button colour for this one email. Body newlines become paragraphs.
  */
 export function renderRichEmail(opts: {
   body: string;
-  brand: BrandSettings;
+  brand: EmailBrand;
   cta?: { text: string; url: string };
   imageUrl?: string;
+  buttonColor?: string;
 }): string {
   const { body, brand, cta, imageUrl } = opts;
-  const primary = /^#[0-9a-f]{6}$/i.test(brand.primaryColor) ? brand.primaryColor : "#FF5C9E";
+  const primary = hex(brand.primaryColor, "#FF5C9E");
+  const btnColor = hex(opts.buttonColor, hex(brand.buttonColor, primary));
+  const logoText = esc(brand.logoText || "Sipfluence");
   const paras = body
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px;line-height:1.65;color:#1a1a17;font-size:15px">${esc(p).replace(/\n/g, "<br/>")}</p>`)
@@ -263,16 +349,23 @@ export function renderRichEmail(opts: {
   const safeCtaUrl = cta?.url && /^(https?:|mailto:)/i.test(cta.url.trim()) ? cta.url.trim() : "";
   const button =
     cta?.text && safeCtaUrl
-      ? `<a href="${esc(safeCtaUrl)}" style="display:inline-block;margin-top:6px;padding:13px 28px;background:${primary};color:#ffffff;text-decoration:none;border-radius:12px;font-weight:600;font-size:15px">${esc(cta.text)}</a>`
+      ? `<a href="${esc(safeCtaUrl)}" style="display:inline-block;margin-top:6px;padding:13px 28px;background:${btnColor};color:#ffffff;text-decoration:none;border-radius:12px;font-weight:600;font-size:15px">${esc(cta.text)}</a>`
       : "";
-  const logo = esc(brand.logoText || "Sipfluence");
+  const logoBlock =
+    brand.logoUrl && /^https?:\/\//i.test(brand.logoUrl)
+      ? `<img src="${esc(brand.logoUrl)}" alt="${logoText}" style="display:block;height:34px;margin-bottom:22px" />`
+      : `<div style="font-size:22px;font-weight:800;color:${primary};margin-bottom:22px">${logoText}</div>`;
+  const footerRaw = (brand.footerText ?? "").trim();
+  const footer = footerRaw
+    ? `<hr style="border:none;border-top:1px solid #efe4da;margin:28px 0 14px" />
+  <p style="margin:0;font-size:12px;color:#9a8f86;line-height:1.5">${esc(footerRaw.replace(/\{\{logo\}\}/g, brand.logoText || "Sipfluence")).replace(/\n/g, "<br/>")}</p>`
+    : "";
   return `<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;background:#FFF7F1">
-  <div style="font-size:22px;font-weight:800;color:#431431;margin-bottom:22px">${logo}</div>
+  ${logoBlock}
   ${hero}
   ${paras}
   ${button}
-  <hr style="border:none;border-top:1px solid #efe4da;margin:28px 0 14px" />
-  <p style="margin:0;font-size:12px;color:#9a8f86;line-height:1.5">You're receiving this because you're a ${logo} partner. Manage your email preferences in your dashboard settings.</p>
+  ${footer}
 </div>`;
 }
 
@@ -286,7 +379,7 @@ export async function renderEmailForType(
 ): Promise<{ subject: string; html: string; enabled: boolean } | null> {
   const r = await getEmailTemplate(key);
   if (!r) return null;
-  const brand = await getBrand();
+  const brand = await getEmailBrand();
   const subject = fillVars(r.tpl.subject, vars);
   const ctaText = r.tpl.ctaText.trim();
   const ctaUrl = fillVars(r.tpl.ctaUrl, vars).trim();
@@ -295,16 +388,17 @@ export async function renderEmailForType(
     brand,
     cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
     imageUrl: r.tpl.imageUrl,
+    buttonColor: r.tpl.buttonColor,
   });
   return { subject, html, enabled: r.tpl.enabled };
 }
 
 /** Render an unsaved draft (for the editor's live preview). */
 export async function renderDraft(
-  draft: Pick<EmailTemplate, "subject" | "body" | "ctaText" | "ctaUrl" | "imageUrl">,
+  draft: Pick<EmailTemplate, "subject" | "body" | "ctaText" | "ctaUrl" | "imageUrl"> & { buttonColor?: string },
   vars: Record<string, string | undefined>,
 ): Promise<{ subject: string; html: string }> {
-  const brand = await getBrand();
+  const brand = await getEmailBrand();
   const ctaText = (draft.ctaText ?? "").trim();
   const ctaUrl = fillVars(draft.ctaUrl ?? "", vars).trim();
   return {
@@ -314,6 +408,7 @@ export async function renderDraft(
       brand,
       cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
       imageUrl: draft.imageUrl,
+      buttonColor: draft.buttonColor,
     }),
   };
 }
@@ -326,9 +421,9 @@ export async function renderBrandedEmail(
   subject: string,
   body: string,
   vars: Record<string, string | undefined> = {},
-  opts?: { cta?: { text: string; url: string }; imageUrl?: string },
+  opts?: { cta?: { text: string; url: string }; imageUrl?: string; buttonColor?: string },
 ): Promise<{ subject: string; html: string }> {
-  const brand = await getBrand();
+  const brand = await getEmailBrand();
   const ctaText = opts?.cta?.text?.trim();
   const ctaUrl = opts?.cta?.url ? fillVars(opts.cta.url, vars).trim() : "";
   return {
@@ -338,6 +433,7 @@ export async function renderBrandedEmail(
       brand,
       cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
       imageUrl: opts?.imageUrl,
+      buttonColor: opts?.buttonColor,
     }),
   };
 }
@@ -350,9 +446,9 @@ export async function sendRichBroadcast(
   recipients: { email: string; name?: string; code?: string; earnings?: string; link?: string }[],
   subject: string,
   body: string,
-  opts?: { cta?: { text: string; url: string }; imageUrl?: string },
+  opts?: { cta?: { text: string; url: string }; imageUrl?: string; buttonColor?: string },
 ): Promise<{ sent: number; failed: number }> {
-  const brand = await getBrand();
+  const brand = await getEmailBrand();
   const ctaText = opts?.cta?.text?.trim();
   let sent = 0;
   let failed = 0;
@@ -368,6 +464,7 @@ export async function sendRichBroadcast(
           brand,
           cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
           imageUrl: opts?.imageUrl,
+          buttonColor: opts?.buttonColor,
         }),
       );
       sent++;

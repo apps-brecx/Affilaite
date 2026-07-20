@@ -1,10 +1,11 @@
 "use server";
 
+import crypto from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { appSettings } from "@/db/schema";
+import { appSettings, affiliates, users } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import {
@@ -13,7 +14,15 @@ import {
   defaultTemplate,
   renderEmailForType,
   renderDraft,
+  renderBrandedEmail,
+  sendRichBroadcast,
+  getEmailBrand,
+  listCustomEmails,
+  getCustomEmail,
+  writeCustomEmails,
   type EmailTemplate,
+  type EmailBrand,
+  type CustomEmail,
 } from "@/lib/email-center";
 
 type Result = { ok: boolean; message: string };
@@ -37,6 +46,10 @@ const SAMPLE_VARS: Record<string, string> = {
   link: "https://sipfluence.example.com/reset-password?token=demo",
 };
 
+const hexOpt = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a hex colour like #FF5C9E.").optional().or(z.literal(""));
+
+// ---------- Built-in lifecycle templates ----------
+
 const patchSchema = z.object({
   key: z.string().min(1),
   enabled: z.boolean().optional(),
@@ -45,6 +58,7 @@ const patchSchema = z.object({
   ctaText: z.string().max(60).optional(),
   ctaUrl: z.string().max(500).optional(),
   imageUrl: z.string().max(1000).optional(),
+  buttonColor: hexOpt,
 });
 
 export async function saveEmailTemplate(input: unknown): Promise<Result> {
@@ -69,6 +83,7 @@ export async function saveEmailTemplate(input: unknown): Promise<Result> {
     ctaText: patch.ctaText ?? current.ctaText,
     ctaUrl: patch.ctaUrl ?? current.ctaUrl,
     imageUrl: (patch.imageUrl ?? current.imageUrl).trim(),
+    buttonColor: (patch.buttonColor ?? current.buttonColor).trim(),
   };
 
   await db
@@ -99,21 +114,148 @@ export async function sendTestEmail(key: string, to: string): Promise<Result> {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return { ok: false, message: "Enter a valid email address." };
   const rendered = await renderEmailForType(key, SAMPLE_VARS);
   if (!rendered) return { ok: false, message: "Unknown email type." };
-  try {
-    const res: any = await sendEmail(address, `[TEST] ${rendered.subject}`, rendered.html);
-    if (res?.skipped) return { ok: false, message: "Connect Resend in Settings → Integrations first." };
-    return { ok: true, message: `Test sent to ${address}.` };
-  } catch (e: any) {
-    return { ok: false, message: `Send failed: ${e?.message ?? "unknown error"}` };
-  }
+  return actuallySend(address, rendered.subject, rendered.html);
 }
 
 /** Server-rendered HTML preview of an unsaved draft (uses sample vars). */
 export async function previewEmail(
   key: string,
-  draft: Pick<EmailTemplate, "subject" | "body" | "ctaText" | "ctaUrl" | "imageUrl">,
+  draft: Pick<EmailTemplate, "subject" | "body" | "ctaText" | "ctaUrl" | "imageUrl" | "buttonColor">,
 ): Promise<{ subject: string; html: string } | null> {
   await assertAdmin();
-  if (!emailTypeByKey(key)) return null;
   return renderDraft(draft, SAMPLE_VARS);
+}
+
+// ---------- Global email branding ----------
+
+const brandSchema = z.object({
+  logoText: z.string().max(60).optional(),
+  logoUrl: z.string().max(1000).optional(),
+  primaryColor: hexOpt,
+  buttonColor: hexOpt,
+  footerText: z.string().max(600).optional(),
+});
+
+export async function saveEmailBrand(input: unknown): Promise<Result> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = brandSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid branding." };
+  const current = await getEmailBrand();
+  const p = parsed.data;
+  const next: EmailBrand = {
+    logoText: (p.logoText ?? current.logoText).trim() || "Sipfluence",
+    logoUrl: (p.logoUrl ?? current.logoUrl).trim(),
+    primaryColor: (p.primaryColor ?? current.primaryColor).trim() || "#FF5C9E",
+    buttonColor: (p.buttonColor ?? current.buttonColor).trim() || "#FF5C9E",
+    footerText: p.footerText ?? current.footerText,
+  };
+  await db
+    .insert(appSettings)
+    .values({ key: "email_brand", value: JSON.stringify(next) })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: JSON.stringify(next), updatedAt: new Date() } });
+  revalidatePath(PATH);
+  return { ok: true, message: "Branding saved — it applies to every email." };
+}
+
+// ---------- Custom emails ----------
+
+const customSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Give it a name.").max(80),
+  subject: z.string().max(200).optional(),
+  body: z.string().max(4000).optional(),
+  ctaText: z.string().max(60).optional(),
+  ctaUrl: z.string().max(500).optional(),
+  imageUrl: z.string().max(1000).optional(),
+  buttonColor: hexOpt,
+});
+
+export async function saveCustomEmail(input: unknown): Promise<Result & { id?: string }> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const parsed = customSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid email." };
+  const d = parsed.data;
+  const list = await listCustomEmails();
+  const id = d.id ?? crypto.randomUUID();
+  const item: CustomEmail = {
+    id,
+    name: d.name.trim(),
+    subject: (d.subject ?? "").trim(),
+    body: d.body ?? "",
+    ctaText: (d.ctaText ?? "").trim(),
+    ctaUrl: (d.ctaUrl ?? "").trim(),
+    imageUrl: (d.imageUrl ?? "").trim(),
+    buttonColor: (d.buttonColor ?? "").trim(),
+  };
+  const idx = list.findIndex((c) => c.id === id);
+  if (idx >= 0) list[idx] = item;
+  else list.unshift(item);
+  await writeCustomEmails(list);
+  revalidatePath(PATH);
+  return { ok: true, message: "Saved.", id };
+}
+
+export async function deleteCustomEmail(id: string): Promise<Result> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const list = (await listCustomEmails()).filter((c) => c.id !== id);
+  await writeCustomEmails(list);
+  revalidatePath(PATH);
+  return { ok: true, message: "Deleted." };
+}
+
+export async function sendTestCustomEmail(id: string, to: string): Promise<Result> {
+  await assertAdmin();
+  const address = (to ?? "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return { ok: false, message: "Enter a valid email address." };
+  const c = await getCustomEmail(id);
+  if (!c) return { ok: false, message: "Email not found." };
+  const r = await renderBrandedEmail(c.subject, c.body, SAMPLE_VARS, {
+    cta: c.ctaText && c.ctaUrl ? { text: c.ctaText, url: c.ctaUrl } : undefined,
+    imageUrl: c.imageUrl,
+    buttonColor: c.buttonColor,
+  });
+  return actuallySend(address, r.subject, r.html);
+}
+
+/** Send a custom email to a segment of affiliates. */
+export async function sendCustomEmailToAudience(id: string, audience: "approved" | "all"): Promise<Result> {
+  await assertAdmin();
+  if (!db) return { ok: false, message: "Database not configured." };
+  const c = await getCustomEmail(id);
+  if (!c) return { ok: false, message: "Email not found." };
+  if (!c.subject.trim() || !c.body.trim()) return { ok: false, message: "Add a subject and message first." };
+
+  const statuses = audience === "all" ? ["approved", "pending", "suspended"] : ["approved"];
+  const rows = await db
+    .select({ email: users.email, name: users.name, prefs: affiliates.notificationPrefs })
+    .from(affiliates)
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(inArray(affiliates.status, statuses as any));
+
+  const recipients = rows
+    .filter((r) => r.email && (r.prefs as Record<string, boolean> | null)?.programUpdates !== false)
+    .map((r) => ({ email: r.email!, name: r.name ?? undefined }));
+  if (!recipients.length) return { ok: false, message: "No opted-in recipients in that segment." };
+
+  const { sent, failed } = await sendRichBroadcast(recipients, c.subject, c.body, {
+    cta: c.ctaText && c.ctaUrl ? { text: c.ctaText, url: c.ctaUrl } : undefined,
+    imageUrl: c.imageUrl,
+    buttonColor: c.buttonColor,
+  });
+  return { ok: sent > 0, message: sent > 0 ? `Sent to ${sent} partner(s)${failed ? `, ${failed} failed` : ""}.` : "Nothing sent — is Resend connected?" };
+}
+
+// ---------- shared ----------
+
+async function actuallySend(address: string, subject: string, html: string): Promise<Result> {
+  try {
+    const res: any = await sendEmail(address, `[TEST] ${subject}`, html);
+    if (res?.skipped) return { ok: false, message: "Connect Resend in Settings → Integrations first." };
+    return { ok: true, message: `Test sent to ${address}.` };
+  } catch (e: any) {
+    return { ok: false, message: `Send failed: ${e?.message ?? "unknown error"}` };
+  }
 }
