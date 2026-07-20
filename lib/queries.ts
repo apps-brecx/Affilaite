@@ -219,6 +219,10 @@ export async function getGroup(id: string): Promise<Group | undefined> {
 // ---------- Campaigns ----------
 
 function mapCampaign(c: any, count: number): Campaign {
+  const cfg = mergeConfig(c.config);
+  // Reward is derived from the config — the single source of truth used by
+  // attribution — so the list/overview never drift from what's actually earned.
+  const toType = (t: string) => (t === "percent" ? "percent" : "flat");
   return {
     id: c.id,
     name: c.name,
@@ -232,11 +236,11 @@ function mapCampaign(c: any, count: number): Campaign {
     endsAt: c.endsAt ? new Date(c.endsAt).toISOString() : null,
     description: c.description ?? "",
     codePrefix: c.codePrefix ?? null,
-    rewardType: c.rewardType ?? "percent",
-    rewardValue: num(c.rewardValue),
-    friendRewardType: c.friendRewardType ?? "percent",
-    friendRewardValue: num(c.friendRewardValue),
-    config: mergeConfig(c.config),
+    rewardType: toType(cfg.reward.valueType),
+    rewardValue: Number(cfg.reward.value) || 0,
+    friendRewardType: toType(cfg.friend.valueType),
+    friendRewardValue: cfg.friend.kind === "none" ? 0 : Number(cfg.friend.value) || 0,
+    config: cfg,
     memberCount: count,
   };
 }

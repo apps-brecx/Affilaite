@@ -57,11 +57,11 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Active affiliates" value={memberIds.length} format="number" icon={Users} accent="primary" hint="in this campaign" />
         <StatCard label="Commission" value={campaign.config.reward.value} format="raw" decimals={campaign.config.reward.valueType === "percent" ? 0 : 2} icon={Wallet} accent="gold" hint={campaign.config.reward.valueType === "percent" ? "percent" : "flat"} />
-        <StatCard label="Reward type" value={0} format="number" icon={Gift} accent="success">
-          <p className="-mt-2 text-sm font-medium capitalize text-foreground">{campaign.config.reward.kind}</p>
+        <StatCard label="Reward type" icon={Gift} accent="success">
+          <p className="text-2xl font-semibold capitalize text-foreground">{campaign.config.reward.kind}</p>
         </StatCard>
-        <StatCard label="Payouts" value={0} format="number" icon={Wallet} accent="warning">
-          <p className="-mt-2 text-sm font-medium capitalize text-foreground">{campaign.config.payout.mode}</p>
+        <StatCard label="Payouts" icon={Wallet} accent="warning">
+          <p className="text-2xl font-semibold capitalize text-foreground">{campaign.config.payout.mode}</p>
         </StatCard>
       </div>
 

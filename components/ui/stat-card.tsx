@@ -16,7 +16,7 @@ export function StatCard({
   decimals,
 }: {
   label: string;
-  value: number;
+  value?: number;
   format?: "currency" | "number" | "raw";
   delta?: number;
   deltaSuffix?: string;
@@ -48,9 +48,11 @@ export function StatCard({
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            <CountUp value={value} format={format} decimals={decimals} />
-          </p>
+          {value !== undefined && (
+            <p className="font-display text-3xl font-semibold tracking-tight text-foreground">
+              <CountUp value={value} format={format} decimals={decimals} />
+            </p>
+          )}
         </div>
         {Icon && (
           <span className={cn("flex size-9 items-center justify-center rounded-lg", accentBg)}>
