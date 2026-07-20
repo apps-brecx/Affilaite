@@ -34,6 +34,15 @@ export function CatalogManager({
   const [featured, setFeatured] = useState<string[]>(initial.featured);
 
   const collById = useMemo(() => new Map(collections.map((c) => [c.id, c])), [collections]);
+  // Shopify's productsCount field is unreliable across API versions (and drops
+  // to 0 when the query tier steps down), so derive the count from the products
+  // we actually loaded; only fall back to Shopify's number when we have none.
+  const countByCollection = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of products) for (const cid of p.collectionIds) m.set(cid, (m.get(cid) ?? 0) + 1);
+    return m;
+  }, [products]);
+  const collCount = (c: C) => countByCollection.get(c.id) ?? c.productsCount ?? 0;
 
   const isVisible = (p: P) => {
     if (hiddenProducts.has(p.id)) return false;
@@ -48,6 +57,11 @@ export function CatalogManager({
     return list;
   }, [products, term]);
   const shown = filtered.slice(0, 200);
+
+  const filteredCollections = useMemo(() => {
+    const t = term.trim().toLowerCase();
+    return t ? collections.filter((c) => c.title.toLowerCase().includes(t)) : collections;
+  }, [collections, term]);
 
   const setMode = (id: string, mode: "auto" | "show" | "hide") => {
     setAllowedProducts((s) => { const n = new Set(s); mode === "show" ? n.add(id) : n.delete(id); return n; });
@@ -83,18 +97,23 @@ export function CatalogManager({
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg bg-muted p-1">
         {(["collections", "products"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors ${tab === t ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"}`}>
+          <button key={t} onClick={() => { setTab(t); setTerm(""); }} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors ${tab === t ? "bg-background text-foreground shadow-subtle" : "text-muted-foreground hover:text-foreground"}`}>
             {t === "collections" ? `Collections (${allowedCollections.size} on)` : `Products (${visibleCount})`}
           </button>
         ))}
       </div>
 
       {tab === "collections" && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Turn a collection on and <span className="font-medium text-foreground">every live product in it</span> becomes visible. Override individual products under the Products tab.</p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={term} onChange={(e) => setTerm(e.target.value)} className="pl-9" placeholder={`Search ${collections.length} collections…`} />
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {collections.length === 0 && <p className="text-sm text-muted-foreground">No collections found in Shopify.</p>}
-            {collections.map((c) => {
+            {filteredCollections.length === 0 && collections.length > 0 && <p className="text-sm text-muted-foreground">No collections match your search.</p>}
+            {filteredCollections.map((c) => {
               const on = allowedCollections.has(c.id);
               return (
                 <button key={c.id} onClick={() => toggleCollection(c.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${on ? "border-primary bg-primary/5" : "border-hairline hover:border-primary/30"}`}>
@@ -103,7 +122,7 @@ export function CatalogManager({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{c.title}</span>
-                    <span className="block text-xs text-muted-foreground">{c.productsCount} product{c.productsCount === 1 ? "" : "s"}</span>
+                    <span className="block text-xs text-muted-foreground">{collCount(c)} product{collCount(c) === 1 ? "" : "s"}</span>
                   </span>
                   <Badge variant={on ? "success" : "secondary"}>{on ? "Visible" : "Off"}</Badge>
                 </button>

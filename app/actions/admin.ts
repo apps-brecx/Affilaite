@@ -25,6 +25,7 @@ import {
   affiliateCampaigns,
   appSettings,
   sampleRequests,
+  discoveredPosts,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import {
@@ -2022,4 +2023,31 @@ export async function decideSampleRequest(
   revalidatePath("/admin/samples");
   revalidatePath("/samples");
   return { ok: true, message: shopifyOrderId ? "Approved — Shopify draft order created." : `Approved.${shopifyNote}` };
+}
+
+// --- Social content scan (the daily "AI worker") ---
+
+/** Run the affiliate social-media scan on demand from the admin Content page. */
+export async function runSocialScan(): Promise<ActionResult> {
+  await assertAdmin("content");
+  const { scanAllAffiliates } = await import("@/lib/social-scan");
+  try {
+    const r = await scanAllAffiliates();
+    revalidatePath("/admin/content");
+    const parts = [`Scanned ${r.scannedAffiliates} affiliate${r.scannedAffiliates === 1 ? "" : "s"}`, `${r.discovered} new post${r.discovered === 1 ? "" : "s"} found`];
+    if (r.skipped.length) parts.push(`skipped ${r.skipped.join(", ")} (no scraper connected)`);
+    return { ok: true, message: parts.join(" · ") + "." };
+  } catch (e: any) {
+    console.error("[runSocialScan]", e);
+    return { ok: false, message: e?.message ?? "Scan failed." };
+  }
+}
+
+/** Keep or dismiss a discovered post from the admin Content feed. */
+export async function setDiscoveredStatus(id: string, status: "kept" | "dismissed"): Promise<ActionResult> {
+  await assertAdmin("content");
+  if (!db) return { ok: false, message: "No database." };
+  await db.update(discoveredPosts).set({ status }).where(eq(discoveredPosts.id, id));
+  revalidatePath("/admin/content");
+  return { ok: true, message: status === "dismissed" ? "Removed from feed." : "Saved." };
 }

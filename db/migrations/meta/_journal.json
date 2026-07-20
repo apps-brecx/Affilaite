@@ -176,6 +176,13 @@
       "when": 1784490000000,
       "tag": "0024_team_access",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784558229877,
+      "tag": "0025_discovered_posts",
+      "breakpoints": true
     }
   ]
 }

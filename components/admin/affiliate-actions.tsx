@@ -4,33 +4,58 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Ban, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { setAffiliateStatus, assignProgram } from "@/app/actions/admin";
 import type { AffiliateState } from "@/lib/types";
 
-export function AffiliateActions({ id, status }: { id: string; status: AffiliateState }) {
+export function AffiliateActions({ id, name, status }: { id: string; name?: string; status: AffiliateState }) {
   const [pending, start] = useTransition();
+  const [confirm, setConfirm] = useState<AffiliateState | null>(null);
   const router = useRouter();
   const toast = useToast();
+  const who = name ?? "this affiliate";
 
   const act = (next: AffiliateState) =>
     start(async () => {
       const res = await setAffiliateStatus(id, next);
       toast(res.message, res.ok ? "success" : "error");
+      setConfirm(null);
       router.refresh();
     });
 
   return (
     <div className="flex gap-2">
       {status === "approved" ? (
-        <Button variant="outline" onClick={() => act("suspended")} disabled={pending}>
+        <Button variant="outline" onClick={() => setConfirm("suspended")} disabled={pending}>
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />} Suspend
         </Button>
       ) : (
-        <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={() => act("approved")} disabled={pending}>
+        <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setConfirm("approved")} disabled={pending}>
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve
         </Button>
       )}
+
+      <ConfirmDialog
+        open={confirm === "suspended"}
+        onClose={() => !pending && setConfirm(null)}
+        onConfirm={() => act("suspended")}
+        pending={pending}
+        variant="danger"
+        title="Suspend affiliate?"
+        description={`${who} will lose portal access and stop earning commissions until reinstated.`}
+        confirmLabel="Suspend"
+      />
+      <ConfirmDialog
+        open={confirm === "approved"}
+        onClose={() => !pending && setConfirm(null)}
+        onConfirm={() => act("approved")}
+        pending={pending}
+        variant="success"
+        title="Approve affiliate?"
+        description={`${who} will be approved and gain access to the partner portal.`}
+        confirmLabel="Approve"
+      />
     </div>
   );
 }

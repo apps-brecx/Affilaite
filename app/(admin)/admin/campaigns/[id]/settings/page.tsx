@@ -11,7 +11,7 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
 
   return (
     <div className="space-y-8">
-      <CampaignHeader campaign={campaign} />
+      <CampaignHeader campaign={campaign} backToCampaign />
       <CampaignSettingsForm campaign={campaign} appUrl={APP_URL} />
     </div>
   );

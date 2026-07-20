@@ -10,7 +10,7 @@ export default async function CampaignRewardsPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-8">
-      <CampaignHeader campaign={campaign} />
+      <CampaignHeader campaign={campaign} backToCampaign />
       <div className="mx-auto max-w-3xl">
         <CampaignRewards campaign={campaign} />
       </div>

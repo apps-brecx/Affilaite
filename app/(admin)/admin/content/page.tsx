@@ -1,9 +1,12 @@
-import { ExternalLink, Instagram, Music2, Youtube, Twitter, Facebook, Link2, MoonStar } from "lucide-react";
+import { ExternalLink, Instagram, Music2, Youtube, Twitter, Facebook, Link2, MoonStar, Sparkles, Play, Image as ImageIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { NudgeButton } from "@/components/admin/nudge-button";
-import { listRecentPosts, quietAffiliates } from "@/lib/social";
+import { ScanNowButton } from "@/components/admin/scan-now-button";
+import { DiscoveredActions } from "@/components/admin/discovered-actions";
+import { listRecentPosts, quietAffiliates, listDiscoveredPosts } from "@/lib/social";
 
 export const metadata = { title: "Content" };
 
@@ -19,17 +22,82 @@ const ICONS: Record<string, typeof Instagram> = {
 const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 export default async function ContentPage() {
-  const [posts, quiet] = await Promise.all([listRecentPosts(80), quietAffiliates(14)]);
+  const [posts, quiet, discovered] = await Promise.all([
+    listRecentPosts(80),
+    quietAffiliates(14),
+    listDiscoveredPosts(60),
+  ]);
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Content feed" description="Every post your affiliates have shared — and who's gone quiet and could use a nudge." />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader title="Content feed" description="Posts your affiliates shared, brand content our AI worker found on their socials, and who's gone quiet." />
+        <ScanNowButton />
+      </div>
+
+      {/* AI-discovered content */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" /> Discovered by AI
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">Auto-scanned daily</span>
+        </CardHeader>
+        <CardContent className="p-0">
+          {discovered.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+              <p>No brand content discovered yet.</p>
+              <p className="mx-auto mt-1 max-w-md text-xs">
+                The worker checks each affiliate&apos;s public YouTube automatically. Instagram &amp; TikTok need a
+                scraper provider connected (they block anonymous access) — until then, affiliates can still log posts
+                from their portal. Hit <span className="font-medium">Scan now</span> to run it immediately.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid grid-cols-1 gap-px bg-hairline sm:grid-cols-2">
+              {discovered.map((d) => {
+                const Icon = ICONS[d.platform] ?? Link2;
+                return (
+                  <li key={d.id} className="flex gap-3 bg-card p-4">
+                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                      {d.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={d.thumbnailUrl} alt="" className="size-full object-cover" />
+                      ) : (
+                        <span className="flex size-full items-center justify-center text-muted-foreground">
+                          {d.mediaType === "video" ? <Play className="size-5" /> : <ImageIcon className="size-5" />}
+                        </span>
+                      )}
+                    </a>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Avatar name={d.affiliateName} size={20} />
+                        <span className="truncate text-xs font-medium">{d.affiliateName}</span>
+                        <Badge variant="secondary" className="ml-auto gap-1 capitalize">
+                          <Icon className="size-3" /> {d.platform}
+                        </Badge>
+                      </div>
+                      <p className="mt-1.5 line-clamp-2 text-sm">{d.description || d.caption || "Brand content"}</p>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">
+                          {d.postedAt ? fmt(d.postedAt) : "View"} <ExternalLink className="size-3" />
+                        </a>
+                        <DiscoveredActions id={d.id} />
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Feed */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Recent posts</CardTitle>
+            <CardTitle>Posts affiliates shared</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {posts.length === 0 ? (

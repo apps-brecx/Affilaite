@@ -259,6 +259,32 @@ export const posts = pgTable(
   (t) => ({ postsAffIdx: index("posts_aff_idx").on(t.affiliateId) }),
 );
 
+// --- Content auto-discovered by the daily social scan worker ---
+// Populated by lib/social-scan.ts (not affiliate-submitted). Each row is one
+// piece of brand content found on an affiliate's public social account, with a
+// short AI-written description. status lets the admin curate the feed.
+export const discoveredPosts = pgTable(
+  "discovered_posts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    affiliateId: uuid("affiliate_id").notNull().references(() => affiliates.id),
+    platform: text("platform").notNull(), // instagram | tiktok | youtube | x | facebook | other
+    externalId: text("external_id").notNull(), // stable id from the platform for dedupe
+    url: text("url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    mediaType: text("media_type").notNull().default("post"), // video | image | post
+    caption: text("caption"), // original title/caption from the platform
+    description: text("description"), // short AI-generated summary
+    postedAt: timestamp("posted_at"),
+    status: text("status").notNull().default("new"), // new | kept | dismissed
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    discAffIdx: index("disc_aff_idx").on(t.affiliateId),
+    discDedupe: uniqueIndex("disc_dedupe_idx").on(t.affiliateId, t.platform, t.externalId),
+  }),
+);
+
 // --- Discount codes issued to affiliates (mirrors Shopify) ---
 export const discountCodes = pgTable(
   "discount_codes",

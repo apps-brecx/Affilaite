@@ -1,5 +1,6 @@
 import { approveMaturedCommissions } from "@/lib/commissions";
 import { reconcileProcessingPayouts, maybeAutoPayout, runScheduledPayout } from "@/app/actions/admin";
+import { scanAllAffiliates } from "@/lib/social-scan";
 import { paypalReady } from "@/lib/integrations";
 
 // Render Cron hits this daily to mature commissions past their hold window and
@@ -21,5 +22,10 @@ export async function GET(req: Request) {
   const scheduled = await runScheduledPayout().catch(() => "");
   // Roll any still-"processing" payout batches forward from PayPal's state.
   if (await paypalReady()) await reconcileProcessingPayouts().catch(() => {});
-  return Response.json({ ok: true, ...result, autoPaid: autoPaid || null, scheduled: scheduled || null });
+  // Daily AI worker: scan affiliates' public socials for new brand content.
+  const scan = await scanAllAffiliates().catch((e) => {
+    console.error("[cron] social scan:", e);
+    return null;
+  });
+  return Response.json({ ok: true, ...result, autoPaid: autoPaid || null, scheduled: scheduled || null, scan });
 }

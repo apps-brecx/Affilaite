@@ -15,7 +15,7 @@ export default async function CampaignAffiliatesPage({ params }: { params: Promi
 
   return (
     <div className="space-y-8">
-      <CampaignHeader campaign={campaign} />
+      <CampaignHeader campaign={campaign} backToCampaign />
       <CampaignMembers campaignId={id} members={members} candidates={candidates} />
     </div>
   );

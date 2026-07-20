@@ -1,7 +1,7 @@
 // lib/social.ts — post tracking + public link-in-bio profile data.
 import { db } from "@/db";
-import { posts, affiliates, users, discountCodes } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { posts, affiliates, users, discountCodes, discoveredPosts } from "@/db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface PostRow {
   id: string;
@@ -61,6 +61,46 @@ export async function quietAffiliates(days = 14): Promise<{ affiliateId: string;
     .filter((r) => !r.lastPost || new Date(r.lastPost).getTime() < cutoff)
     .map((r) => ({ affiliateId: r.affiliateId, name: r.name ?? r.email ?? "Partner", lastPostAt: r.lastPost ? new Date(r.lastPost).toISOString() : null }))
     .sort((a, b) => (a.lastPostAt ?? "").localeCompare(b.lastPostAt ?? ""));
+}
+
+export interface DiscoveredRow {
+  id: string;
+  affiliateId: string;
+  affiliateName: string;
+  platform: string;
+  url: string;
+  thumbnailUrl: string | null;
+  mediaType: string;
+  caption: string | null;
+  description: string | null;
+  postedAt: string | null;
+  status: string;
+}
+
+/** Auto-discovered brand content (from the daily AI scan) for the admin feed. */
+export async function listDiscoveredPosts(limit = 60): Promise<DiscoveredRow[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({ d: discoveredPosts, name: users.name, email: users.email })
+    .from(discoveredPosts)
+    .leftJoin(affiliates, eq(discoveredPosts.affiliateId, affiliates.id))
+    .leftJoin(users, eq(affiliates.userId, users.id))
+    .where(and(eq(discoveredPosts.status, "new")))
+    .orderBy(desc(discoveredPosts.postedAt), desc(discoveredPosts.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.d.id,
+    affiliateId: r.d.affiliateId,
+    affiliateName: r.name ?? r.email ?? "Partner",
+    platform: r.d.platform,
+    url: r.d.url,
+    thumbnailUrl: r.d.thumbnailUrl,
+    mediaType: r.d.mediaType,
+    caption: r.d.caption,
+    description: r.d.description,
+    postedAt: r.d.postedAt ? new Date(r.d.postedAt).toISOString() : null,
+    status: r.d.status,
+  }));
 }
 
 export interface PublicProfile {

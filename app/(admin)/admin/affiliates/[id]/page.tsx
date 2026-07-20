@@ -71,7 +71,7 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
             <Button variant="outline" size="sm" asChild>
               <Link href={`/admin/messages?to=${a.id}`}><Mail className="size-4" /> Message</Link>
             </Button>
-            <AffiliateActions id={a.id} status={a.status} />
+            <AffiliateActions id={a.id} name={a.name} status={a.status} />
           </div>
         </CardContent>
       </Card>

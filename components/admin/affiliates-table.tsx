@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { setAffiliateStatus, sendPortalInvite } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
@@ -28,6 +29,7 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; name: string; status: AffiliateState } | null>(null);
   const router = useRouter();
   const toast = useToast();
 
@@ -37,8 +39,15 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
       const res = await setAffiliateStatus(id, status);
       toast(res.message, res.ok ? "success" : "error");
       setBusyId(null);
+      setConfirm(null);
       router.refresh();
     });
+  };
+
+  const CONFIRM_COPY: Record<string, { title: string; description: (n: string) => string; label: string; variant: "danger" | "success" }> = {
+    approved: { title: "Approve affiliate?", description: (n) => `${n} will be approved and gain access to the partner portal.`, label: "Approve", variant: "success" },
+    suspended: { title: "Suspend affiliate?", description: (n) => `${n} will lose portal access and stop earning commissions until reinstated.`, label: "Suspend", variant: "danger" },
+    rejected: { title: "Reject applicant?", description: (n) => `${n}'s application will be rejected. You can approve them later if you change your mind.`, label: "Reject", variant: "danger" },
   };
 
   const bulkApprove = () => {
@@ -191,10 +200,10 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     ) : a.status === "pending" ? (
                       <>
-                        <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "rejected")}>
+                        <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "rejected" })}>
                           <X className="size-4" />
                         </Button>
-                        <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => act(a.id, "approved")}>
+                        <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
                           <Check className="size-4" />
                         </Button>
                       </>
@@ -203,12 +212,12 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                         <Button size="icon-sm" variant="ghost" title="Send portal invite" aria-label="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
                           <Mail className="size-4" />
                         </Button>
-                        <Button size="icon-sm" variant="ghost" title="Suspend" aria-label="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => act(a.id, "suspended")}>
+                        <Button size="icon-sm" variant="ghost" title="Suspend" aria-label="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "suspended" })}>
                           <Ban className="size-4" />
                         </Button>
                       </>
                     ) : (
-                      <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => act(a.id, "approved")}>
+                      <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
                         <Check className="size-4" />
                       </Button>
                     )}
@@ -222,6 +231,22 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
           <p className="py-12 text-center text-sm text-muted-foreground">No affiliates match your filters.</p>
         )}
       </div>
+
+      {confirm && (() => {
+        const copy = CONFIRM_COPY[confirm.status];
+        return (
+          <ConfirmDialog
+            open
+            onClose={() => !pending && setConfirm(null)}
+            onConfirm={() => act(confirm.id, confirm.status)}
+            pending={pending}
+            variant={copy.variant}
+            title={copy.title}
+            description={copy.description(confirm.name)}
+            confirmLabel={copy.label}
+          />
+        );
+      })()}
     </div>
   );
 }

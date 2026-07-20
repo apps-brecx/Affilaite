@@ -5,11 +5,14 @@ import { CampaignTabs } from "@/components/admin/campaign-tabs";
 import { CampaignStatusToggle } from "@/components/admin/campaign-status-toggle";
 import type { Campaign } from "@/lib/types";
 
-export function CampaignHeader({ campaign }: { campaign: Campaign }) {
+export function CampaignHeader({ campaign, backToCampaign }: { campaign: Campaign; backToCampaign?: boolean }) {
+  const back = backToCampaign
+    ? { href: `/admin/campaigns/${campaign.id}`, label: campaign.name }
+    : { href: "/admin/campaigns", label: "All campaigns" };
   return (
     <div className="space-y-5">
-      <Link href="/admin/campaigns" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> All campaigns
+      <Link href={back.href} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> {back.label}
       </Link>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
