@@ -98,6 +98,7 @@ export function SamplesBanner({ banner }: { banner: Banner | null }) {
   const toast = useToast();
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const mobileRef = useRef<HTMLInputElement>(null);
   const [b, setB] = useState({
     enabled: banner?.enabled ?? false,
     title: banner?.title ?? "",
@@ -105,16 +106,17 @@ export function SamplesBanner({ banner }: { banner: Banner | null }) {
     ctaLabel: banner?.ctaLabel ?? "",
     ctaUrl: banner?.ctaUrl ?? "",
     imageUrl: banner?.imageUrl ?? "",
+    imageUrlMobile: banner?.imageUrlMobile ?? "",
   });
 
-  const pickImage = (file?: File) => {
+  const pickImage = (field: "imageUrl" | "imageUrlMobile", file?: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast("Choose an image file.", "error"); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result);
       if (dataUrl.length > MAX_IMG) { toast("Image is too large — pick one under ~1.3MB.", "error"); return; }
-      setB((v) => ({ ...v, imageUrl: dataUrl }));
+      setB((v) => ({ ...v, [field]: dataUrl }));
     };
     reader.readAsDataURL(file);
   };
@@ -140,23 +142,45 @@ export function SamplesBanner({ banner }: { banner: Banner | null }) {
           <div className="space-y-1.5"><Label>Button text</Label><Input value={b.ctaLabel} onChange={(e) => setB({ ...b, ctaLabel: e.target.value })} placeholder="Optional" /></div>
           <div className="space-y-1.5"><Label>Button URL</Label><Input value={b.ctaUrl} onChange={(e) => setB({ ...b, ctaUrl: e.target.value })} placeholder="https://" /></div>
         </div>
-        <div className="space-y-1.5">
-          <Label>Banner image</Label>
-          {b.imageUrl ? (
-            <div className="relative w-fit">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={b.imageUrl} alt="" className="h-24 rounded-lg border border-hairline object-cover" />
-              <button onClick={() => setB({ ...b, imageUrl: "" })} className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-danger text-danger-foreground"><X className="size-3" /></button>
-            </div>
-          ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-hairline py-6 text-sm text-muted-foreground hover:bg-accent/40"
-            >
-              <Upload className="size-4" /> Upload an image
-            </button>
-          )}
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Website image</Label>
+            {b.imageUrl ? (
+              <div className="relative w-fit">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={b.imageUrl} alt="" className="h-24 rounded-lg border border-hairline object-cover" />
+                <button onClick={() => setB({ ...b, imageUrl: "" })} className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-danger text-danger-foreground"><X className="size-3" /></button>
+              </div>
+            ) : (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-hairline py-6 text-sm text-muted-foreground hover:bg-accent/40"
+              >
+                <Upload className="size-4" /> Upload wide image
+              </button>
+            )}
+            <p className="text-[11px] text-muted-foreground">Shown on desktop / tablet.</p>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickImage("imageUrl", e.target.files?.[0])} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Mobile image</Label>
+            {b.imageUrlMobile ? (
+              <div className="relative w-fit">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={b.imageUrlMobile} alt="" className="h-24 rounded-lg border border-hairline object-cover" />
+                <button onClick={() => setB({ ...b, imageUrlMobile: "" })} className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-danger text-danger-foreground"><X className="size-3" /></button>
+              </div>
+            ) : (
+              <button
+                onClick={() => mobileRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-hairline py-6 text-sm text-muted-foreground hover:bg-accent/40"
+              >
+                <Upload className="size-4" /> Upload tall image
+              </button>
+            )}
+            <p className="text-[11px] text-muted-foreground">Optional — falls back to the website image.</p>
+            <input ref={mobileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickImage("imageUrlMobile", e.target.files?.[0])} />
+          </div>
         </div>
       </CardContent>
     </Card>

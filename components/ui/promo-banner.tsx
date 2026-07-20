@@ -5,15 +5,21 @@ import type { Banner } from "@/lib/queries";
 export function PromoBanner({ banner, fullBleed = false }: { banner: Banner | null; fullBleed?: boolean }) {
   if (!banner) return null;
 
-  // Full-bleed hero: breaks out of the page's padded container to span the
-  // entire top of the content area, with the copy overlaid on the image.
+  // Hero: a wide, rounded banner across the top with the copy overlaid. Uses a
+  // separate mobile image when one is set, falling back to the desktop image.
   if (fullBleed) {
     const hasCopy = banner.title || banner.body || (banner.ctaLabel && banner.ctaUrl);
+    const desktop = banner.imageUrl || banner.imageUrlMobile;
+    const mobile = banner.imageUrlMobile || banner.imageUrl;
     return (
-      <div className="relative -mx-4 -mt-6 overflow-hidden sm:-mx-6 lg:-mx-8 lg:-mt-8">
-        {banner.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={banner.imageUrl} alt="" className="h-40 w-full object-cover sm:h-56 lg:h-64" />
+      <div className="relative mt-2 overflow-hidden rounded-2xl border border-hairline">
+        {desktop || mobile ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={mobile} alt="" className="h-44 w-full object-cover sm:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={desktop} alt="" className="hidden h-56 w-full object-cover sm:block lg:h-64" />
+          </>
         ) : (
           <div className="h-40 w-full bg-gradient-to-br from-primary/20 to-gold/10 sm:h-48" />
         )}

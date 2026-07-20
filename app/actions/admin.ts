@@ -1772,6 +1772,7 @@ export async function saveBanner(placement: "samples" | "promotions", input: unk
       // Images are uploaded as base64 data URLs (the client caps files at
       // ~1.8MB), so this must comfortably exceed a plain URL length.
       imageUrl: z.string().max(2_600_000).optional().default(""),
+      imageUrlMobile: z.string().max(2_600_000).optional().default(""),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid banner." };

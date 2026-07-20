@@ -293,7 +293,8 @@ export interface Banner {
   body: string;
   ctaLabel: string;
   ctaUrl: string;
-  imageUrl: string;
+  imageUrl: string; // desktop / website image
+  imageUrlMobile: string; // optional separate image for phones
 }
 
 /** A promo banner for a page ("samples" | "promotions"). Null when not set/off. */
@@ -302,7 +303,7 @@ export async function getBanner(placement: "samples" | "promotions"): Promise<Ba
   if (!raw) return null;
   try {
     const b = JSON.parse(raw) as Partial<Banner>;
-    if (!b.enabled || (!b.title && !b.body && !b.imageUrl)) return null;
+    if (!b.enabled || (!b.title && !b.body && !b.imageUrl && !b.imageUrlMobile)) return null;
     return {
       enabled: true,
       title: b.title ?? "",
@@ -310,6 +311,7 @@ export async function getBanner(placement: "samples" | "promotions"): Promise<Ba
       ctaLabel: b.ctaLabel ?? "",
       ctaUrl: b.ctaUrl ?? "",
       imageUrl: b.imageUrl ?? "",
+      imageUrlMobile: b.imageUrlMobile ?? "",
     };
   } catch {
     return null;
