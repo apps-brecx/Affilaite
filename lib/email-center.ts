@@ -333,9 +333,14 @@ export function renderRichEmail(opts: {
   cta?: { text: string; url: string };
   imageUrl?: string;
   buttonColor?: string;
+  preheader?: string;
 }): string {
   const { body, brand, cta, imageUrl } = opts;
   const primary = hex(brand.primaryColor, "#FF5C9E");
+  // Hidden preview text (shown in the inbox list, not the body).
+  const preheader = opts.preheader?.trim()
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(opts.preheader.trim())}</div>`
+    : "";
   const btnColor = hex(opts.buttonColor, hex(brand.buttonColor, primary));
   const logoText = esc(brand.logoText || "Sipfluence");
   const paras = body
@@ -361,12 +366,63 @@ export function renderRichEmail(opts: {
   <p style="margin:0;font-size:12px;color:#9a8f86;line-height:1.5">${esc(footerRaw.replace(/\{\{logo\}\}/g, brand.logoText || "Sipfluence")).replace(/\n/g, "<br/>")}</p>`
     : "";
   return `<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;background:#FFF7F1">
+  ${preheader}
   ${logoBlock}
   ${hero}
   ${paras}
   ${button}
   ${footer}
 </div>`;
+}
+
+// ---------- Team invite email (fully admin-controlled) ----------
+
+export interface TeamInviteEmail {
+  fromName: string;
+  subject: string;
+  preheader: string;
+  body: string;
+  buttonLabel: string;
+  buttonUrl: string;
+  imageUrl: string;
+  buttonColor: string;
+}
+
+const TEAM_INVITE_KEY = "team_invite_email";
+
+export function defaultTeamInviteEmail(): TeamInviteEmail {
+  return {
+    fromName: "",
+    subject: "You've been added to the {{brand}} admin",
+    preheader: "Your admin access is ready — sign in to get started.",
+    body: "Hi {{name}},\n\nYou've been given access to the {{brand}} admin portal. Sign in with the temporary password below, then change it from your account settings.\n\nTemporary password: {{tempPassword}}",
+    buttonLabel: "Sign in",
+    buttonUrl: "{{loginUrl}}",
+    imageUrl: "",
+    buttonColor: "",
+  };
+}
+
+export async function getTeamInviteEmail(): Promise<TeamInviteEmail> {
+  const d = defaultTeamInviteEmail();
+  if (!db) return d;
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, TEAM_INVITE_KEY) });
+  if (!row?.value) return d;
+  try {
+    const s = JSON.parse(row.value) as Partial<TeamInviteEmail>;
+    return { ...d, ...s };
+  } catch {
+    return d;
+  }
+}
+
+export async function writeTeamInviteEmail(tpl: TeamInviteEmail): Promise<void> {
+  if (!db) return;
+  const value = JSON.stringify(tpl);
+  await db
+    .insert(appSettings)
+    .values({ key: TEAM_INVITE_KEY, value })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
 }
 
 /**

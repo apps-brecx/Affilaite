@@ -3,16 +3,23 @@
 import { Resend } from "resend";
 import { emailConfig } from "./integrations";
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(to: string, subject: string, html: string, fromName?: string) {
   const { apiKey, from } = await emailConfig();
   if (!apiKey) {
     console.warn("[email] Resend not connected — skipping send to", to);
     return { skipped: true as const };
   }
   const resend = new Resend(apiKey);
+  // Optional display name: keep the verified address, swap the friendly name.
+  let fromHeader = from;
+  if (fromName && fromName.trim() && from) {
+    const m = from.match(/<([^>]+)>/);
+    const addr = m ? m[1] : from.trim();
+    fromHeader = `${fromName.trim()} <${addr}>`;
+  }
   // Resend v4 resolves with { data, error } instead of throwing — surface the
   // error so callers don't report "sent" when nothing was delivered.
-  const { data, error } = await resend.emails.send({ from, to, subject, html });
+  const { data, error } = await resend.emails.send({ from: fromHeader, to, subject, html });
   if (error) throw new Error(`Resend: ${error.message ?? JSON.stringify(error)}`);
   return { id: data?.id };
 }

@@ -109,7 +109,7 @@ export const adminNav: NavSection[] = [
           { label: "Integrations", href: "/admin/settings/integrations", icon: "integrations" },
           { label: "Payments", href: "/admin/settings/payments", icon: "payments" },
           { label: "Brand & theme", href: "/admin/settings/brand", icon: "brand" },
-          { label: "Invite templates", href: "/admin/settings/invites", icon: "invites" },
+          { label: "Team invites", href: "/admin/settings/invites", icon: "invites" },
           { label: "Account", href: "/admin/settings/account", icon: "account" },
         ],
       },

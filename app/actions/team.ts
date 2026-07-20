@@ -11,7 +11,15 @@ import { auth } from "@/lib/auth";
 import { APP_URL } from "@/lib/links";
 import { emailReady } from "@/lib/integrations";
 import { sendEmail } from "@/lib/email";
-import { renderBrandedEmail } from "@/lib/email-center";
+import {
+  getEmailBrand,
+  renderRichEmail,
+  fillVars,
+  getTeamInviteEmail,
+  writeTeamInviteEmail,
+  defaultTeamInviteEmail,
+  type TeamInviteEmail,
+} from "@/lib/email-center";
 import { AREA_KEYS } from "@/lib/permissions";
 
 type Result = { ok: boolean; message: string };
@@ -38,19 +46,53 @@ function tempPassword(): string {
 
 async function emailInvite(email: string, name: string, temp: string): Promise<boolean> {
   if (!(await emailReady())) return false;
-  const r = await renderBrandedEmail(
-    "You've been added to the Sipfluence admin",
-    `Hi ${name || "there"},\n\nYou've been given access to the Sipfluence admin portal. Sign in with the temporary password below and change it from your account settings.\n\nTemporary password: ${temp}`,
-    {},
-    { cta: { text: "Sign in", url: `${APP_URL}/login` } },
-  );
+  const [tpl, brand] = await Promise.all([getTeamInviteEmail(), getEmailBrand()]);
+  const vars = {
+    name: name || "there",
+    email,
+    tempPassword: temp,
+    loginUrl: `${APP_URL}/login`,
+    brand: brand.logoText || "Sipfluence",
+  };
+  const subject = fillVars(tpl.subject, vars) || `You've been added to the ${vars.brand} admin`;
+  const buttonUrl = fillVars(tpl.buttonUrl || `${APP_URL}/login`, vars);
+  const html = renderRichEmail({
+    body: fillVars(tpl.body, vars),
+    brand,
+    preheader: fillVars(tpl.preheader, vars),
+    imageUrl: tpl.imageUrl,
+    buttonColor: tpl.buttonColor,
+    cta: tpl.buttonLabel && buttonUrl ? { text: tpl.buttonLabel, url: buttonUrl } : undefined,
+  });
   try {
-    const res: any = await sendEmail(email, r.subject, r.html);
+    const res: any = await sendEmail(email, subject, html, tpl.fromName);
     return !res?.skipped;
   } catch (e) {
     console.error("[team] invite email:", e);
     return false;
   }
+}
+
+/** Save the team-invite email template (owner only). */
+export async function saveTeamInviteEmail(input: unknown): Promise<Result> {
+  await requireOwnerSession();
+  const parsed = z
+    .object({
+      fromName: z.string().max(80).optional().default(""),
+      subject: z.string().max(200).optional().default(""),
+      preheader: z.string().max(200).optional().default(""),
+      body: z.string().max(4000).optional().default(""),
+      buttonLabel: z.string().max(60).optional().default(""),
+      buttonUrl: z.string().max(500).optional().default(""),
+      imageUrl: z.string().max(2_600_000).optional().default(""),
+      buttonColor: z.string().max(9).optional().default(""),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid template." };
+  const tpl: TeamInviteEmail = { ...defaultTeamInviteEmail(), ...parsed.data };
+  await writeTeamInviteEmail(tpl);
+  revalidatePath("/admin/settings/invites");
+  return { ok: true, message: "Team invite email saved." };
 }
 
 const inviteSchema = z.object({
