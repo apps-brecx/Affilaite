@@ -58,6 +58,7 @@ export function MessageComposer({
         payload = {
           title: fields.title || special?.title,
           code: fields.code,
+          discount: fields.discount ? Number(fields.discount) : undefined,
           endsAt: fields.endsAt || undefined,
           ...(special ? { productTitle: special.title, productImage: special.image, productUrl: special.url, promoName: special.promoName, bonus: special.bonus } : {}),
         };
@@ -148,6 +149,7 @@ export function MessageComposer({
             })()}
             <div className="grid gap-2 sm:grid-cols-2">
               <Input placeholder="Deal title (or keep the product name)" value={fields.title ?? ""} onChange={(e) => set("title", e.target.value)} />
+              <Input type="number" min="0" max="100" placeholder="% off (e.g. 20)" value={fields.discount ?? ""} onChange={(e) => set("discount", e.target.value)} />
               <Input placeholder="Code (optional)" value={fields.code ?? ""} onChange={(e) => set("code", e.target.value)} />
               <Input type="date" value={fields.endsAt ?? ""} onChange={(e) => set("endsAt", e.target.value)} />
             </div>

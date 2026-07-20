@@ -142,10 +142,14 @@ export default async function CommunityPage({
                       {m.kind === "deal" && (
                         <>
                           <p className="mb-1 text-xs font-semibold opacity-90">🎟️ {m.payload?.title || "Special deal"}</p>
+                          {(m.payload?.discount ?? 0) > 0 && (
+                            <span className={`mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${m.fromAdmin ? "bg-primary text-primary-foreground" : "bg-primary-foreground text-primary"}`}>{m.payload?.discount}% OFF</span>
+                          )}
                           {m.payload?.productImage && (
-                            <Link href="/promotions" className="mb-1.5 block overflow-hidden rounded-lg">
+                            <Link href="/promotions" className="relative mb-1.5 block overflow-hidden rounded-lg">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={m.payload.productImage} alt="" className="h-28 w-full max-w-[220px] object-cover" />
+                              {(m.payload?.discount ?? 0) > 0 && <span className="absolute right-2 top-2 rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-foreground shadow">{m.payload?.discount}% OFF</span>}
                             </Link>
                           )}
                           {(m.payload?.promoName || m.payload?.bonus) && (

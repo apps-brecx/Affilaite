@@ -45,10 +45,12 @@ export function CommunityMessage({
         {msg.kind === "deal" && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-primary"><Ticket className="size-4" /> {p.title || "Special deal"}</div>
+            {p.discount > 0 && !p.productImage && <span className="inline-block rounded-full bg-primary px-3 py-1 text-sm font-bold text-primary-foreground">{p.discount}% OFF</span>}
             {p.productImage && (
-              <a href="/promotions" className="block overflow-hidden rounded-lg border border-hairline">
+              <a href="/promotions" className="relative block overflow-hidden rounded-lg border border-hairline">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.productImage} alt={p.productTitle || ""} className="h-32 w-full object-cover" />
+                {p.discount > 0 && <span className="absolute right-2 top-2 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow">{p.discount}% OFF</span>}
               </a>
             )}
             {(p.promoName || p.bonus) && (
