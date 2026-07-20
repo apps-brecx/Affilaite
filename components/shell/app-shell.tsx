@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { markNotificationsReadByPath, getMyBadges } from "@/app/actions/notifications";
+import { markNotificationsReadByPath, getMyBadges, getAdminBadges } from "@/app/actions/notifications";
 import {
   Menu,
   X,
@@ -225,21 +225,19 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [badges, setBadges] = useState<Record<string, number>>(initialBadges ?? {});
-  // Admin badges come straight from the server (recomputed on every
-  // router.refresh() after an action), so the red dot clears the moment a
-  // request is handled. Affiliate badges use the polling state below.
-  const effectiveBadges = variant === "admin" ? initialBadges ?? {} : badges;
+  // Both variants poll so red dots (pending samples/applicants + unread
+  // messages for admin, notifications for affiliates) update live everywhere.
+  const effectiveBadges = badges;
 
-  // Live badge counts: poll on an interval and whenever the tab regains focus,
-  // so new notifications show up without a page reload.
+  // Live badge counts: poll on an interval and whenever the tab regains focus.
   useEffect(() => {
-    if (variant !== "affiliate") return;
     let active = true;
+    const fetcher = variant === "admin" ? getAdminBadges : getMyBadges;
     const refresh = () =>
-      getMyBadges()
+      fetcher()
         .then((b) => active && setBadges(b))
         .catch(() => {});
-    const id = setInterval(refresh, 12000);
+    const id = setInterval(refresh, variant === "admin" ? 10000 : 12000);
     const onVisible = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {

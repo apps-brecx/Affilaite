@@ -3,6 +3,7 @@ import { ArrowLeft, MessageSquare, Compass, Users, Lock, Globe } from "lucide-re
 import { GroupAvatar } from "@/components/ui/group-avatar";
 import { CommunityMessage } from "@/components/affiliate/community-message";
 import { JoinGroupButton, LeaveGroupButton, DmReply, MarkGroupRead, MarkDmRead } from "@/components/affiliate/community-actions";
+import { AutoRefresh } from "@/components/ui/auto-refresh";
 import { requireAffiliate } from "@/lib/session";
 import {
   listGroupsForAffiliate,
@@ -41,6 +42,7 @@ export default async function CommunityPage({
 
   return (
     <div className="flex h-[calc(100dvh-8.5rem)] min-h-[540px] overflow-hidden rounded-2xl border border-hairline bg-card">
+      <AutoRefresh ms={5000} />
       {/* Rail */}
       <aside className={`${selected ? "hidden lg:flex" : "flex"} w-full flex-col border-r border-hairline lg:w-[320px]`}>
         <div className="border-b border-hairline p-4"><h1 className="font-display text-lg font-semibold">Community</h1></div>

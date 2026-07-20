@@ -1,7 +1,7 @@
 // lib/queries.ts — the data-access seam. Real Drizzle queries against Postgres.
 // Everything reflects the database; when there's no data, callers get empty
 // results and the UI shows honest empty states. No fabricated numbers.
-import { and, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db, isDbConfigured } from "@/db";
 import {
   affiliates,
@@ -25,6 +25,7 @@ import {
   affiliateCampaigns,
   appSettings,
   sampleRequests,
+  directMessages,
 } from "@/db/schema";
 import type {
   Affiliate,
@@ -1138,15 +1139,19 @@ export async function pendingSampleCount(): Promise<number> {
 /** Red-dot counts for the admin sidebar (pending things that need attention). */
 export async function getAdminNavBadges(): Promise<Record<string, number>> {
   if (!db) return {};
-  const [samples, apps] = await Promise.all([
+  const [samples, apps, dms] = await Promise.all([
     db.select({ c: sql<number>`count(*)` }).from(sampleRequests).where(eq(sampleRequests.status, "requested")),
     db.select({ c: sql<number>`count(*)` }).from(affiliates).where(eq(affiliates.status, "pending")),
+    // Unread direct messages from affiliates (not from admin, not yet read).
+    db.select({ c: sql<number>`count(*)` }).from(directMessages).where(and(eq(directMessages.fromAdmin, false), isNull(directMessages.readByAdminAt))),
   ]);
   const badges: Record<string, number> = {};
   const s = Number(samples[0]?.c ?? 0);
   const a = Number(apps[0]?.c ?? 0);
+  const d = Number(dms[0]?.c ?? 0);
   if (s > 0) badges["/admin/samples"] = s;
   if (a > 0) badges["/admin/affiliates"] = a;
+  if (d > 0) badges["/admin/messages"] = d;
   return badges;
 }
 

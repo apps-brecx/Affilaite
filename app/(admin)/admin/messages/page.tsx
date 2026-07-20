@@ -11,6 +11,7 @@ import { GroupManage } from "@/components/admin/group-manage";
 import { MessageComposer } from "@/components/admin/message-composer";
 import { AdminChatMessage } from "@/components/admin/chat-message";
 import { MarkDmRead } from "@/components/admin/mark-dm-read";
+import { AutoRefresh } from "@/components/ui/auto-refresh";
 import {
   listGroupsAdmin,
   listDmThreads,
@@ -56,6 +57,8 @@ export default async function MessagesPage({
 
   return (
     <div className="flex h-[calc(100dvh-8.5rem)] min-h-[540px] overflow-hidden rounded-2xl border border-hairline bg-card">
+      {/* Live: refresh the thread + rail so new messages appear without a reload. */}
+      <AutoRefresh ms={5000} />
       {/* Rail */}
       <aside className={`${selected ? "hidden lg:flex" : "flex"} w-full flex-col border-r border-hairline lg:w-[340px]`}>
         <div className="flex items-center justify-between gap-2 border-b border-hairline p-4">
