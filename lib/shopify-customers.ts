@@ -10,16 +10,12 @@ const FIND = `
     customers(first: 1, query: $q) { edges { node { id } } }
   }`;
 
-const FIND_FULL = `
-  query FindCustomerFull($q: String!) {
-    customers(first: 1, query: $q) {
-      edges { node { id displayName defaultEmailAddress { emailAddress } } }
-    }
-  }`;
-
+// PII-free: request only the id, matching upsertShopifyCustomer. Requesting
+// customer PII (email/name) can be blocked by Shopify Protected Customer Data
+// even when read_customers is granted, which would look like "not found".
 const BY_ID = `
   query CustomerById($id: ID!) {
-    customer(id: $id) { id displayName defaultEmailAddress { emailAddress } }
+    customer(id: $id) { id }
   }`;
 
 export interface LinkedCustomer {
@@ -28,30 +24,34 @@ export interface LinkedCustomer {
   name: string | null;
 }
 
-/** Find an existing Shopify customer by email (no create). Null if none / offline. */
-export async function findShopifyCustomerByEmail(email: string): Promise<LinkedCustomer | null> {
+/**
+ * Find an existing Shopify customer by email (no create). Returns the id when
+ * found, and surfaces any Shopify error so the caller can report the real cause
+ * instead of a misleading "not found".
+ */
+export async function findShopifyCustomerByEmail(email: string): Promise<{ id: string | null; error: string | null }> {
   const clean = (email ?? "").trim().toLowerCase();
-  if (!clean || !(await shopifyReady())) return null;
+  if (!clean) return { id: null, error: null };
+  if (!(await shopifyReady())) return { id: null, error: "The store isn't connected." };
   try {
-    const json: any = await shopifyGraphQL(FIND_FULL, { q: `email:"${clean.replace(/"/g, "")}"` });
-    const n = json?.data?.customers?.edges?.[0]?.node;
-    return n ? { id: n.id, email: n.defaultEmailAddress?.emailAddress ?? clean, name: n.displayName ?? null } : null;
-  } catch (e) {
+    const json: any = await shopifyGraphQL(FIND, { q: `email:${clean}` });
+    if (json?.errors?.length) return { id: null, error: json.errors.map((e: any) => e.message).join("; ") };
+    return { id: json?.data?.customers?.edges?.[0]?.node?.id ?? null, error: null };
+  } catch (e: any) {
     console.error("[findShopifyCustomerByEmail]", e);
-    return null;
+    return { id: null, error: e?.message ?? "Could not reach Shopify" };
   }
 }
 
-/** Resolve a linked Shopify customer by GID (for display). Null if gone / offline. */
-export async function getShopifyCustomerById(id: string): Promise<LinkedCustomer | null> {
-  if (!id || !(await shopifyReady())) return null;
+/** Does a linked Shopify customer id still resolve? (existence check, PII-free) */
+export async function shopifyCustomerExists(id: string): Promise<boolean> {
+  if (!id || !(await shopifyReady())) return false;
   try {
     const json: any = await shopifyGraphQL(BY_ID, { id });
-    const n = json?.data?.customer;
-    return n ? { id: n.id, email: n.defaultEmailAddress?.emailAddress ?? null, name: n.displayName ?? null } : null;
+    return !!json?.data?.customer?.id;
   } catch (e) {
-    console.error("[getShopifyCustomerById]", e);
-    return null;
+    console.error("[shopifyCustomerExists]", e);
+    return false;
   }
 }
 

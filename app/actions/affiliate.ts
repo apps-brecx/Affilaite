@@ -266,15 +266,16 @@ export async function linkShopifyAccount(): Promise<ActionResult> {
   if (!email) return { ok: false, message: "No email on file to match." };
 
   const { findShopifyCustomerByEmail } = await import("@/lib/shopify-customers");
-  const customer = await findShopifyCustomerByEmail(email);
-  if (!customer) {
-    return { ok: false, message: `No Syruvia account found for ${email}. Place an order or sign up with this email first.` };
+  const { id, error } = await findShopifyCustomerByEmail(email);
+  if (error) return { ok: false, message: `Couldn't check Shopify: ${error}` };
+  if (!id) {
+    return { ok: false, message: `No Syruvia account found for ${email}.` };
   }
-  await db.update(affiliates).set({ shopifyCustomerId: customer.id }).where(eq(affiliates.id, affiliateId));
+  await db.update(affiliates).set({ shopifyCustomerId: id }).where(eq(affiliates.id, affiliateId));
   revalidatePath("/settings");
   revalidatePath("/orders");
   revalidatePath("/vip");
-  return { ok: true, message: `Linked to your Syruvia account (${customer.email ?? email}).` };
+  return { ok: true, message: `Linked to your Syruvia account (${email}).` };
 }
 
 /** Remove the Shopify customer link from the affiliate. */
