@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Gift, Users, SlidersHorizontal, Settings2, Palette, ArrowRight, Wallet } from "lucide-react";
+import { Gift, Users, SlidersHorizontal, Settings2, ArrowRight, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -114,37 +114,20 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* Settings */}
-            <Card>
-              <CardHeader className="flex-row items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2">
-                  <Settings2 className="size-4 text-primary" /> Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">Name, access, URL, short code, dates.</p>
-                <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link href={`${base}/settings`}>Edit settings</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Brand & theme */}
-            <Card>
-              <CardHeader className="flex-row items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="size-4 text-primary" /> Theme &amp; content
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">Logo, colors and copy for the pages partners see.</p>
-                <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link href={`${base}/theme`}>Edit theme</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Settings */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="size-4 text-primary" /> Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">Name, access, URL, short code, dates.</p>
+              <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                <Link href={`${base}/settings`}>Edit settings</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         <CampaignHealth campaign={campaign} memberCount={memberIds.length} />
