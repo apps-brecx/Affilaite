@@ -192,6 +192,32 @@ export function TeamInviteEmailBuilder({
             )}
           </div>
         </div>
+
+        {/* Login screen preview — what invited members see when they click through */}
+        <Label className="mb-2 mt-6 block">Login screen preview</Label>
+        <div className="overflow-hidden rounded-xl border border-hairline bg-[#FFF7F1]">
+          <div className="flex flex-col items-center px-6 py-8 text-center">
+            {brand.logoUrl && /^https?:\/\//.test(brand.logoUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logoUrl} alt="" className="mb-5 h-8 object-contain" />
+            ) : (
+              <div className="mb-5 text-lg font-extrabold" style={{ color: brand.primaryColor || "#FF5C9E" }}>{brandName}</div>
+            )}
+            <p className="font-display text-xl font-semibold text-[#1a1a17]">{t.loginHeadline?.trim() || "Welcome"}</p>
+            <p className="mt-1 text-sm text-[#7a7168]">{t.loginSubtext?.trim() || `Sign in to the ${brandName} partner portal.`}</p>
+            <div className="mt-5 w-full max-w-[280px] space-y-2.5 rounded-xl border border-[#efe4da] bg-white p-4 text-left">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-[#7a7168]">Email</p>
+                <div className="h-8 rounded-md border border-[#efe4da] bg-[#FFF7F1]" />
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-[#7a7168]">Password</p>
+                <div className="h-8 rounded-md border border-[#efe4da] bg-[#FFF7F1]" />
+              </div>
+              <div className="h-9 rounded-lg" style={{ background: brand.primaryColor || "#FF5C9E" }} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
