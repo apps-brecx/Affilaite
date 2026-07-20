@@ -42,25 +42,49 @@ const PRODUCTS_QUERY = `
 // Promotions — all request up to 1000) don't hit Shopify's cost-throttled
 // products query on every load. The catalog changes rarely; 60s is plenty.
 type ProductsResult = { connected: boolean; products: StoreProduct[]; error?: string };
-const PRODUCTS_TTL = 60_000;
-const _productsCache = new Map<number, { at: number; data: ProductsResult }>();
+// The catalog changes rarely, so cache aggressively — most page loads become
+// instant, and only the first load after 5 min hits Shopify.
+const PRODUCTS_TTL = 5 * 60_000;
+const _productsCache = new Map<number, { at: number; data: ProductsResult; refreshing?: boolean }>();
 
 /**
  * Fetch the live product catalog. Returns `connected: false` when Shopify
  * isn't set up so the UI can show a friendly placeholder instead of an error.
+ *
+ * Stale-while-revalidate: a fresh cache returns instantly; a stale cache also
+ * returns instantly while refreshing in the background — so only the very first
+ * load ever waits on Shopify.
  */
 export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
   const cached = _productsCache.get(limit);
-  if (cached && Date.now() - cached.at < PRODUCTS_TTL) return cached.data;
+  if (cached) {
+    const fresh = Date.now() - cached.at < PRODUCTS_TTL;
+    if (!fresh && !cached.refreshing) {
+      cached.refreshing = true;
+      fetchStoreProducts(limit)
+        .then((data) => { if (data.connected && !data.error) _productsCache.set(limit, { at: Date.now(), data }); })
+        .catch(() => {})
+        .finally(() => { const c = _productsCache.get(limit); if (c) c.refreshing = false; });
+    }
+    return cached.data; // serve fresh or stale immediately
+  }
+  const data = await fetchStoreProducts(limit);
+  if (data.connected && !data.error) _productsCache.set(limit, { at: Date.now(), data });
+  return data;
+}
+
+async function fetchStoreProducts(limit: number): Promise<ProductsResult> {
   if (!(await shopifyReady())) return { connected: false, products: [] };
   try {
     const { domain } = await shopifyConfig();
     const products: StoreProduct[] = [];
     let after: string | null = null;
-    // Page through with a cursor (250/page, Shopify's max) up to `limit`, so a
-    // catalog with >100 products doesn't silently drop items past the first page.
+    // Page through with a cursor up to `limit`. We use 100/page (not Shopify's
+    // 250 max) because the nested collections push the query cost near Shopify's
+    // 1000-point ceiling at 250 — smaller pages stay under it and avoid the
+    // throttle-and-retry waits that made big catalogs slow to load.
     for (let guard = 0; products.length < limit && guard < 200; guard++) {
-      const pageSize = Math.min(250, limit - products.length + 5);
+      const pageSize = Math.min(100, limit - products.length + 5);
       const json: any = await shopifyGraphQL<any>(PRODUCTS_QUERY, { first: pageSize, after });
       if (json.errors?.length) {
         console.error("[getStoreProducts] GraphQL errors:", json.errors);
@@ -90,9 +114,7 @@ export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
       if (!conn?.pageInfo?.hasNextPage) break;
       after = conn.pageInfo.endCursor;
     }
-    const data: ProductsResult = { connected: true, products: products.slice(0, limit) };
-    _productsCache.set(limit, { at: Date.now(), data });
-    return data;
+    return { connected: true, products: products.slice(0, limit) };
   } catch (e: any) {
     console.error("[getStoreProducts]", e);
     return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };
@@ -126,11 +148,27 @@ const COLLECTIONS_TIERS = [
 ];
 
 type CollectionsResult = { connected: boolean; collections: StoreCollection[]; error?: string };
-const _collectionsCache = new Map<number, { at: number; data: CollectionsResult }>();
+const _collectionsCache = new Map<number, { at: number; data: CollectionsResult; refreshing?: boolean }>();
 
 export async function getStoreCollections(limit = 50): Promise<CollectionsResult> {
   const cached = _collectionsCache.get(limit);
-  if (cached && Date.now() - cached.at < PRODUCTS_TTL) return cached.data;
+  if (cached) {
+    const fresh = Date.now() - cached.at < PRODUCTS_TTL;
+    if (!fresh && !cached.refreshing) {
+      cached.refreshing = true;
+      fetchStoreCollections(limit)
+        .then((data) => { if (data.connected && !data.error) _collectionsCache.set(limit, { at: Date.now(), data }); })
+        .catch(() => {})
+        .finally(() => { const c = _collectionsCache.get(limit); if (c) c.refreshing = false; });
+    }
+    return cached.data;
+  }
+  const data = await fetchStoreCollections(limit);
+  if (data.connected && !data.error) _collectionsCache.set(limit, { at: Date.now(), data });
+  return data;
+}
+
+async function fetchStoreCollections(limit: number): Promise<CollectionsResult> {
   if (!(await shopifyReady())) return { connected: false, collections: [] };
   try {
     const { domain } = await shopifyConfig();
@@ -155,9 +193,7 @@ export async function getStoreCollections(limit = 50): Promise<CollectionsResult
         image: n.image?.url ?? null,
         productsCount: typeof n.productsCount === "object" ? n.productsCount?.count ?? 0 : (n.productsCount ?? 0),
       }));
-    const data: CollectionsResult = { connected: true, collections };
-    _collectionsCache.set(limit, { at: Date.now(), data });
-    return data;
+    return { connected: true, collections };
   } catch (e: any) {
     console.error("[getStoreCollections]", e);
     return { connected: true, collections: [], error: e?.message ?? "Could not reach Shopify" };
