@@ -126,6 +126,21 @@ export function TeamInviteEmailBuilder({
             </div>
           </div>
 
+          <div className="rounded-xl border border-hairline p-4">
+            <p className="mb-1 text-sm font-medium">Login screen greeting</p>
+            <p className="mb-3 text-xs text-muted-foreground">Shown on the sign-in page when an invited member clicks the button (instead of &ldquo;Welcome back&rdquo;).</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Headline</Label>
+                <Input value={t.loginHeadline} onChange={(e) => set({ loginHeadline: e.target.value })} placeholder="Welcome" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subtext</Label>
+                <Input value={t.loginSubtext} onChange={(e) => set({ loginSubtext: e.target.value })} placeholder="Sign in to get started." />
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Header image (optional)</Label>
             {t.imageUrl ? (

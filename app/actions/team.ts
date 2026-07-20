@@ -51,7 +51,9 @@ async function emailInvite(email: string, name: string, temp: string): Promise<b
     name: name || "there",
     email,
     tempPassword: temp,
-    loginUrl: `${APP_URL}/login`,
+    // ?welcome=1 makes the login screen greet invited members with the custom
+    // headline instead of "Welcome back".
+    loginUrl: `${APP_URL}/login?welcome=1`,
     brand: brand.logoText || "Sipfluence",
   };
   const subject = fillVars(tpl.subject, vars) || `You've been added to the ${vars.brand} admin`;
@@ -86,6 +88,8 @@ export async function saveTeamInviteEmail(input: unknown): Promise<Result> {
       buttonUrl: z.string().max(500).optional().default(""),
       imageUrl: z.string().max(2_600_000).optional().default(""),
       buttonColor: z.string().max(9).optional().default(""),
+      loginHeadline: z.string().max(80).optional().default(""),
+      loginSubtext: z.string().max(160).optional().default(""),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid template." };

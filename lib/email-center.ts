@@ -386,6 +386,10 @@ export interface TeamInviteEmail {
   buttonUrl: string;
   imageUrl: string;
   buttonColor: string;
+  // Text shown on the login screen when an invited member arrives via the
+  // invite link (?welcome=1), instead of the default "Welcome back".
+  loginHeadline: string;
+  loginSubtext: string;
 }
 
 const TEAM_INVITE_KEY = "team_invite_email";
@@ -400,6 +404,8 @@ export function defaultTeamInviteEmail(): TeamInviteEmail {
     buttonUrl: "{{loginUrl}}",
     imageUrl: "",
     buttonColor: "",
+    loginHeadline: "Welcome",
+    loginSubtext: "Sign in to get started.",
   };
 }
 
