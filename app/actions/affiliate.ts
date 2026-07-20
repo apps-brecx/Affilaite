@@ -248,6 +248,48 @@ export async function updatePayoutPhone(phoneRaw: string): Promise<ActionResult>
   return { ok: true, message: "Venmo payout number saved." };
 }
 
+/**
+ * Link the affiliate to the Shopify customer with the same email. Used by the
+ * "Link my Shopify account" button in Settings (and its Retry).
+ */
+export async function linkShopifyAccount(): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  if (!(await shopifyReady())) return { ok: false, message: "The store isn't connected yet — try again later." };
+
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+  if (!aff) return { ok: false, message: "Account not found." };
+  const user = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
+  const email = user?.email;
+  if (!email) return { ok: false, message: "No email on file to match." };
+
+  const { findShopifyCustomerByEmail } = await import("@/lib/shopify-customers");
+  const customer = await findShopifyCustomerByEmail(email);
+  if (!customer) {
+    return { ok: false, message: `No Syruvia account found for ${email}. Place an order or sign up with this email first.` };
+  }
+  await db.update(affiliates).set({ shopifyCustomerId: customer.id }).where(eq(affiliates.id, affiliateId));
+  revalidatePath("/settings");
+  revalidatePath("/orders");
+  revalidatePath("/vip");
+  return { ok: true, message: `Linked to your Syruvia account (${customer.email ?? email}).` };
+}
+
+/** Remove the Shopify customer link from the affiliate. */
+export async function unlinkShopifyAccount(): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  await db.update(affiliates).set({ shopifyCustomerId: null }).where(eq(affiliates.id, affiliateId));
+  revalidatePath("/settings");
+  revalidatePath("/orders");
+  revalidatePath("/vip");
+  return { ok: true, message: "Unlinked from your Syruvia account." };
+}
+
 // Kept module-local: a "use server" file may only export async functions, so
 // this must NOT be exported (doing so throws "can only export async functions").
 const NOTIF_PREF_KEYS = ["newCommission", "payoutSent", "programUpdates"] as const;

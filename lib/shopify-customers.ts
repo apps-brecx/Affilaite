@@ -10,6 +10,51 @@ const FIND = `
     customers(first: 1, query: $q) { edges { node { id } } }
   }`;
 
+const FIND_FULL = `
+  query FindCustomerFull($q: String!) {
+    customers(first: 1, query: $q) {
+      edges { node { id displayName defaultEmailAddress { emailAddress } } }
+    }
+  }`;
+
+const BY_ID = `
+  query CustomerById($id: ID!) {
+    customer(id: $id) { id displayName defaultEmailAddress { emailAddress } }
+  }`;
+
+export interface LinkedCustomer {
+  id: string;
+  email: string | null;
+  name: string | null;
+}
+
+/** Find an existing Shopify customer by email (no create). Null if none / offline. */
+export async function findShopifyCustomerByEmail(email: string): Promise<LinkedCustomer | null> {
+  const clean = (email ?? "").trim().toLowerCase();
+  if (!clean || !(await shopifyReady())) return null;
+  try {
+    const json: any = await shopifyGraphQL(FIND_FULL, { q: `email:"${clean.replace(/"/g, "")}"` });
+    const n = json?.data?.customers?.edges?.[0]?.node;
+    return n ? { id: n.id, email: n.defaultEmailAddress?.emailAddress ?? clean, name: n.displayName ?? null } : null;
+  } catch (e) {
+    console.error("[findShopifyCustomerByEmail]", e);
+    return null;
+  }
+}
+
+/** Resolve a linked Shopify customer by GID (for display). Null if gone / offline. */
+export async function getShopifyCustomerById(id: string): Promise<LinkedCustomer | null> {
+  if (!id || !(await shopifyReady())) return null;
+  try {
+    const json: any = await shopifyGraphQL(BY_ID, { id });
+    const n = json?.data?.customer;
+    return n ? { id: n.id, email: n.defaultEmailAddress?.emailAddress ?? null, name: n.displayName ?? null } : null;
+  } catch (e) {
+    console.error("[getShopifyCustomerById]", e);
+    return null;
+  }
+}
+
 const CREATE = `
   mutation CreateCustomer($input: CustomerInput!) {
     customerCreate(input: $input) {

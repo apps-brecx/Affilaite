@@ -1,16 +1,21 @@
-import { User, Bell, Link2 } from "lucide-react";
+import { User, Bell, Link2, ShoppingBag } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileForm } from "@/components/affiliate/profile-form";
 import { NotificationPrefs } from "@/components/affiliate/notification-prefs";
 import { PublicPageForm } from "@/components/affiliate/public-page-form";
+import { ShopifyLinkCard } from "@/components/affiliate/shopify-link-card";
 import { requireAffiliate } from "@/lib/session";
 import { APP_URL } from "@/lib/links";
+import { getShopifyCustomerById } from "@/lib/shopify-customers";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const me = await requireAffiliate();
+  // Resolve the linked Shopify customer (if any) so we can show status.
+  const linkedCustomer = me.shopifyCustomerId ? await getShopifyCustomerById(me.shopifyCustomerId) : null;
+  const broken = !!me.shopifyCustomerId && !linkedCustomer;
   return (
     <div className="space-y-8">
       <PageHeader title="Settings" description="Manage your profile, social channels, and notifications." />
@@ -36,6 +41,23 @@ export default async function SettingsPage() {
             </CardHeader>
             <CardContent>
               <PublicPageForm handle={me.handle} bio={me.bio} appUrl={APP_URL} />
+            </CardContent>
+          </Card>
+
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingBag className="size-4 text-primary" /> Shopify account
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ShopifyLinkCard
+                linked={!!linkedCustomer}
+                linkedName={linkedCustomer?.name ?? null}
+                linkedEmail={linkedCustomer?.email ?? null}
+                broken={broken}
+                email={me.email}
+              />
             </CardContent>
           </Card>
 
