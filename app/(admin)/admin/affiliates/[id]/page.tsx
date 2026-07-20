@@ -180,7 +180,18 @@ export default async function AffiliateDetail({ params }: { params: Promise<{ id
             <TableBody>
               {commissions.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell className="pl-6 font-medium">{c.orderNumber}</TableCell>
+                  <TableCell className="pl-6 font-medium">
+                    {c.orderNumber && c.orderNumber !== "—" ? (
+                      <Link
+                        href={`/admin/affiliate-orders?q=${encodeURIComponent(String(c.orderNumber).replace(/^#/, ""))}`}
+                        className="text-primary hover:underline"
+                      >
+                        {c.orderNumber}
+                      </Link>
+                    ) : (
+                      c.orderNumber
+                    )}
+                  </TableCell>
                   <TableCell className="capitalize text-muted-foreground">{c.attributedBy}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(c.createdAt)}</TableCell>
                   <TableCell className="text-right tnum font-medium">{formatCurrency(c.amount)}</TableCell>
