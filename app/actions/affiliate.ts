@@ -332,6 +332,8 @@ const profileSchema = z.object({
   country: z.string().optional(),
   companyName: z.string().optional(),
   instagram: z.string().optional(),
+  youtube: z.string().optional(),
+  tiktok: z.string().optional(),
   website: z.string().optional(),
 });
 
@@ -343,7 +345,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!userId || !affiliateId) return { ok: false, message: "Not signed in." };
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
-  const { name, email, phone, companyName, instagram, website } = parsed.data;
+  const { name, email, phone, companyName, instagram, youtube, tiktok, website } = parsed.data;
 
   const newEmail = email.toLowerCase().trim();
   // Email is the login — enforce uniqueness before changing it.
@@ -373,7 +375,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
       postalCode: addr.postalCode || null,
       country: addr.country || null,
       companyName: companyName || null,
-      socialLinks: { instagram: instagram ?? "", website: website ?? "" },
+      socialLinks: { instagram: instagram ?? "", youtube: youtube ?? "", tiktok: tiktok ?? "", website: website ?? "" },
     })
     .where(eq(affiliates.id, affiliateId));
   revalidatePath("/settings");

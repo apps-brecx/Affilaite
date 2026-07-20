@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Instagram, Globe, Loader2, Phone, Mail, MapPin } from "lucide-react";
+import { Instagram, Globe, Loader2, Phone, Mail, MapPin, Youtube, Music2 } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -29,6 +29,8 @@ export function ProfileForm({ me }: { me: Affiliate }) {
         country: String(fd.get("country") ?? ""),
         companyName: String(fd.get("companyName") ?? ""),
         instagram: String(fd.get("instagram") ?? ""),
+        youtube: String(fd.get("youtube") ?? ""),
+        tiktok: String(fd.get("tiktok") ?? ""),
         website: String(fd.get("website") ?? ""),
       });
       toast(res.message, res.ok ? "success" : "error");
@@ -106,6 +108,20 @@ export function ProfileForm({ me }: { me: Affiliate }) {
           <div className="relative">
             <Instagram className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input name="instagram" className="pl-9" defaultValue={me.socialLinks.instagram ?? ""} placeholder="@yourhandle" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>YouTube</Label>
+          <div className="relative">
+            <Youtube className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input name="youtube" className="pl-9" defaultValue={me.socialLinks.youtube ?? ""} placeholder="youtube.com/@yourchannel" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>TikTok</Label>
+          <div className="relative">
+            <Music2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input name="tiktok" className="pl-9" defaultValue={me.socialLinks.tiktok ?? ""} placeholder="@yourhandle" />
           </div>
         </div>
         <div className="space-y-1.5">

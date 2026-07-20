@@ -136,6 +136,33 @@ function normalizePlatform(key: string): string {
   return "other";
 }
 
+// Social-media platform keys we actually scan (everything else on the profile,
+// like `website` or the link-in-bio `handle`, is ignored).
+const SCANNABLE = new Set(["instagram", "tiktok", "youtube", "x", "facebook"]);
+
+const PROFILE_BASE: Record<string, string> = {
+  instagram: "https://www.instagram.com/",
+  tiktok: "https://www.tiktok.com/@",
+  youtube: "https://www.youtube.com/@",
+  x: "https://x.com/",
+  facebook: "https://www.facebook.com/",
+};
+
+/**
+ * Turn whatever the affiliate typed (a full URL, `youtube.com/@x`, `@handle`,
+ * or a bare username) into a fetchable profile URL for the given platform.
+ * Returns null if there's nothing usable.
+ */
+function toProfileUrl(platform: string, raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[\w-]+\.[\w.-]+\//.test(v) || /\.(com|tv|me|co)\b/i.test(v)) return `https://${v.replace(/^\/+/, "")}`;
+  const handle = v.replace(/^@+/, "");
+  const base = PROFILE_BASE[platform];
+  return base ? `${base}${handle}` : null;
+}
+
 function isBrandRelevant(caption: string, extraTerms: string[]): boolean {
   const c = caption.toLowerCase();
   if (!c) return false;
@@ -161,7 +188,11 @@ export async function scanAllAffiliates(): Promise<ScanResult> {
 
   for (const aff of rows) {
     const links = (aff.links ?? {}) as Record<string, string>;
-    const entries = Object.entries(links).filter(([, url]) => url && /^https?:\/\//.test(url));
+    // Map each social entry to {platform, url}, ignoring non-social keys
+    // (website, handle) and turning handles into fetchable profile URLs.
+    const entries = Object.entries(links)
+      .map(([key, val]) => ({ platform: normalizePlatform(key), url: toProfileUrl(normalizePlatform(key), val ?? "") }))
+      .filter((e): e is { platform: string; url: string } => SCANNABLE.has(e.platform) && !!e.url);
     if (entries.length === 0) continue;
     result.scannedAffiliates++;
 
@@ -169,8 +200,7 @@ export async function scanAllAffiliates(): Promise<ScanResult> {
     const codes = await db.select({ code: discountCodes.code }).from(discountCodes).where(eq(discountCodes.affiliateId, aff.id));
     const extraTerms = [aff.refCode?.toLowerCase(), ...codes.map((c) => c.code.toLowerCase())].filter(Boolean) as string[];
 
-    for (const [rawPlatform, url] of entries) {
-      const platform = normalizePlatform(rawPlatform);
+    for (const { platform, url } of entries) {
       let candidates: Candidate[] | null;
       if (platform === "youtube") {
         candidates = await fetchYoutube(url);
