@@ -142,13 +142,13 @@ export default async function CommunityPage({
                         <>
                           <p className="mb-1 text-xs font-semibold opacity-90">🎟️ {m.payload?.title || "Special deal"}</p>
                           {m.payload?.productImage && (
-                            <a href={m.payload.productUrl || "#"} target="_blank" rel="noopener noreferrer" className="mb-1.5 block overflow-hidden rounded-lg">
+                            <Link href="/promotions" className="mb-1.5 block overflow-hidden rounded-lg">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={m.payload.productImage} alt="" className="h-28 w-full max-w-[220px] object-cover" />
-                            </a>
+                            </Link>
                           )}
-                          {m.payload?.productUrl && (
-                            <a href={m.payload.productUrl} target="_blank" rel="noopener noreferrer" className={`mb-0.5 inline-block text-xs font-medium underline ${m.fromAdmin ? "text-primary" : ""}`}>Shop now →</a>
+                          {(m.payload?.productImage || m.payload?.productUrl) && (
+                            <Link href="/promotions" className={`mb-0.5 inline-block text-xs font-medium underline ${m.fromAdmin ? "text-primary" : ""}`}>Get your link →</Link>
                           )}
                           {m.payload?.code && <p className="mb-0.5 font-mono text-xs font-semibold">Code: {m.payload.code}</p>}
                         </>
