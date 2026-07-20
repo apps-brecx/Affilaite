@@ -8,7 +8,7 @@ import { SampleCatalog } from "@/components/affiliate/sample-catalog";
 import { PromoBanner } from "@/components/ui/promo-banner";
 import { requireAffiliate } from "@/lib/session";
 import { getMySampleRequests, getBanner } from "@/lib/queries";
-import { getStoreProducts, getCatalogConfig, applyCatalogConfig, getSamplesConfig } from "@/lib/products";
+import { getStoreProducts, getCatalogVisibility, resolveVisibleProducts, getSamplesConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -22,17 +22,18 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function SamplesPage() {
   const me = await requireAffiliate();
-  const [catalog, promoConfig, samplesConfig, mine, banner] = await Promise.all([
-    getStoreProducts(100),
-    getCatalogConfig(),
+  const [catalog, visibility, samplesConfig, mine, banner] = await Promise.all([
+    getStoreProducts(1000),
+    getCatalogVisibility(),
     getSamplesConfig(),
     getMySampleRequests(me.id),
     getBanner("samples"),
   ]);
 
-  // Only products the affiliate can see in Promotions are sample-able. Then the
-  // samples curation narrows/orders that set; out-of-stock sinks to the bottom.
-  const promoShown = applyCatalogConfig(catalog.products, promoConfig);
+  // Only products the affiliate can see in Promotions are sample-able — use the
+  // exact same visibility rules as the Promotions catalog. Then the samples
+  // curation narrows/orders that set; out-of-stock sinks to the bottom.
+  const promoShown = resolveVisibleProducts(catalog.products, visibility);
   let shown = samplesConfig.shown.length
     ? promoShown.filter((p) => samplesConfig.shown.includes(p.id))
     : promoShown;

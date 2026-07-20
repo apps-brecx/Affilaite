@@ -7,7 +7,7 @@ import { SamplesCuration, SamplesBanner } from "@/components/admin/samples-setti
 import { CreateReveal, RevealGroup } from "@/components/admin/create-reveal";
 import { requireAdmin } from "@/lib/session";
 import { listSampleRequests, getBanner } from "@/lib/queries";
-import { getStoreProducts, getCatalogConfig, applyCatalogConfig, getSamplesConfig } from "@/lib/products";
+import { getStoreProducts, getCatalogVisibility, resolveVisibleProducts, getSamplesConfig } from "@/lib/products";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Samples" };
@@ -21,18 +21,19 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function AdminSamplesPage() {
   await requireAdmin();
-  const [requests, catalog, promoConfig, samplesConfig, banner] = await Promise.all([
+  const [requests, catalog, visibility, samplesConfig, banner] = await Promise.all([
     listSampleRequests(),
-    getStoreProducts(100),
-    getCatalogConfig(),
+    getStoreProducts(1000),
+    getCatalogVisibility(),
     getSamplesConfig(),
     getBanner("samples"),
   ]);
   const open = requests.filter((r) => r.status === "requested");
   const approved = requests.filter((r) => r.status === "approved");
   const rest = requests.filter((r) => r.status !== "requested" && r.status !== "approved");
-  // Only products the affiliate can see in Promotions are sample-able.
-  const promoShown = applyCatalogConfig(catalog.products, promoConfig);
+  // Only products the affiliate can see in Promotions are sample-able — use the
+  // exact same visibility rules as the Promotions catalog so the two stay in sync.
+  const promoShown = resolveVisibleProducts(catalog.products, visibility);
   const catalogForSettings = promoShown.map((p) => ({ id: p.id, title: p.title, image: p.image, available: p.available }));
 
   const Row = ({ r }: { r: (typeof requests)[number] }) => {
