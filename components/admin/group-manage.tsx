@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings2, Loader2, UserPlus, UserMinus, Trash2, Globe, Lock } from "lucide-react";
+import { Settings2, Loader2, UserPlus, UserMinus, Trash2, Globe, Lock, Palette, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Avatar } from "@/components/ui/avatar";
+import { GroupAvatar } from "@/components/ui/group-avatar";
 import { useToast } from "@/components/ui/toast";
 import { AvatarPicker } from "@/components/admin/new-group-button";
 import { updateGroupChat, deleteGroupChat, addGroupMembers, removeGroupMember } from "@/app/actions/messaging";
@@ -29,6 +30,7 @@ export function GroupManage({
   const [color, setColor] = useState(group.avatarColor);
   const [visibility, setVisibility] = useState<"public" | "private">(group.visibility);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [showTheme, setShowTheme] = useState(false);
   const [pending, start] = useTransition();
   const router = useRouter();
   const toast = useToast();
@@ -90,7 +92,18 @@ export function GroupManage({
           </div>
         ) : (
           <div className="space-y-4">
-            <AvatarPicker emoji={emoji} color={color} setEmoji={setEmoji} setColor={setColor} />
+            {/* Theme behind its own button */}
+            <div className="rounded-lg border border-hairline p-3">
+              <button type="button" onClick={() => setShowTheme((v) => !v)} className="flex w-full items-center gap-3">
+                <GroupAvatar emoji={emoji} color={color} size={40} />
+                <span className="flex-1 text-left">
+                  <span className="flex items-center gap-1.5 text-sm font-medium"><Palette className="size-4 text-primary" /> Theme</span>
+                  <span className="text-xs text-muted-foreground">Icon &amp; color</span>
+                </span>
+                <ChevronDown className={`size-4 text-muted-foreground transition-transform ${showTheme ? "rotate-180" : ""}`} />
+              </button>
+              {showTheme && <div className="mt-3 border-t border-hairline pt-3"><AvatarPicker emoji={emoji} color={color} setEmoji={setEmoji} setColor={setColor} /></div>}
+            </div>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" disabled={group.isMain} />
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} />
             {!group.isMain && (

@@ -130,6 +130,7 @@ export default async function CommunityPage({
                       <p className="flex items-center gap-1.5 font-semibold text-primary">🚀 Campaign invite</p>
                       <p className="font-medium">{m.payload.campaignName || "New campaign"}</p>
                       {m.payload.reward && <p>Earn <span className="font-semibold text-primary">{m.payload.reward}</span> on every sale.</p>}
+                      {m.payload.customerReward && <p>Your customers get <span className="font-semibold text-primary">{m.payload.customerReward}</span>.</p>}
                       {m.body && <p className="text-muted-foreground">{m.body}</p>}
                       <JoinCampaignButton campaignId={m.payload.campaignId} />
                       <p className="text-[10px] text-muted-foreground">{relativeTime(m.createdAt)}</p>

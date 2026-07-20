@@ -10,7 +10,13 @@ import { GroupAvatar, GROUP_COLORS } from "@/components/ui/group-avatar";
 import { useToast } from "@/components/ui/toast";
 import { createGroupChat } from "@/app/actions/messaging";
 
-export const EMOJIS = ["💬", "📣", "🎯", "🔥", "⭐", "🚀", "💎", "🎁", "🏆", "👑", "💰", "🌟", "🥤", "❤️", "✨"];
+export const EMOJIS = [
+  "💬", "📣", "🎯", "🔥", "⭐", "🚀", "💎", "🎁", "🏆", "👑", "💰", "🌟", "✨", "⚡", "💥", "🎉", "🎊",
+  "❤️", "🧡", "💛", "💚", "💙", "💜", "🩷", "💗", "💕", "😍", "🤩", "🥳", "🙌", "👏", "🤝", "💪",
+  "🥤", "🧋", "🍹", "🍸", "🍷", "🥂", "🍾", "☕", "🧃", "🫧", "🍓", "🍑", "🍊", "🍋", "🍏", "🍇", "🫐", "🥭", "🍍", "🥥", "🌴",
+  "🌈", "🌸", "🌺", "🌼", "🌻", "🌊", "🏝️", "🎀", "🎈", "🪩", "💃", "🕺", "📸", "🎥", "🎬", "🎤", "🎧", "🎵",
+  "🛍️", "🏷️", "🔖", "💫", "🥇", "🎖️", "🏅", "🔔", "📌", "🧿", "🍀", "🌙",
+];
 export const COLORS = Object.keys(GROUP_COLORS);
 
 export function AvatarPicker({
@@ -28,12 +34,12 @@ export function AvatarPicker({
     <div className="flex gap-4">
       <GroupAvatar emoji={emoji} color={color} size={64} />
       <div className="flex-1 space-y-2">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded-lg border border-hairline p-1.5 no-scrollbar">
           {EMOJIS.map((e) => (
-            <button key={e} type="button" onClick={() => setEmoji(e)} className={`flex size-8 items-center justify-center rounded-lg text-lg ${emoji === e ? "bg-primary/15 ring-1 ring-primary" : "hover:bg-accent"}`}>{e}</button>
+            <button key={e} type="button" onClick={() => setEmoji(e)} className={`flex size-8 shrink-0 items-center justify-center rounded-lg text-lg ${emoji === e ? "bg-primary/15 ring-1 ring-primary" : "hover:bg-accent"}`}>{e}</button>
           ))}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {COLORS.map((c) => (
             <button key={c} type="button" onClick={() => setColor(c)} className={`size-6 rounded-full bg-gradient-to-br ${GROUP_COLORS[c]} ${color === c ? "ring-2 ring-offset-1 ring-foreground" : ""}`} aria-label={c} />
           ))}

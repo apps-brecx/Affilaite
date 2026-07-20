@@ -34,9 +34,17 @@ async function withLiveInvites<T extends { kind: string; payload: Record<string,
     if (m.kind !== "invite" || !m.payload?.campaignId) return m;
     const c = byId.get(m.payload.campaignId);
     if (!c) return m;
-    const reward = mergeConfig(c.config).reward;
+    const cfg = mergeConfig(c.config);
+    const reward = cfg.reward;
     const label = reward.valueType === "percent" ? `${Number(reward.value) || 0}%` : `$${Number(reward.value) || 0}`;
-    return { ...m, payload: { ...m.payload, campaignName: c.name, reward: label } };
+    // What the customer (referred friend) gets — shown on the invite card too.
+    let customerReward = "";
+    if (cfg.friend.kind === "coupon" && Number(cfg.friend.value) > 0) {
+      customerReward = cfg.friend.valueType === "percent" ? `${Number(cfg.friend.value)}% off` : `$${Number(cfg.friend.value)} off`;
+    } else if (cfg.friend.kind === "promo" && cfg.friend.promoDescription) {
+      customerReward = cfg.friend.promoDescription;
+    }
+    return { ...m, payload: { ...m.payload, campaignName: c.name, reward: label, customerReward } };
   });
 }
 
