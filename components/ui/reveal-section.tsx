@@ -11,13 +11,13 @@ import { cn } from "@/lib/utils";
  */
 export function RevealSection({
   label,
-  icon: Icon,
+  icon,
   count,
   children,
   defaultOpen = false,
 }: {
   label: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: ReactNode;
   count?: number;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -26,7 +26,7 @@ export function RevealSection({
   return (
     <div>
       <Button variant={open ? "secondary" : "outline"} onClick={() => setOpen((o) => !o)}>
-        {Icon && <Icon className="size-4" />}
+        {icon}
         {label}
         {typeof count === "number" && count > 0 && (
           <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 text-xs font-semibold text-primary">

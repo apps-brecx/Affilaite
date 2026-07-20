@@ -94,7 +94,7 @@ export default async function SamplesPage() {
 
       {/* Request history — tucked behind a button */}
       {mine.length > 0 && (
-        <RevealSection label="Your requests" icon={Gift} count={mine.length}>
+        <RevealSection label="Your requests" icon={<Gift className="size-4" />} count={mine.length}>
           <Card>
           <CardContent className="space-y-3 pt-6">
             {mine.map((r) => {
