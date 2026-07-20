@@ -86,7 +86,7 @@ function OrderCard({ o }: { o: MyOrder }) {
 
 export default async function MyOrdersPage() {
   const me = await requireAffiliate();
-  const { connected, orders, error } = await getMyStoreOrders(me.email, 30);
+  const { connected, accountFound, orders, error } = await getMyStoreOrders(me.email, 30);
 
   return (
     <div className="space-y-8">
@@ -96,11 +96,17 @@ export default async function MyOrdersPage() {
         <EmptyState icon={Package} title="Orders aren't available yet" description="Once the store is connected, your personal orders and tracking will appear here." />
       ) : error ? (
         <EmptyState icon={Package} title="Couldn't load your orders" description="Please try again in a moment." />
+      ) : !accountFound ? (
+        <EmptyState
+          icon={ShoppingBag}
+          title="Syruvia account not found"
+          description={`We couldn't find a Syruvia customer account for ${me.email}. Place an order (or sign up) with this email and your orders will appear here.`}
+        />
       ) : orders.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
           title="No orders yet"
-          description={`We couldn't find orders for ${me.email}. Orders you place with this email will show up here.`}
+          description="Your account is connected — orders you place will show up here with live tracking."
         />
       ) : (
         <div className="space-y-4">

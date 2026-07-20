@@ -29,6 +29,7 @@ export interface MyOrder {
 
 const QUERY = `
   query MyOrders($q: String!, $first: Int!) {
+    customers(first: 1, query: $q) { edges { node { id } } }
     orders(first: $first, query: $q, sortKey: CREATED_AT, reverse: true) {
       edges {
         node {
@@ -50,19 +51,25 @@ const QUERY = `
     }
   }`;
 
-/** Fetch a customer's own orders by email. Never throws — returns a status. */
+/**
+ * Fetch a customer's own orders by email. The email must match an existing
+ * Shopify customer — if none does, `accountFound` is false so the UI can say
+ * "Syruvia account not found". Never throws — returns a status.
+ */
 export async function getMyStoreOrders(
   email: string,
   limit = 25,
-): Promise<{ connected: boolean; orders: MyOrder[]; error?: string }> {
-  if (!email || !(await shopifyReady())) return { connected: false, orders: [] };
+): Promise<{ connected: boolean; accountFound: boolean; orders: MyOrder[]; error?: string }> {
+  if (!email || !(await shopifyReady())) return { connected: false, accountFound: false, orders: [] };
   try {
     // Quote the email so "+" / "." in addresses don't confuse the search syntax.
     const json: any = await shopifyGraphQL<any>(QUERY, { q: `email:"${email.replace(/"/g, "")}"`, first: Math.min(50, limit) });
     if (json.errors?.length) {
       console.error("[getMyStoreOrders] GraphQL errors:", json.errors);
-      return { connected: true, orders: [], error: json.errors.map((e: any) => e.message).join(", ") };
+      return { connected: true, accountFound: false, orders: [], error: json.errors.map((e: any) => e.message).join(", ") };
     }
+    const accountFound = (json.data?.customers?.edges?.length ?? 0) > 0;
+    if (!accountFound) return { connected: true, accountFound: false, orders: [] };
     const orders: MyOrder[] = (json.data?.orders?.edges ?? []).map((e: any) => {
       const n = e.node;
       const money = n.currentTotalPriceSet?.shopMoney;
@@ -92,9 +99,9 @@ export async function getMyStoreOrders(
         tracking,
       };
     });
-    return { connected: true, orders };
+    return { connected: true, accountFound: true, orders };
   } catch (e: any) {
     console.error("[getMyStoreOrders]", e);
-    return { connected: true, orders: [], error: e?.message ?? "Could not reach Shopify" };
+    return { connected: true, accountFound: false, orders: [], error: e?.message ?? "Could not reach Shopify" };
   }
 }
