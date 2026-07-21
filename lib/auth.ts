@@ -97,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           affiliateId,
           isOwner: !!(user as any).isOwner,
           permissions: ((user as any).permissions as string[] | null) ?? null,
+          mustChangePassword: !!(user as any).mustChangePassword,
         } as any;
       },
     }),

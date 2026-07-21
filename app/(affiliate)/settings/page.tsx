@@ -1,7 +1,8 @@
-import { User, Bell, Link2, ShoppingBag } from "lucide-react";
+import { User, Bell, Link2, ShoppingBag, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileForm } from "@/components/affiliate/profile-form";
+import { ChangePassword } from "@/components/affiliate/change-password";
 import { NotificationPrefs } from "@/components/affiliate/notification-prefs";
 import { PublicPageForm } from "@/components/affiliate/public-page-form";
 import { ShopifyLinkCard } from "@/components/affiliate/shopify-link-card";
@@ -69,6 +70,17 @@ export default async function SettingsPage() {
             </CardHeader>
             <CardContent>
               <NotificationPrefs prefs={me.notificationPrefs} />
+            </CardContent>
+          </Card>
+
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <KeyRound className="size-4 text-primary" /> Password
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChangePassword />
             </CardContent>
           </Card>
         </div>

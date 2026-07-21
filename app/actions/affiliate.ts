@@ -23,6 +23,48 @@ import type { TimePoint } from "@/lib/types";
 export type ActionResult = { ok: boolean; message: string };
 
 /**
+ * First-login password reset for temp-code users. Any signed-in user (affiliate
+ * or admin) can call this; it sets a real password and clears the
+ * mustChangePassword flag so middleware stops forcing /set-password. The client
+ * must call updateSession({ mustChangePassword: false }) afterwards so the live
+ * JWT reflects the change without a full re-login.
+ */
+export async function setInitialPassword(newPassword: string): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const userId = (session?.user as any)?.id;
+  if (!userId) return { ok: false, message: "Not signed in." };
+  const parsed = z.object({ next: z.string().min(6, "Password must be at least 6 characters") }).safeParse({ next: newPassword });
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid password." };
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(parsed.data.next, 10), mustChangePassword: false })
+    .where(eq(users.id, userId));
+  return { ok: true, message: "Password set." };
+}
+
+/** Change password from Settings (verifies current password first). */
+export async function changePassword(input: unknown): Promise<ActionResult> {
+  if (!db) return { ok: false, message: "Database not configured." };
+  const session = await auth();
+  const userId = (session?.user as any)?.id;
+  if (!userId) return { ok: false, message: "Not signed in." };
+  const parsed = z
+    .object({ current: z.string().min(1), next: z.string().min(6, "New password must be at least 6 characters") })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user?.passwordHash) return { ok: false, message: "No password on file." };
+  const ok = await bcrypt.compare(parsed.data.current, user.passwordHash);
+  if (!ok) return { ok: false, message: "Current password is incorrect." };
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(parsed.data.next, 10), mustChangePassword: false })
+    .where(eq(users.id, userId));
+  return { ok: true, message: "Password changed." };
+}
+
+/**
  * Apply-page convenience: if the entered email already belongs to a store
  * customer, return their name + shipping address to pre-fill the form. Best
  * effort — returns null when unavailable (store not connected, no such customer,

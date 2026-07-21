@@ -52,6 +52,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   name: text("name"),
   passwordHash: text("password_hash"),
+  // Set when we hand out a temporary password (invite / portal reset) — forces a
+  // "set your password" screen before the account can be used.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   role: roleEnum("role").notNull().default("affiliate"),
   // Admin team access: the founding admin is the owner (full access, manages the
   // team). Other admins get a subset of area keys in `permissions`.

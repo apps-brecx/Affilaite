@@ -18,6 +18,17 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(path)}`, nextUrl));
   }
 
+  // Temp-code users must set a real password before they can use the portal.
+  // Send them to /set-password on every protected route until the flag clears.
+  if (isLoggedIn && user?.mustChangePassword && path !== "/set-password") {
+    return NextResponse.redirect(new URL("/set-password", nextUrl));
+  }
+  // Once the flag is cleared, don't leave them stranded on /set-password.
+  if (path === "/set-password" && isLoggedIn && !user?.mustChangePassword) {
+    const home = user?.role === "admin" ? "/admin" : "/dashboard";
+    return NextResponse.redirect(new URL(home, nextUrl));
+  }
+
   if (path.startsWith("/admin")) {
     if (user?.role !== "admin") return NextResponse.redirect(new URL("/dashboard", nextUrl));
     // Owner passes everything; team members are gated per area — bounce to the
@@ -30,6 +41,7 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
+    "/set-password",
     "/admin/:path*",
     "/dashboard/:path*",
     "/links/:path*",

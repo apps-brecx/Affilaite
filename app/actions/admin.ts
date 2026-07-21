@@ -1108,7 +1108,7 @@ async function createAndInvite(
   const passwordHash = await bcrypt.hash(tempPassword, 10);
   const [user] = await db!
     .insert(users)
-    .values({ email, name: name || email, passwordHash, role: "affiliate" })
+    .values({ email, name: name || email, passwordHash, role: "affiliate", mustChangePassword: true })
     .returning();
 
   const program = await db!.query.programs.findFirst({ where: eq(programs.isDefault, true) });
@@ -1258,7 +1258,7 @@ export async function sendPortalInvite(
 
     // Reset a temp password so they can log in from the invite.
     const tempPassword = crypto.randomBytes(6).toString("base64url");
-    await db.update(users).set({ passwordHash: await bcrypt.hash(tempPassword, 10) }).where(eq(users.id, user.id));
+    await db.update(users).set({ passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true }).where(eq(users.id, user.id));
     processed++;
 
     if (tpl && (await emailReady())) {
