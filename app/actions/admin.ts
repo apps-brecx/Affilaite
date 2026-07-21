@@ -1477,6 +1477,7 @@ export async function saveCampaignTheme(id: string, brand: unknown): Promise<Act
       logoImage: z.string().max(2_600_000).optional().default(""),
       primaryColor: z.string().max(9).optional().default("#FF5C9E"),
       accentColor: z.string().max(9).optional().default("#FFC94D"),
+      backgroundColor: z.string().max(9).optional().default(""),
       heroImage: z.string().max(2_600_000).optional().default(""),
       headline: z.string().max(120).optional().default(""),
       subtext: z.string().max(400).optional().default(""),
@@ -1774,11 +1775,49 @@ export async function assignAffiliateToCampaign(affiliateId: string, campaignId:
   const existing = await db.query.affiliateCampaigns.findFirst({
     where: and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)),
   });
-  if (!existing) await db.insert(affiliateCampaigns).values({ affiliateId, campaignId });
+  if (!existing) {
+    await db.insert(affiliateCampaigns).values({ affiliateId, campaignId });
+    // Let them know they're in — in-app + a Notification-Center email.
+    await notifyAddedToCampaign(affiliateId, campaignId);
+  }
   revalidatePath(`/admin/campaigns/${campaignId}`);
   revalidatePath(`/admin/affiliates/${affiliateId}`);
   revalidatePath("/admin/campaigns");
-  return { ok: true, message: "Added to campaign." };
+  return { ok: true, message: existing ? "Already in this campaign." : "Added to campaign — they've been notified." };
+}
+
+/** Notify an affiliate (in-app + the managed "campaign_added" email) that they
+ *  were added to a campaign. Best-effort — never blocks the enrollment. */
+async function notifyAddedToCampaign(affiliateId: string, campaignId: string): Promise<void> {
+  if (!db) return;
+  try {
+    const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) });
+    const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+    if (!campaign || !aff) return;
+    await notify(
+      affiliateId,
+      "dashboard",
+      `You're in: ${campaign.name} 🎉`,
+      "You've been added to a new campaign. Sign in to grab your code and link.",
+      "/dashboard",
+    );
+    const user = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
+    if (!user?.email) return;
+    if ((aff.notificationPrefs as Record<string, boolean> | null)?.campaign_added === false) return;
+    // Prefer the campaign-scoped code, else any of theirs.
+    const code =
+      (await db.query.discountCodes.findFirst({ where: and(eq(discountCodes.affiliateId, affiliateId), eq(discountCodes.campaignId, campaignId)) }))?.code ??
+      (await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, affiliateId) }))?.code ??
+      aff.refCode;
+    await dispatchEmail("campaign_added", user.email, {
+      name: user.name ?? "there",
+      campaign: campaign.name,
+      code,
+      loginUrl: `${APP_URL}/login`,
+    });
+  } catch (e) {
+    console.error("[notifyAddedToCampaign]", e);
+  }
 }
 
 export async function removeAffiliateFromCampaign(affiliateId: string, campaignId: string): Promise<ActionResult> {

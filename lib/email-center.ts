@@ -67,6 +67,7 @@ const V = {
   loginUrl: { token: "{{loginUrl}}", label: "Sign-in link" },
   dashboardUrl: { token: "{{dashboardUrl}}", label: "Dashboard link" },
   link: { token: "{{link}}", label: "Action link" },
+  campaign: { token: "{{campaign}}", label: "Campaign name" },
 } as const;
 
 /** Every lifecycle email, in the order shown in the Notification Center. */
@@ -86,6 +87,22 @@ export const EMAIL_TYPES: EmailType[] = [
       "Hi {{name}},\n\nThanks for applying to the Sipfluence partner program. We're reviewing your details and will email you as soon as you're approved.",
     defaultCtaText: "",
     defaultCtaUrl: "",
+  },
+  {
+    key: "campaign_added",
+    label: "Added to a campaign",
+    description: "Tells a partner they've been added to a specific campaign.",
+    category: "Onboarding",
+    whenText: "When an admin adds an affiliate to a campaign (or invites them into one).",
+    recommendation: "Name the campaign and their reward, and link them to sign in and grab their code.",
+    variables: [V.name, V.campaign, V.code, V.loginUrl],
+    togglable: true,
+    prefKey: null,
+    defaultSubject: "You've been added to {{campaign}} 🎉",
+    defaultBody:
+      "Hi {{name}},\n\nYou've been added to the {{campaign}} campaign on Sipfluence. Your discount code is {{code}} — sign in to grab your link and start earning.",
+    defaultCtaText: "Sign in",
+    defaultCtaUrl: "{{loginUrl}}",
   },
   {
     key: "instant_welcome",

@@ -54,8 +54,9 @@ export interface CampaignBrand {
   enabled: boolean;
   logoText: string;
   logoImage: string; // data URL (optional)
-  primaryColor: string; // hex
-  accentColor: string; // hex
+  primaryColor: string; // hex — buttons, links, highlights
+  accentColor: string; // hex — gold/secondary accents
+  backgroundColor: string; // hex (optional) — page background; "" = default look
   heroImage: string; // data URL (optional) — background/hero on the join page
   headline: string;
   subtext: string;
@@ -69,6 +70,7 @@ export function defaultCampaignBrand(): CampaignBrand {
     logoImage: "",
     primaryColor: "#FF5C9E",
     accentColor: "#FFC94D",
+    backgroundColor: "",
     heroImage: "",
     headline: "",
     subtext: "",

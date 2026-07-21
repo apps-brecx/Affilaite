@@ -38,6 +38,7 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
     : globalBrand;
   const heroImage = cb.enabled ? cb.heroImage : "";
   const logoImage = cb.enabled ? cb.logoImage : "";
+  const bgColor = cb.enabled && cb.backgroundColor ? cb.backgroundColor : "";
 
   const inviteOnly = campaign.access === "invite";
   const paused = campaign.status !== "active";
@@ -46,12 +47,14 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
 
   return (
     <BrandScope brand={brand}>
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen" style={bgColor ? { backgroundColor: bgColor } : undefined}>
       {heroImage && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={heroImage} alt="" className="relative h-40 w-full object-cover sm:h-52" />
       )}
-      <div className="aurora pointer-events-none absolute inset-0 h-96" />
+      {/* The aurora glow softens to near-nothing when a solid custom background
+          is chosen, so the admin's color actually shows through. */}
+      <div className={`aurora pointer-events-none absolute inset-0 h-96 ${bgColor ? "opacity-20" : ""}`} />
       <header className="relative mx-auto flex max-w-5xl items-center justify-between px-4 py-6 sm:px-6">
         {logoImage ? (
           // eslint-disable-next-line @next/next/no-img-element
