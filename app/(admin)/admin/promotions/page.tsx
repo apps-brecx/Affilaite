@@ -1,4 +1,5 @@
-import { BadgePercent, Calendar, ShoppingBag } from "lucide-react";
+import { Suspense } from "react";
+import { BadgePercent, Calendar, ShoppingBag, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -15,6 +16,28 @@ export const metadata = { title: "Promotions" };
 const CATALOG_CAP = 1000;
 
 export default async function PromotionsPage() {
+  // Header renders instantly; the catalog-dependent body streams in so the page
+  // no longer sits blank for the full Shopify product fetch.
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Promotions"
+        description="Time-boxed bonus commissions to spark a push, and control over the product catalog affiliates see."
+      />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-hairline py-16 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading promotions & catalog…
+          </div>
+        }
+      >
+        <PromotionsBody />
+      </Suspense>
+    </div>
+  );
+}
+
+async function PromotionsBody() {
   const [promos, catalog, collections, visibility] = await Promise.all([
     listPromotions(),
     getStoreProducts(CATALOG_CAP),
@@ -73,37 +96,30 @@ export default async function PromotionsPage() {
   );
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Promotions"
-        description="Time-boxed bonus commissions to spark a push, and control over the product catalog affiliates see."
-      />
-
-      <PromotionsTabs
-        promotionsPanel={promotionsPanel}
-        catalogPanel={
-          !catalog.connected ? (
-            <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
-              Connect Shopify in Settings → Integrations to manage the product catalog.
-            </p>
-          ) : (
-            <CatalogManager
-              products={catalog.products.map((p) => ({
-                id: p.id,
-                title: p.title,
-                image: p.image,
-                price: p.price,
-                currency: p.currency,
-                available: p.available,
-                collectionIds: p.collectionIds,
-              }))}
-              collections={collections.collections.map((c) => ({ id: c.id, title: c.title, productsCount: c.productsCount }))}
-              initial={visibility}
-              capped={catalog.products.length >= CATALOG_CAP}
-            />
-          )
-        }
-      />
-    </div>
+    <PromotionsTabs
+      promotionsPanel={promotionsPanel}
+      catalogPanel={
+        !catalog.connected ? (
+          <p className="rounded-lg border border-dashed border-hairline py-10 text-center text-sm text-muted-foreground">
+            Connect Shopify in Settings → Integrations to manage the product catalog.
+          </p>
+        ) : (
+          <CatalogManager
+            products={catalog.products.map((p) => ({
+              id: p.id,
+              title: p.title,
+              image: p.image,
+              price: p.price,
+              currency: p.currency,
+              available: p.available,
+              collectionIds: p.collectionIds,
+            }))}
+            collections={collections.collections.map((c) => ({ id: c.id, title: c.title, productsCount: c.productsCount }))}
+            initial={visibility}
+            capped={catalog.products.length >= CATALOG_CAP}
+          />
+        )
+      }
+    />
   );
 }

@@ -82,6 +82,17 @@ const _productsCache = new Map<number, { at: number; data: ProductsResult; refre
  * returns instantly while refreshing in the background — so only the very first
  * load ever waits on Shopify.
  */
+// Cache policy: a complete catalog caches for the full TTL; a PARTIAL catalog
+// (a mid-pagination Shopify hiccup) is still cached so page loads stay fast, but
+// with a near-stale timestamp so it re-fetches within ~45s to fill the gaps
+// instead of hammering Shopify on every single load. Hard errors never cache.
+function cacheProducts(limit: number, data: ProductsResult) {
+  if (!data.connected) return;
+  if (data.error && data.error !== "partial catalog") return;
+  const at = data.error === "partial catalog" ? Date.now() - (PRODUCTS_TTL - 45_000) : Date.now();
+  _productsCache.set(limit, { at, data });
+}
+
 export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
   const cached = _productsCache.get(limit);
   if (cached) {
@@ -89,14 +100,14 @@ export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
     if (!fresh && !cached.refreshing) {
       cached.refreshing = true;
       fetchStoreProducts(limit)
-        .then((data) => { if (data.connected && !data.error) _productsCache.set(limit, { at: Date.now(), data }); })
+        .then((data) => cacheProducts(limit, data))
         .catch(() => {})
         .finally(() => { const c = _productsCache.get(limit); if (c) c.refreshing = false; });
     }
     return cached.data; // serve fresh or stale immediately
   }
   const data = await fetchStoreProducts(limit);
-  if (data.connected && !data.error) _productsCache.set(limit, { at: Date.now(), data });
+  cacheProducts(limit, data);
   return data;
 }
 

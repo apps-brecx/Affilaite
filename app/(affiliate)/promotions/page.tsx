@@ -1,4 +1,5 @@
-import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles } from "lucide-react";
+import { Suspense } from "react";
+import { BadgePercent, Calendar, ShoppingBag, ExternalLink, Globe, PackageOpen, Sparkles, Loader2 } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,41 +17,20 @@ import {
 } from "@/lib/products";
 import { buildReferralLink } from "@/lib/links";
 import { formatDate } from "@/lib/utils";
+import type { Affiliate } from "@/lib/types";
 
 export const metadata = { title: "Promotions" };
 
 export default async function PromotionsPage() {
   const me = await requireAffiliate();
-  const [promos, catalog, collectionsRaw, visibility, website, banner] = await Promise.all([
+  // Only the fast (DB) bits block the initial render — the heavy Shopify catalog
+  // streams in via <Suspense> below so the page is interactive right away
+  // instead of waiting up to a minute on the full product fetch.
+  const [promos, website, banner] = await Promise.all([
     getPromotionsForAffiliate(me),
-    getStoreProducts(1000),
-    getStoreCollections(250),
-    getCatalogVisibility(),
     getDefaultDestination(),
     getBanner("promotions"),
   ]);
-
-  const resolved = resolveVisibleProducts(catalog.products, visibility);
-  const visibleProducts = resolved.map((p) => ({
-    id: p.id,
-    title: p.title,
-    image: p.image,
-    price: p.price,
-    currency: p.currency,
-    available: p.available,
-    collectionIds: p.collectionIds,
-    shareLink: buildReferralLink(me.refCode, p.url),
-  }));
-
-  // Only collections the admin allowed AND that actually contain visible products.
-  const allowed = new Set(visibility.allowedCollections);
-  const usedCollectionIds = new Set(resolved.flatMap((p) => p.collectionIds));
-  const visibleCollections = collectionsRaw.collections
-    .filter((c) => allowed.has(c.id))
-    .map((c) => ({ ...c, shareLink: buildReferralLink(me.refCode, c.url) }));
-  const filterCollections = visibleCollections
-    .filter((c) => usedCollectionIds.has(c.id))
-    .map((c) => ({ id: c.id, title: c.title }));
 
   return (
     <div className="space-y-8">
@@ -140,25 +120,74 @@ export default async function PromotionsPage() {
         )}
       </section>
 
-      {/* Catalog — opt-in, collections + products together */}
-      {visibleProducts.length === 0 && visibleCollections.length === 0 ? (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <ShoppingBag className="size-4" /> Catalog
-          </h2>
-          <EmptyState
-            icon={PackageOpen}
-            title={catalog.connected ? "No products to show yet" : "Catalog coming soon"}
-            description={
-              catalog.connected
-                ? "Products and collections show up here once they're published in Shopify and made visible by the team."
-                : "The catalog appears here once the store is connected. In the meantime, share your code and link from Links & Codes."
-            }
-          />
-        </section>
-      ) : (
-        <CatalogBrowser products={visibleProducts} collections={visibleCollections} filterCollections={filterCollections} />
-      )}
+      {/* Catalog — streamed so it never blocks the page. */}
+      <Suspense fallback={<CatalogSkeleton />}>
+        <CatalogSection me={me} />
+      </Suspense>
     </div>
   );
+}
+
+function CatalogSkeleton() {
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <ShoppingBag className="size-4" /> Catalog
+      </h2>
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-hairline py-16 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Loading the catalog…
+      </div>
+    </section>
+  );
+}
+
+async function CatalogSection({ me }: { me: Affiliate }) {
+  const [catalog, collectionsRaw, visibility] = await Promise.all([
+    getStoreProducts(1000),
+    getStoreCollections(250),
+    getCatalogVisibility(),
+  ]);
+
+  const resolved = resolveVisibleProducts(catalog.products, visibility);
+  const visibleProducts = resolved.map((p) => ({
+    id: p.id,
+    title: p.title,
+    image: p.image,
+    price: p.price,
+    currency: p.currency,
+    available: p.available,
+    collectionIds: p.collectionIds,
+    shareLink: buildReferralLink(me.refCode, p.url),
+  }));
+
+  // Only collections the admin allowed AND that actually contain visible products.
+  const allowed = new Set(visibility.allowedCollections);
+  const usedCollectionIds = new Set(resolved.flatMap((p) => p.collectionIds));
+  const visibleCollections = collectionsRaw.collections
+    .filter((c) => allowed.has(c.id))
+    .map((c) => ({ ...c, shareLink: buildReferralLink(me.refCode, c.url) }));
+  const filterCollections = visibleCollections
+    .filter((c) => usedCollectionIds.has(c.id))
+    .map((c) => ({ id: c.id, title: c.title }));
+
+  if (visibleProducts.length === 0 && visibleCollections.length === 0) {
+    return (
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <ShoppingBag className="size-4" /> Catalog
+        </h2>
+        <EmptyState
+          icon={PackageOpen}
+          title={catalog.connected ? "No products to show yet" : "Catalog coming soon"}
+          description={
+            catalog.connected
+              ? "Products and collections show up here once they're published in Shopify and made visible by the team."
+              : "The catalog appears here once the store is connected. In the meantime, share your code and link from Links & Codes."
+          }
+        />
+      </section>
+    );
+  }
+
+  return <CatalogBrowser products={visibleProducts} collections={visibleCollections} filterCollections={filterCollections} />;
 }

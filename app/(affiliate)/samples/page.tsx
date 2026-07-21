@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Gift, MapPin, PackageOpen, Clock, Check, X, Truck } from "lucide-react";
+import { Suspense } from "react";
+import { Gift, MapPin, PackageOpen, Clock, Check, X, Truck, Loader2 } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,25 +24,12 @@ const STATUS: Record<string, { label: string; variant: "default" | "success" | "
 
 export default async function SamplesPage() {
   const me = await requireAffiliate();
-  const [catalog, visibility, samplesConfig, mine, banner] = await Promise.all([
-    getStoreProducts(1000),
-    getCatalogVisibility(),
-    getSamplesConfig(),
+  // Fast (DB) bits only — the Shopify catalog streams in below.
+  const [mine, banner] = await Promise.all([
     getMySampleRequests(me.id),
     getBanner("samples"),
   ]);
 
-  // Only products the affiliate can see in Promotions are sample-able — use the
-  // exact same visibility rules as the Promotions catalog. Then the samples
-  // curation narrows/orders that set; out-of-stock sinks to the bottom.
-  const promoShown = resolveVisibleProducts(catalog.products, visibility);
-  // Opt-out: sample-able = promo-visible minus anything the admin switched off.
-  let shown = promoShown.filter((p) => !samplesConfig.hidden.includes(p.id));
-  if (samplesConfig.order.length) {
-    const pos = new Map(samplesConfig.order.map((id, i) => [id, i] as const));
-    shown = [...shown].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
-  }
-  shown = [...shown].sort((a, b) => Number(a.available === false) - Number(b.available === false));
   const openProductIds = mine
     .filter((r) => (r.status === "requested" || r.status === "approved") && r.productId)
     .map((r) => r.productId as string);
@@ -138,29 +126,69 @@ export default async function SamplesPage() {
         </RevealSection>
       )}
 
-      {/* Catalog */}
+      {/* Catalog — streamed so it never blocks the page. */}
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           <PackageOpen className="size-4" /> Available products
         </h2>
-        {shown.length === 0 ? (
-          <EmptyState
-            icon={PackageOpen}
-            title={catalog.connected ? "No products to sample yet" : "Samples coming soon"}
-            description={
-              catalog.connected
-                ? "Products show up here once they're published in Shopify and made visible by the team."
-                : "The sample catalog appears here once the store is connected. Check back soon."
-            }
-          />
-        ) : hasAddress && !banned ? (
-          <SampleCatalog products={shown} openProductIds={openProductIds} />
-        ) : (
-          <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
-            {banned ? "Sample requests are disabled on your account." : "Add a shipping address above to request any of these products."}
-          </p>
-        )}
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-hairline py-16 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading products…
+            </div>
+          }
+        >
+          <SampleCatalogSection openProductIds={openProductIds} hasAddress={hasAddress} banned={banned} />
+        </Suspense>
       </section>
     </div>
+  );
+}
+
+async function SampleCatalogSection({
+  openProductIds,
+  hasAddress,
+  banned,
+}: {
+  openProductIds: string[];
+  hasAddress: boolean;
+  banned: boolean;
+}) {
+  const [catalog, visibility, samplesConfig] = await Promise.all([
+    getStoreProducts(1000),
+    getCatalogVisibility(),
+    getSamplesConfig(),
+  ]);
+
+  // Sample-able = promo-visible products minus anything the admin switched off;
+  // out-of-stock sinks to the bottom.
+  const promoShown = resolveVisibleProducts(catalog.products, visibility);
+  let shown = promoShown.filter((p) => !samplesConfig.hidden.includes(p.id));
+  if (samplesConfig.order.length) {
+    const pos = new Map(samplesConfig.order.map((id, i) => [id, i] as const));
+    shown = [...shown].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+  }
+  shown = [...shown].sort((a, b) => Number(a.available === false) - Number(b.available === false));
+
+  if (shown.length === 0) {
+    return (
+      <EmptyState
+        icon={PackageOpen}
+        title={catalog.connected ? "No products to sample yet" : "Samples coming soon"}
+        description={
+          catalog.connected
+            ? "Products show up here once they're published in Shopify and made visible by the team."
+            : "The sample catalog appears here once the store is connected. Check back soon."
+        }
+      />
+    );
+  }
+  if (hasAddress && !banned) {
+    return <SampleCatalog products={shown} openProductIds={openProductIds} />;
+  }
+  return (
+    <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-sm text-muted-foreground">
+      {banned ? "Sample requests are disabled on your account." : "Add a shipping address above to request any of these products."}
+    </p>
   );
 }
