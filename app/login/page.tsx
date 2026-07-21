@@ -16,7 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   // Invited members arrive with ?welcome=1 and get the custom greeting.
   const invited = welcome === "1";
   const invite = invited ? await getTeamInviteEmail() : null;
-  const headline = invite?.loginHeadline?.trim() || (invited ? "Welcome" : "Welcome back");
+  const headline = invite?.loginHeadline?.trim() || "Welcome";
   const subtext = invite?.loginSubtext?.trim() || `Sign in to the ${brand.logoText} partner portal.`;
   return (
     <BrandScope brand={brand}>
