@@ -19,7 +19,7 @@ export interface StoreProduct {
 
 const PRODUCTS_QUERY = `
   query Catalog($first: Int!, $after: String) {
-    products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true) {
+    products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
       pageInfo { hasNextPage endCursor }
       edges {
         node {

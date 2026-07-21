@@ -24,13 +24,24 @@ export async function shopifyGraphQL<T = any>(query: string, variables?: Record<
   if (!domain || !token) throw new Error("Shopify is not connected");
   const url = `https://${domain}/admin/api/${version}/graphql.json`;
   const MAX_ATTEMPTS = 4;
+  const TIMEOUT_MS = 15_000; // never let a single request hang the whole page
 
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-      body: JSON.stringify({ query, variables }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch (e: any) {
+      // A timeout/network error: retry a couple of times, then surface it so the
+      // caller degrades (cached/partial) instead of hanging indefinitely.
+      if (attempt >= MAX_ATTEMPTS) throw new Error(`Shopify GraphQL request failed: ${e?.message ?? e}`);
+      await sleep(500 * 2 ** (attempt - 1));
+      continue;
+    }
 
     // HTTP 429: honor Retry-After, then back off. Shopify throttles aggressively.
     if (res.status === 429) {
