@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { ne } from "drizzle-orm";
 import { AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { AffiliatesTable } from "@/components/admin/affiliates-table";
@@ -15,7 +15,8 @@ export default async function AffiliatesPage() {
     listAffiliates(),
     listInviteTemplates(),
     emailReady(),
-    db ? db.select({ id: campaigns.id, name: campaigns.name }).from(campaigns).where(eq(campaigns.status, "active")) : Promise.resolve([]),
+    // Any campaign you can still invite into (active or paused — not ended).
+    db ? db.select({ id: campaigns.id, name: campaigns.name }).from(campaigns).where(ne(campaigns.status, "ended")) : Promise.resolve([]),
   ]);
   return (
     <div className="space-y-8">

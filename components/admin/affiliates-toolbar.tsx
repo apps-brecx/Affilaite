@@ -149,23 +149,30 @@ export function AffiliatesToolbar({
     });
   };
 
-  const CampaignSelect = () =>
-    campaigns.length === 0 ? null : (
-      <div className="space-y-1.5">
-        <Label>Add to campaign <span className="text-muted-foreground">(optional)</span></Label>
-        <select
-          value={campaignId}
-          onChange={(e) => setCampaignId(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
-        >
-          <option value="">No campaign — general invite</option>
-          {campaigns.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">Enrolls them in this campaign and issues that campaign&apos;s discount code.</p>
-      </div>
-    );
+  const CampaignSelect = () => (
+    <div className="space-y-1.5">
+      <Label>Add to campaign <span className="text-muted-foreground">(optional)</span></Label>
+      {campaigns.length === 0 ? (
+        <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          No campaigns yet — create one in <strong>Campaigns</strong> to invite partners straight into it.
+        </p>
+      ) : (
+        <>
+          <select
+            value={campaignId}
+            onChange={(e) => setCampaignId(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
+          >
+            <option value="">No campaign — general invite</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">Enrolls them in this campaign and issues that campaign&apos;s discount code.</p>
+        </>
+      )}
+    </div>
+  );
 
   const TemplateSelect = () => (
     <div className="space-y-1.5">
@@ -303,6 +310,7 @@ export function AffiliatesToolbar({
                 </div>
               </div>
             )}
+            <CampaignSelect />
             <TemplateSelect />
             <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Import &amp; invite {parsed.length || ""}
