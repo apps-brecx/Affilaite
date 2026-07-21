@@ -11,6 +11,7 @@ import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
 import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
+import { getCustomerPrefill, type CustomerPrefill } from "@/lib/shopify-customers";
 import { shopifyReady } from "@/lib/integrations";
 import { dispatchEmail } from "@/lib/email-center";
 import { APP_URL } from "@/lib/links";
@@ -18,6 +19,26 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 import type { TimePoint } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; message: string };
+
+/**
+ * Apply-page convenience: if the entered email already belongs to a store
+ * customer, return their name + shipping address to pre-fill the form. Best
+ * effort — returns null when unavailable (store not connected, no such customer,
+ * or Shopify's Protected Customer Data blocks the PII). Rate-limited to blunt
+ * email-enumeration abuse of a public endpoint.
+ */
+export async function lookupCustomerForApply(email: string): Promise<CustomerPrefill | null> {
+  const clean = (email ?? "").trim().toLowerCase();
+  if (!clean || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) return null;
+  const ip = await clientIp();
+  if (!rateLimit(`apply-lookup:${ip}`, 12, 60_000).ok) return null;
+  // Don't reveal existing partners' details through this endpoint.
+  if (db) {
+    const existing = await db.query.users.findFirst({ where: eq(users.email, clean) });
+    if (existing) return null;
+  }
+  return getCustomerPrefill(clean);
+}
 
 export type EarningsRange = "today" | "week" | "month" | "year" | "all";
 

@@ -12,6 +12,7 @@ import { MessageComposer } from "@/components/admin/message-composer";
 import { AdminChatMessage } from "@/components/admin/chat-message";
 import { MarkDmRead } from "@/components/admin/mark-dm-read";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
+import { ScrollAnchor } from "@/components/ui/scroll-anchor";
 import {
   listGroupsAdmin,
   listDmThreads,
@@ -135,6 +136,7 @@ export default async function MessagesPage({
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {thread.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Send the first one below.</p>}
               {thread.map((m) => <AdminChatMessage key={m.id} msg={m} leaderboard={leaderboards[m.id]} />)}
+              <ScrollAnchor />
             </div>
             <MessageComposer target={{ type: "group", id: group.id }} campaigns={campsForComposer} deals={deals} />
           </>
@@ -158,6 +160,7 @@ export default async function MessagesPage({
                   </div>
                 </div>
               ))}
+              <ScrollAnchor />
             </div>
             <MessageComposer target={{ type: "dm", id: dmThread.affiliateId }} campaigns={campsForComposer} deals={deals} />
           </>

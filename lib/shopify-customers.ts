@@ -43,6 +43,59 @@ export async function findShopifyCustomerByEmail(email: string): Promise<{ id: s
   }
 }
 
+export interface CustomerPrefill {
+  name: string;
+  company: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
+}
+
+const PREFILL = `
+  query CustomerPrefill($q: String!) {
+    customers(first: 1, query: $q) {
+      edges { node {
+        firstName lastName
+        defaultAddress { address1 address2 city province provinceCode zip country countryCodeV2 company }
+      } }
+    }
+  }`;
+
+/**
+ * Best-effort: pull the name + default shipping address for an existing customer
+ * so the apply form can pre-fill it. Returns null when the store isn't connected,
+ * there's no such customer, or Shopify's Protected Customer Data rules block the
+ * PII fields (in which case the applicant just fills it in manually).
+ */
+export async function getCustomerPrefill(email: string): Promise<CustomerPrefill | null> {
+  const clean = (email ?? "").trim().toLowerCase();
+  if (!clean || !(await shopifyReady())) return null;
+  try {
+    const json: any = await shopifyGraphQL(PREFILL, { q: `email:"${clean}"` });
+    if (json?.errors?.length) return null; // often Protected Customer Data — degrade quietly
+    const n = json?.data?.customers?.edges?.[0]?.node;
+    if (!n) return null;
+    const a = n.defaultAddress ?? {};
+    const name = [n.firstName, n.lastName].filter(Boolean).join(" ").trim();
+    return {
+      name,
+      company: a.company ?? "",
+      addressLine1: a.address1 ?? "",
+      addressLine2: a.address2 ?? "",
+      city: a.city ?? "",
+      region: a.provinceCode || a.province || "",
+      postalCode: a.zip ?? "",
+      country: a.countryCodeV2 || a.country || "",
+    };
+  } catch (e) {
+    console.error("[getCustomerPrefill]", e);
+    return null;
+  }
+}
+
 /** Does a linked Shopify customer id still resolve? (existence check, PII-free) */
 export async function shopifyCustomerExists(id: string): Promise<boolean> {
   if (!id || !(await shopifyReady())) return false;

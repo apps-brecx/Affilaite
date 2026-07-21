@@ -1,20 +1,54 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle2, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { PhoneVerify } from "@/components/marketing/phone-verify";
-import { applyAsAffiliate } from "@/app/actions/affiliate";
+import { applyAsAffiliate, lookupCustomerForApply } from "@/app/actions/affiliate";
+
+const BLANK = { name: "", companyName: "", addressLine1: "", addressLine2: "", city: "", region: "", postalCode: "", country: "" };
 
 export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
   const [done, setDone] = useState(false);
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [email, setEmail] = useState("");
+  const [fields, setFields] = useState(BLANK);
+  const [prefilling, setPrefilling] = useState(false);
+  const [prefilled, setPrefilled] = useState(false);
   const toast = useToast();
+  const set = (patch: Partial<typeof BLANK>) => setFields((f) => ({ ...f, ...patch }));
+
+  // When the applicant leaves the email field, pull anything the store already
+  // knows about them and pre-fill it (best effort — silently does nothing if
+  // there's no match or the store's customer data isn't readable).
+  const onEmailBlur = () => {
+    const e = email.trim().toLowerCase();
+    if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return;
+    setPrefilling(true);
+    lookupCustomerForApply(e)
+      .then((c) => {
+        if (!c) return;
+        // Only fill blanks — never clobber something the applicant already typed.
+        setFields((f) => ({
+          name: f.name || c.name,
+          companyName: f.companyName || c.company,
+          addressLine1: f.addressLine1 || c.addressLine1,
+          addressLine2: f.addressLine2 || c.addressLine2,
+          city: f.city || c.city,
+          region: f.region || c.region,
+          postalCode: f.postalCode || c.postalCode,
+          country: f.country || c.country,
+        }));
+        if (c.name || c.addressLine1) setPrefilled(true);
+      })
+      .catch(() => {})
+      .finally(() => setPrefilling(false));
+  };
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,14 +108,22 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
         <form onSubmit={submit} className="space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Full name</Label>
-              <Input name="name" required placeholder="Your name" />
+              <Label>Email</Label>
+              <Input name="email" required type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={onEmailBlur} />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input name="email" required type="email" placeholder="you@email.com" />
+              <Label className="flex items-center gap-1.5">
+                Full name
+                {prefilling && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+              </Label>
+              <Input name="name" required placeholder="Your name" value={fields.name} onChange={(e) => set({ name: e.target.value })} />
             </div>
           </div>
+          {prefilled && (
+            <p className="-mt-2 flex items-center gap-1.5 text-xs text-primary">
+              <Sparkles className="size-3.5" /> We found your details on file and filled them in — edit anything that's changed.
+            </p>
+          )}
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Password</Label>
@@ -89,7 +131,7 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             </div>
             <div className="space-y-1.5">
               <Label>Company / brand (optional)</Label>
-              <Input name="companyName" placeholder="Your brand" />
+              <Input name="companyName" placeholder="Your brand" value={fields.companyName} onChange={(e) => set({ companyName: e.target.value })} />
             </div>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -126,30 +168,30 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             <p className="-mt-1 text-xs text-muted-foreground">Add this if you'd like to receive product samples. You can also fill it in later.</p>
             <div className="space-y-1.5">
               <Label>Street address</Label>
-              <Input name="addressLine1" placeholder="123 Main St" />
+              <Input name="addressLine1" placeholder="123 Main St" value={fields.addressLine1} onChange={(e) => set({ addressLine1: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label>Apt / suite (optional)</Label>
-              <Input name="addressLine2" placeholder="Apt 4B" />
+              <Input name="addressLine2" placeholder="Apt 4B" value={fields.addressLine2} onChange={(e) => set({ addressLine2: e.target.value })} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>City</Label>
-                <Input name="city" placeholder="City" />
+                <Input name="city" placeholder="City" value={fields.city} onChange={(e) => set({ city: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>State / province</Label>
-                <Input name="region" placeholder="State" />
+                <Input name="region" placeholder="State" value={fields.region} onChange={(e) => set({ region: e.target.value })} />
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>ZIP / postal code</Label>
-                <Input name="postalCode" placeholder="ZIP" />
+                <Input name="postalCode" placeholder="ZIP" value={fields.postalCode} onChange={(e) => set({ postalCode: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Country</Label>
-                <Input name="country" placeholder="Country" />
+                <Input name="country" placeholder="Country" value={fields.country} onChange={(e) => set({ country: e.target.value })} />
               </div>
             </div>
           </fieldset>

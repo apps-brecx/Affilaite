@@ -4,6 +4,7 @@ import { GroupAvatar } from "@/components/ui/group-avatar";
 import { CommunityMessage } from "@/components/affiliate/community-message";
 import { JoinGroupButton, LeaveGroupButton, DmReply, MarkGroupRead, MarkDmRead, JoinCampaignButton } from "@/components/affiliate/community-actions";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
+import { ScrollAnchor } from "@/components/ui/scroll-anchor";
 import { requireAffiliate } from "@/lib/session";
 import {
   listGroupsForAffiliate,
@@ -104,6 +105,7 @@ export default async function CommunityPage({
               <div className="flex-1 space-y-3 overflow-y-auto p-4">
                 {(thread ?? []).length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet — check back soon.</p>}
                 {(thread ?? []).map((m) => <CommunityMessage key={m.id} msg={m} leaderboard={leaderboards[m.id]} myAffiliateId={me.id} />)}
+                <ScrollAnchor />
               </div>
             </>
           ) : (
@@ -168,6 +170,7 @@ export default async function CommunityPage({
                   </div>
                 ),
               )}
+              <ScrollAnchor />
             </div>
             <DmReply />
           </>
