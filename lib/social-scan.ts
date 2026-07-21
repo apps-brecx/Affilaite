@@ -107,7 +107,12 @@ async function fetchViaProvider(platform: string, url: string): Promise<Candidat
       body: JSON.stringify({ platform, url }),
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) return [];
+    // Return null (not []) on a provider error so the caller can tell a broken
+    // provider apart from a profile that genuinely has nothing new.
+    if (!res.ok) {
+      console.error(`[social-scan] provider ${res.status} for ${platform} ${url}`);
+      return null;
+    }
     const json: any = await res.json();
     const items: any[] = Array.isArray(json) ? json : json?.items ?? [];
     return items
@@ -121,8 +126,9 @@ async function fetchViaProvider(platform: string, url: string): Promise<Candidat
         caption: String(it.caption ?? it.title ?? ""),
         postedAt: it.postedAt ? new Date(it.postedAt) : null,
       }));
-  } catch {
-    return [];
+  } catch (e) {
+    console.error(`[social-scan] provider error for ${platform} ${url}:`, e);
+    return null;
   }
 }
 
@@ -185,8 +191,15 @@ export async function scanAllAffiliates(): Promise<ScanResult> {
     .where(eq(affiliates.status, "approved"));
 
   const skippedPlatforms = new Set<string>();
+  // Budget the run so it can't sit in cron forever (nested loops + a per-item AI
+  // call). When we hit the wall we stop cleanly and report it rather than letting
+  // the whole scan time out and silently drop everything.
+  const DEADLINE = Date.now() + 90_000;
+  const MAX_DISCOVER = 60;
+  let budgetHit = false;
 
   for (const aff of rows) {
+    if (Date.now() > DEADLINE || result.discovered >= MAX_DISCOVER) { budgetHit = true; break; }
     const links = (aff.links ?? {}) as Record<string, string>;
     // Map each social entry to {platform, url}, ignoring non-social keys
     // (website, handle) and turning handles into fetchable profile URLs.
@@ -225,6 +238,7 @@ export async function scanAllAffiliates(): Promise<ScanResult> {
       const fresh = relevant.filter((c) => !seen.has(c.externalId));
 
       for (const c of fresh) {
+        if (Date.now() > DEADLINE || result.discovered >= MAX_DISCOVER) { budgetHit = true; break; }
         const description = await describeContent({ caption: c.caption, platform, mediaType: c.mediaType });
         await db
           .insert(discoveredPosts)
@@ -246,6 +260,6 @@ export async function scanAllAffiliates(): Promise<ScanResult> {
     }
   }
 
-  result.skipped = [...skippedPlatforms];
+  result.skipped = [...skippedPlatforms, ...(budgetHit ? ["budget reached — remaining affiliates roll to the next run"] : [])];
   return result;
 }

@@ -307,6 +307,13 @@ export async function processOrderCreated(order: any) {
         return;
       }
     }
+    // A "custom" reward (e.g. a free product, a gift) is fulfilled by hand — it
+    // must NOT book a cash commission off the leftover value field. cash / credit
+    // / coupon all settle as a cash payout on our single payout rail.
+    if (cfg.reward.kind === "custom") {
+      await note(`attributed → ${affiliate.refCode} · custom reward (${cfg.reward.custom || "manual"}) — no cash commission`);
+      return;
+    }
     amount = rate(cfg.reward.valueType, Number(cfg.reward.value));
     if (cfg.reward.bonusEnabled && Number(cfg.reward.bonusValue) > 0) {
       amount += rate(cfg.reward.bonusType, Number(cfg.reward.bonusValue));
