@@ -86,28 +86,79 @@ const _productsCache = new Map<number, { at: number; data: ProductsResult; refre
 // (a mid-pagination Shopify hiccup) is still cached so page loads stay fast, but
 // with a near-stale timestamp so it re-fetches within ~45s to fill the gaps
 // instead of hammering Shopify on every single load. Hard errors never cache.
+const isCacheable = (data: ProductsResult) => data.connected && (!data.error || data.error === "partial catalog");
+const cacheAt = (data: ProductsResult) => (data.error === "partial catalog" ? Date.now() - (PRODUCTS_TTL - 45_000) : Date.now());
 function cacheProducts(limit: number, data: ProductsResult) {
-  if (!data.connected) return;
-  if (data.error && data.error !== "partial catalog") return;
-  const at = data.error === "partial catalog" ? Date.now() - (PRODUCTS_TTL - 45_000) : Date.now();
-  _productsCache.set(limit, { at, data });
+  if (isCacheable(data)) _productsCache.set(limit, { at: cacheAt(data), data });
+}
+
+// L2 cache in Postgres — survives server restarts and new instances, so a cold
+// process serves the catalog instantly from the DB instead of re-paging the
+// whole (cost-throttled) Shopify products query. This is what stops "every load
+// takes a minute" when the app restarts or scales.
+async function readDbCache<T>(key: string): Promise<{ at: number; data: T } | null> {
+  if (!db) return null;
+  try {
+    const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    return typeof parsed?.at === "number" && parsed?.data ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+async function writeDbCache(key: string, at: number, data: unknown): Promise<void> {
+  if (!db) return;
+  try {
+    const value = JSON.stringify({ at, data });
+    await db
+      .insert(appSettings)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+  } catch (e) {
+    console.error("[products] L2 cache write failed", e);
+  }
+}
+
+const productsKey = (limit: number) => `catalog_cache_v1_products_${limit}`;
+
+async function refreshProductsCache(limit: number): Promise<void> {
+  try {
+    const data = await fetchStoreProducts(limit);
+    cacheProducts(limit, data);
+    if (isCacheable(data)) await writeDbCache(productsKey(limit), cacheAt(data), data);
+  } catch { /* keep serving the stale copy */ }
 }
 
 export async function getStoreProducts(limit = 24): Promise<ProductsResult> {
-  const cached = _productsCache.get(limit);
-  if (cached) {
-    const fresh = Date.now() - cached.at < PRODUCTS_TTL;
-    if (!fresh && !cached.refreshing) {
-      cached.refreshing = true;
-      fetchStoreProducts(limit)
-        .then((data) => cacheProducts(limit, data))
-        .catch(() => {})
-        .finally(() => { const c = _productsCache.get(limit); if (c) c.refreshing = false; });
+  const memo = _productsCache.get(limit);
+  if (memo && Date.now() - memo.at < PRODUCTS_TTL) return memo.data; // fresh L1
+
+  // Stale L1 → serve it immediately, refresh in the background.
+  if (memo) {
+    if (!memo.refreshing) {
+      memo.refreshing = true;
+      refreshProductsCache(limit).finally(() => { const c = _productsCache.get(limit); if (c) c.refreshing = false; });
     }
-    return cached.data; // serve fresh or stale immediately
+    return memo.data;
   }
+
+  // Cold L1 (fresh process) → try Postgres before paying for Shopify.
+  const l2 = await readDbCache<ProductsResult>(productsKey(limit));
+  if (l2?.data?.connected) {
+    _productsCache.set(limit, { at: l2.at, data: l2.data });
+    if (Date.now() - l2.at >= PRODUCTS_TTL) {
+      const c = _productsCache.get(limit)!;
+      c.refreshing = true;
+      refreshProductsCache(limit).finally(() => { const cc = _productsCache.get(limit); if (cc) cc.refreshing = false; });
+    }
+    return l2.data;
+  }
+
+  // Cold everywhere — the only load that actually waits on Shopify.
   const data = await fetchStoreProducts(limit);
   cacheProducts(limit, data);
+  if (isCacheable(data)) await writeDbCache(productsKey(limit), cacheAt(data), data);
   return data;
 }
 
@@ -199,21 +250,48 @@ const COLLECTIONS_TIERS = [
 type CollectionsResult = { connected: boolean; collections: StoreCollection[]; error?: string };
 const _collectionsCache = new Map<number, { at: number; data: CollectionsResult; refreshing?: boolean }>();
 
-export async function getStoreCollections(limit = 50): Promise<CollectionsResult> {
-  const cached = _collectionsCache.get(limit);
-  if (cached) {
-    const fresh = Date.now() - cached.at < PRODUCTS_TTL;
-    if (!fresh && !cached.refreshing) {
-      cached.refreshing = true;
-      fetchStoreCollections(limit)
-        .then((data) => { if (data.connected && !data.error) _collectionsCache.set(limit, { at: Date.now(), data }); })
-        .catch(() => {})
-        .finally(() => { const c = _collectionsCache.get(limit); if (c) c.refreshing = false; });
+const collectionsKey = (limit: number) => `catalog_cache_v1_collections_${limit}`;
+const cacheableCollections = (data: CollectionsResult) => data.connected && !data.error;
+
+async function refreshCollectionsCache(limit: number): Promise<void> {
+  try {
+    const data = await fetchStoreCollections(limit);
+    if (cacheableCollections(data)) {
+      _collectionsCache.set(limit, { at: Date.now(), data });
+      await writeDbCache(collectionsKey(limit), Date.now(), data);
     }
-    return cached.data;
+  } catch { /* keep serving the stale copy */ }
+}
+
+export async function getStoreCollections(limit = 50): Promise<CollectionsResult> {
+  const memo = _collectionsCache.get(limit);
+  if (memo && Date.now() - memo.at < PRODUCTS_TTL) return memo.data; // fresh L1
+
+  if (memo) {
+    if (!memo.refreshing) {
+      memo.refreshing = true;
+      refreshCollectionsCache(limit).finally(() => { const c = _collectionsCache.get(limit); if (c) c.refreshing = false; });
+    }
+    return memo.data;
   }
+
+  // Cold L1 → try Postgres (L2) before hitting Shopify.
+  const l2 = await readDbCache<CollectionsResult>(collectionsKey(limit));
+  if (l2?.data?.connected) {
+    _collectionsCache.set(limit, { at: l2.at, data: l2.data });
+    if (Date.now() - l2.at >= PRODUCTS_TTL) {
+      const c = _collectionsCache.get(limit)!;
+      c.refreshing = true;
+      refreshCollectionsCache(limit).finally(() => { const cc = _collectionsCache.get(limit); if (cc) cc.refreshing = false; });
+    }
+    return l2.data;
+  }
+
   const data = await fetchStoreCollections(limit);
-  if (data.connected && !data.error) _collectionsCache.set(limit, { at: Date.now(), data });
+  if (cacheableCollections(data)) {
+    _collectionsCache.set(limit, { at: Date.now(), data });
+    await writeDbCache(collectionsKey(limit), Date.now(), data);
+  }
   return data;
 }
 
