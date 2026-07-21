@@ -10,6 +10,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Modal } from "@/components/ui/modal";
+import { Label } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { setAffiliateStatus, sendPortalInvite, deleteAffiliate } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
@@ -23,7 +25,7 @@ const FILTERS: { label: string; value: AffiliateState | "all" }[] = [
   { label: "Rejected", value: "rejected" },
 ];
 
-export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
+export function AffiliatesTable({ affiliates, campaigns = [] }: { affiliates: Affiliate[]; campaigns?: { id: string; name: string }[] }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<AffiliateState | "all">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -31,8 +33,33 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ id: string; name: string; status: AffiliateState } | null>(null);
   const [del, setDel] = useState<{ id: string; name: string } | null>(null);
+  // Approve flow: pick which campaign to put them in (single or bulk).
+  const [approve, setApprove] = useState<{ ids: string[]; label: string } | null>(null);
+  const [approveCampaign, setApproveCampaign] = useState(campaigns[0]?.id ?? "");
   const router = useRouter();
   const toast = useToast();
+
+  const runApprove = () => {
+    if (!approve) return;
+    const ids = approve.ids;
+    if (campaigns.length > 0 && !approveCampaign) {
+      toast("Pick a campaign to add them to.", "error");
+      return;
+    }
+    setBusyId(ids.length === 1 ? ids[0] : null);
+    start(async () => {
+      let ok = 0;
+      for (const id of ids) {
+        const res = await setAffiliateStatus(id, "approved", approveCampaign || undefined);
+        if (res.ok) ok++;
+      }
+      toast(ids.length === 1 ? "Affiliate approved." : `${ok} affiliate(s) approved.`, "success");
+      setBusyId(null);
+      setApprove(null);
+      setSelected(new Set());
+      router.refresh();
+    });
+  };
 
   const removeAffiliate = (id: string) => {
     setBusyId(id);
@@ -62,15 +89,7 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
     rejected: { title: "Reject applicant?", description: (n) => `${n}'s application will be rejected. You can approve them later if you change your mind.`, label: "Reject", variant: "danger" },
   };
 
-  const bulkApprove = () => {
-    const ids = [...selected];
-    start(async () => {
-      for (const id of ids) await setAffiliateStatus(id, "approved");
-      toast(`${ids.length} affiliate(s) approved.`);
-      setSelected(new Set());
-      router.refresh();
-    });
-  };
+  const bulkApprove = () => setApprove({ ids: [...selected], label: `${selected.size} affiliate(s)` });
 
   const bulkInvite = () => {
     const ids = [...selected];
@@ -217,7 +236,7 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                             <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "rejected" })}>
                               <X className="size-4" />
                             </Button>
-                            <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
+                            <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setApprove({ ids: [a.id], label: a.name })}>
                               <Check className="size-4" />
                             </Button>
                           </>
@@ -231,7 +250,7 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                             </Button>
                           </>
                         ) : (
-                          <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
+                          <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => setApprove({ ids: [a.id], label: a.name })}>
                             <Check className="size-4" />
                           </Button>
                         )}
@@ -251,6 +270,38 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
           <p className="py-12 text-center text-sm text-muted-foreground">No affiliates match your filters.</p>
         )}
       </div>
+
+      {approve && (
+        <Modal open onClose={() => !pending && setApprove(null)} title="Approve & add to a campaign" description={`Approve ${approve.label} and put them straight into a campaign.`} className="max-w-md">
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Campaign <span className="text-danger">*</span></Label>
+              {campaigns.length === 0 ? (
+                <p className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-foreground">
+                  You need a campaign first — create one in <a href="/admin/campaigns" className="font-medium underline">Campaigns</a>, then approve.
+                </p>
+              ) : (
+                <select
+                  value={approveCampaign}
+                  onChange={(e) => setApproveCampaign(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
+                >
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-muted-foreground">They&apos;re enrolled and get that campaign&apos;s discount code — in one approval email.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => !pending && setApprove(null)} disabled={pending}>Cancel</Button>
+              <Button onClick={runApprove} disabled={pending || campaigns.length === 0} className="bg-success text-success-foreground hover:bg-success/90">
+                {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Approve
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {confirm && (() => {
         const copy = CONFIRM_COPY[confirm.status];

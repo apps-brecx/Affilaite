@@ -34,7 +34,7 @@ export default async function AffiliatesPage() {
           </p>
         </div>
       )}
-      <AffiliatesTable affiliates={affiliates} />
+      <AffiliatesTable affiliates={affiliates} campaigns={camps} />
     </div>
   );
 }

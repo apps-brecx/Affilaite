@@ -191,7 +191,7 @@ function revalAdmin() {
 
 // ---------- Affiliates ----------
 
-export async function approveAffiliate(id: string): Promise<ActionResult> {
+export async function approveAffiliate(id: string, campaignId?: string): Promise<ActionResult> {
   await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
 
@@ -199,6 +199,14 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
   if (!aff) return { ok: false, message: "Affiliate not found." };
 
   await db.update(affiliates).set({ status: "approved" }).where(eq(affiliates.id, id));
+
+  // Assign to the chosen campaign on approval — its config drives the code.
+  const campaign = campaignId
+    ? await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) })
+    : null;
+  if (campaign) {
+    await db.insert(affiliateCampaigns).values({ affiliateId: id, campaignId: campaign.id }).onConflictDoNothing();
+  }
 
   // Issue a discount code if one doesn't exist yet.
   let shopifyError: string | null = null;
@@ -208,22 +216,29 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
     const program = aff.programId
       ? await db.query.programs.findFirst({ where: eq(programs.id, aff.programId) })
       : await db.query.programs.findFirst({ where: eq(programs.isDefault, true) });
-    const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-    const code = await uniqueDiscountCode(`${aff.refCode}${percent}`);
-    issuedCode = code;
+    const cfg = campaign ? mergeConfig(campaign.config) : null;
+    const cust = cfg
+      ? customerDiscountFromConfig(cfg, program)
+      : { value: program && program.commissionType === "percent" ? Number(program.commissionValue) : 15, valueType: "percent" as const };
+    let code = await uniqueDiscountCode(`${aff.refCode}${Math.round(cust.value)}`);
 
     let shopifyDiscountId: string | null = null;
     if (await shopifyReady()) {
       try {
-        shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+        const options = cfg ? await resolveCampaignDiscountOptions(cfg, campaign!.endsAt) : {};
+        if (cfg) options.valueType = cust.valueType;
+        const created = await createDiscountWithUniqueCode(code, cust.value, options);
+        shopifyDiscountId = created.id;
+        code = created.code;
       } catch (e: any) {
         shopifyError = e?.message ?? "Shopify sync failed";
         console.error("[approveAffiliate] Shopify code creation failed:", e);
       }
     }
+    issuedCode = code;
     await db
       .insert(discountCodes)
-      .values({ affiliateId: id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
+      .values({ affiliateId: id, campaignId: campaign?.id ?? null, code, percentage: cust.value.toString(), shopifyDiscountId, active: true })
       .onConflictDoNothing();
   }
 
@@ -231,16 +246,17 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
     id,
     "dashboard",
     "You're approved 🎉",
-    "Your partner account is active — grab your link and start earning.",
+    campaign ? `You're in the ${campaign.name} campaign — grab your link and start earning.` : "Your partner account is active — grab your link and start earning.",
     "/dashboard",
   );
 
-  // Email the affiliate — the apply screen promises "we'll email you once approved".
+  // Email the affiliate — ONE email (the approved email, naming the campaign).
   const approvedUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
   if (approvedUser?.email) {
     await dispatchEmail("approved", approvedUser.email, {
       name: approvedUser.name ?? "there",
       code: issuedCode ?? "",
+      campaign: campaign?.name ?? "",
       loginUrl: `${APP_URL}/login`,
     });
   }
@@ -265,10 +281,11 @@ export async function approveAffiliate(id: string): Promise<ActionResult> {
 export async function setAffiliateStatus(
   id: string,
   status: "approved" | "rejected" | "suspended" | "pending",
+  campaignId?: string,
 ): Promise<ActionResult> {
   await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured." };
-  if (status === "approved") return approveAffiliate(id);
+  if (status === "approved") return approveAffiliate(id, campaignId);
   await db.update(affiliates).set({ status }).where(eq(affiliates.id, id));
   revalAdmin();
   return { ok: true, message: `Affiliate ${status}.` };

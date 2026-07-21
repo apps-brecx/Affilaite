@@ -262,31 +262,38 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
           )}
 
           {/* ---------- Nav buttons ---------- */}
-          <div className="flex items-center gap-3 pt-1">
-            {step > 1 && (
-              <Button type="button" variant="outline" size="lg" onClick={back} disabled={pending}>
-                <ArrowLeft className="size-4" /> Back
-              </Button>
-            )}
-            {step < 3 ? (
+          {step < 3 ? (
+            <div className="flex items-center gap-3 pt-1">
+              {step > 1 && (
+                <Button type="button" variant="outline" size="lg" onClick={back} disabled={pending}>
+                  <ArrowLeft className="size-4" /> Back
+                </Button>
+              )}
               <Button type="submit" size="lg" className="flex-1" disabled={step === 1 && !step1Valid}>
                 Continue <ArrowRight className="size-4" />
               </Button>
-            ) : (
-              <div className="flex flex-1 items-center gap-3">
-                <Button type="button" variant="ghost" size="lg" onClick={submit} disabled={pending}>
-                  Skip for now
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {/* Primary CTA — full width and prominent. */}
+              <Button type="submit" size="lg" className="w-full" disabled={pending}>
+                {pending ? (
+                  <><Loader2 className="size-4 animate-spin" /> Submitting…</>
+                ) : (
+                  <>Submit application <ArrowRight className="size-4" /></>
+                )}
+              </Button>
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="outline" size="sm" onClick={back} disabled={pending}>
+                  <ArrowLeft className="size-4" /> Back
                 </Button>
-                <Button type="submit" size="lg" className="flex-1" disabled={pending}>
-                  {pending ? (
-                    <><Loader2 className="size-4 animate-spin" /> Submitting…</>
-                  ) : (
-                    <>Submit application <ArrowRight className="size-4" /></>
-                  )}
+                {/* Skip the optional address/phone step — clearly visible, not a faint ghost. */}
+                <Button type="button" variant="secondary" size="sm" onClick={submit} disabled={pending}>
+                  Skip address for now
                 </Button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
           <p className="text-center text-xs text-muted-foreground">
             By applying you agree to the Sipfluence partner terms.
           </p>
