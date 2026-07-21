@@ -65,7 +65,7 @@ export function PhoneVerify({
             inputMode="tel"
             value={phone}
             onChange={(e) => onPhoneChange(e.target.value)}
-            placeholder="+1 555 123 4567"
+            placeholder="(555) 123-4567"
             className="pl-9"
             disabled={verified}
           />

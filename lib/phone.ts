@@ -7,13 +7,23 @@ import { getSetting } from "@/lib/queries";
 export const RESEND_COOLDOWN_MS = 60 * 1000; // a new code can only be requested every 60s
 const VERIFIED_WINDOW_MS = 30 * 60 * 1000; // signup must finish within 30 min of verifying
 
-/** Loose E.164-ish normalization: keep a leading +, strip formatting, sanity-check length. */
+/**
+ * Loose E.164-ish normalization. So partners never have to type a country code,
+ * a bare 10-digit number is assumed North American (+1), and 11 digits starting
+ * with 1 gets a +. A number typed WITH a leading + keeps its own country code.
+ */
 export function normalizePhone(raw: string): string | null {
   if (typeof raw !== "string") return null;
-  const digits = raw.trim().replace(/[^\d+]/g, "");
-  const plain = digits.replace(/\D/g, "");
+  const hasPlus = raw.trim().startsWith("+");
+  const plain = raw.replace(/\D/g, "");
+  if (hasPlus) {
+    if (plain.length < 8 || plain.length > 15) return null;
+    return `+${plain}`;
+  }
+  if (plain.length === 10) return `+1${plain}`; // US/Canada, no country code typed
+  if (plain.length === 11 && plain.startsWith("1")) return `+${plain}`;
   if (plain.length < 8 || plain.length > 15) return null;
-  return digits.startsWith("+") ? `+${plain}` : plain;
+  return `+${plain}`;
 }
 
 /** Is phone verification required at signup? Admin-toggleable, default ON. */

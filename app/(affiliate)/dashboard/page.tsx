@@ -29,7 +29,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`Welcome back, ${me.name.split(" ")[0]}`}
+        title={`Welcome, ${me.name.split(" ")[0]}`}
         description="Here's how your partnership is performing this month."
       >
         <Button variant="secondary" asChild>

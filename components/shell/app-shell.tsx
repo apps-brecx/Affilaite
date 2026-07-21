@@ -274,12 +274,15 @@ export function AppShell({
       .catch(() => {});
   }, [pathname, variant]);
 
+  // Signed in → the logo goes to the portal home, not the marketing site.
+  const homeHref = variant === "admin" ? "/admin" : "/dashboard";
+
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-hairline bg-card/40 px-4 py-5 lg:flex">
         <div className="flex items-center justify-between px-1">
-          <Logo />
+          <Logo href={homeHref} />
           {variant === "admin" && (
             <div className="flex items-center gap-1.5">
               <AdminBell />
@@ -307,7 +310,7 @@ export function AppShell({
 
       {/* Mobile top bar */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-hairline bg-background/80 px-4 py-3 backdrop-blur-lg lg:hidden">
-        <Logo />
+        <Logo href={homeHref} />
         <div className="flex items-center gap-2">
           {variant === "admin" && <AdminBell />}
           <ThemeToggle />
@@ -340,7 +343,7 @@ export function AppShell({
               className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-hairline bg-card px-4 py-5 lg:hidden"
             >
               <div className="flex items-center justify-between">
-                <Logo />
+                <Logo href={homeHref} />
                 <button
                   onClick={() => setOpen(false)}
                   className="inline-flex size-9 items-center justify-center rounded-md border border-hairline"
