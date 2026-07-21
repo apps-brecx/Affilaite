@@ -56,13 +56,16 @@ function parseRows(text: string): Row[] {
 export function AffiliatesToolbar({
   affiliates,
   templates,
+  campaigns = [],
 }: {
   affiliates: Affiliate[];
   templates: InviteTemplate[];
+  campaigns?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("single");
   const [templateId, setTemplateId] = useState(templates.find((t) => t.isDefault)?.id ?? templates[0]?.id ?? "");
+  const [campaignId, setCampaignId] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -120,6 +123,7 @@ export function AffiliatesToolbar({
         phone: String(fd.get("phone") ?? "") || undefined,
         address: String(fd.get("address") ?? "") || undefined,
         templateId: templateId || undefined,
+        campaignId: campaignId || undefined,
       });
       toast(res.message, res.ok ? "success" : "error");
       if (res.ok) {
@@ -135,7 +139,7 @@ export function AffiliatesToolbar({
       return;
     }
     start(async () => {
-      const res = await bulkInviteAffiliates(parsed, templateId || undefined);
+      const res = await bulkInviteAffiliates(parsed, templateId || undefined, campaignId || undefined);
       toast(res.message, res.ok ? "success" : "error");
       if (res.created > 0) {
         setOpen(false);
@@ -144,6 +148,24 @@ export function AffiliatesToolbar({
       }
     });
   };
+
+  const CampaignSelect = () =>
+    campaigns.length === 0 ? null : (
+      <div className="space-y-1.5">
+        <Label>Add to campaign <span className="text-muted-foreground">(optional)</span></Label>
+        <select
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
+        >
+          <option value="">No campaign — general invite</option>
+          {campaigns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">Enrolls them in this campaign and issues that campaign&apos;s discount code.</p>
+      </div>
+    );
 
   const TemplateSelect = () => (
     <div className="space-y-1.5">
@@ -223,6 +245,7 @@ export function AffiliatesToolbar({
               <Label>Shipping address for samples <span className="text-muted-foreground">(optional)</span></Label>
               <Textarea name="address" rows={2} placeholder="Street, city, state, ZIP, country" />
             </div>
+            <CampaignSelect />
             <TemplateSelect />
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invite
@@ -242,6 +265,7 @@ export function AffiliatesToolbar({
               />
               <p className="text-xs text-muted-foreground">{parsed.length} valid recipient(s) detected.</p>
             </div>
+            <CampaignSelect />
             <TemplateSelect />
             <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Invite {parsed.length || ""} affiliate(s)

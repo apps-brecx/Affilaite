@@ -37,6 +37,9 @@ import {
 import { auth } from "@/lib/auth";
 import {
   createDiscountForAffiliate,
+  createDiscountWithUniqueCode,
+  customerDiscountFromConfig,
+  resolveCampaignDiscountOptions,
   updateDiscountInShopify,
   deleteDiscountInShopify,
   setDiscountActiveInShopify,
@@ -1073,10 +1076,16 @@ async function createAndInvite(
   existingCode?: string,
   phoneRaw?: string,
   address?: string,
+  campaignId?: string,
 ): Promise<InviteOutcome> {
   email = email.toLowerCase().trim();
   const existing = await db!.query.users.findFirst({ where: eq(users.email, email) });
   if (existing) return { email, ok: false, emailed: false, error: "Already exists" };
+
+  // Optionally enroll into a specific campaign — its config drives the code.
+  const campaign = campaignId
+    ? await db!.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) })
+    : null;
 
   const tempPassword = crypto.randomBytes(6).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
@@ -1091,8 +1100,13 @@ async function createAndInvite(
   const cleanCode = existingCode ? existingCode.toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
   const refBase = cleanCode || slugCode(name || email);
   const refCode = await uniqueRefCode(refBase);
-  const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-  const code = cleanCode || `${refCode}${percent}`.toUpperCase();
+  // The discount reflects the campaign's config when inviting into one; otherwise
+  // the program rate (falling back to 15%).
+  const cfg = campaign ? mergeConfig(campaign.config) : null;
+  const cust = cfg
+    ? customerDiscountFromConfig(cfg, program)
+    : { value: program && program.commissionType === "percent" ? Number(program.commissionValue) : 15, valueType: "percent" as const };
+  let code = cleanCode || `${refCode}${Math.round(cust.value)}`.toUpperCase();
 
   const phone = phoneRaw && phoneRaw.trim() ? normalizePhone(phoneRaw) : null;
   // Invited affiliates are approved on the spot — link them to Shopify now.
@@ -1102,19 +1116,28 @@ async function createAndInvite(
     .values({ userId: user.id, status: "approved", refCode, paypalEmail: null, phone, address: address?.trim() || null, programId: program?.id ?? null, shopifyCustomerId })
     .returning();
 
+  // Enroll into the chosen campaign.
+  if (campaign) {
+    await db!.insert(affiliateCampaigns).values({ affiliateId: aff.id, campaignId: campaign.id }).onConflictDoNothing();
+  }
+
   // Issue the discount code (create in Shopify only if it's a freshly generated one;
   // imported codes are assumed to already exist in the store).
   let shopifyDiscountId: string | null = null;
   if (!existingCode && (await shopifyReady())) {
     try {
-      shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+      const options = cfg ? await resolveCampaignDiscountOptions(cfg, campaign!.endsAt) : {};
+      if (cfg) options.valueType = cust.valueType;
+      const created = await createDiscountWithUniqueCode(code, cust.value, options);
+      shopifyDiscountId = created.id;
+      code = created.code;
     } catch (e) {
       console.error("[invite] shopify code:", e);
     }
   }
   await db!
     .insert(discountCodes)
-    .values({ affiliateId: aff.id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
+    .values({ affiliateId: aff.id, campaignId: campaign?.id ?? null, code, percentage: cust.value.toString(), shopifyDiscountId, active: true })
     .onConflictDoNothing();
 
   // Send the invite email using the chosen (or default) template.
@@ -1147,10 +1170,11 @@ export async function inviteAffiliate(input: unknown): Promise<ActionResult & { 
       templateId: z.string().optional(),
       phone: z.string().optional(),
       address: z.string().optional(),
+      campaignId: z.string().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a valid email." };
-  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code, parsed.data.phone, parsed.data.address);
+  const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code, parsed.data.phone, parsed.data.address, parsed.data.campaignId);
   revalAdmin();
   if (!res.ok) return { ok: false, message: `${res.email}: ${res.error}` };
   return {
@@ -1166,6 +1190,7 @@ export async function inviteAffiliate(input: unknown): Promise<ActionResult & { 
 export async function bulkInviteAffiliates(
   rows: { name?: string; email: string; code?: string }[],
   templateId?: string,
+  campaignId?: string,
 ): Promise<ActionResult & { created: number; emailed: number; skipped: number }> {
   await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured.", created: 0, emailed: 0, skipped: 0 };
@@ -1174,7 +1199,7 @@ export async function bulkInviteAffiliates(
     emailed = 0,
     skipped = 0;
   for (const r of clean) {
-    const res = await createAndInvite(r.name ?? "", r.email, templateId, r.code);
+    const res = await createAndInvite(r.name ?? "", r.email, templateId, r.code, undefined, undefined, campaignId);
     if (res.ok) {
       created++;
       if (res.emailed) emailed++;
