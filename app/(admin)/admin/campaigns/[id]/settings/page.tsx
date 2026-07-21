@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { CampaignHeader } from "@/components/admin/campaign-header";
 import { CampaignSettingsForm } from "@/components/admin/campaign-settings-form";
 import { CampaignThemeEditor } from "@/components/admin/campaign-theme-editor";
+import { CampaignSignupFields } from "@/components/admin/campaign-signup-fields";
 import { getCampaign } from "@/lib/queries";
-import { mergeCampaignBrand } from "@/lib/campaign-config";
+import { mergeCampaignBrand, mergeSignupFields } from "@/lib/campaign-config";
 import { APP_URL } from "@/lib/links";
 
 export default async function CampaignSettingsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,6 +16,7 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
     <div className="space-y-8">
       <CampaignHeader campaign={campaign} backToCampaign />
       <CampaignSettingsForm campaign={campaign} appUrl={APP_URL} />
+      <CampaignSignupFields campaignId={campaign.id} initial={mergeSignupFields(campaign.config.signup)} />
       <CampaignThemeEditor
         campaignId={campaign.id}
         initial={mergeCampaignBrand(campaign.config.brand)}

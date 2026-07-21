@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button";
 import { JoinForm } from "@/components/marketing/join-form";
 import { BrandScope } from "@/components/marketing/brand-scope";
 import { getCampaignBySlug, getBrand } from "@/lib/queries";
-import { mergeCampaignBrand } from "@/lib/campaign-config";
-import { phoneVerificationRequired } from "@/lib/phone";
+import { mergeCampaignBrand, mergeSignupFields } from "@/lib/campaign-config";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +132,7 @@ export default async function JoinCampaignPage({ params }: { params: Promise<{ s
               </CardContent>
             </Card>
           ) : (
-            <JoinForm slug={campaign.slug!} instantAccess={campaign.access === "instant"} approvedMessage={brand.approvedMessage} requirePhone={await phoneVerificationRequired()} />
+            <JoinForm slug={campaign.slug!} instantAccess={campaign.access === "instant"} approvedMessage={brand.approvedMessage} signup={mergeSignupFields(campaign.config.signup)} />
           )}
         </div>
       </div>

@@ -1486,6 +1486,24 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
 }
 
 /** Save the per-campaign theme (merged into the campaign's config JSON). */
+/** Save which extra fields a campaign's /join signup form collects. */
+export async function saveCampaignSignup(id: string, signup: unknown): Promise<ActionResult> {
+  await assertAdmin("campaigns");
+  if (!db) return { ok: false, message: "Database not configured." };
+  const mode = z.enum(["off", "optional", "required"]).default("optional");
+  const parsed = z
+    .object({ companyName: mode, channel: mode, audienceSize: mode, handle: mode, address: mode, phone: mode })
+    .safeParse(signup);
+  if (!parsed.success) return { ok: false, message: "Invalid signup fields." };
+  const current = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!current) return { ok: false, message: "Campaign not found." };
+  const config = { ...mergeConfig(current.config), signup: parsed.data };
+  await db.update(campaigns).set({ config: config as any }).where(eq(campaigns.id, id));
+  revalidatePath(`/admin/campaigns/${id}`);
+  if (current.slug) revalidatePath(`/join/${current.slug}`);
+  return { ok: true, message: "Signup fields saved." };
+}
+
 export async function saveCampaignTheme(id: string, brand: unknown): Promise<ActionResult> {
   await assertAdmin("campaigns");
   if (!db) return { ok: false, message: "Database not configured." };

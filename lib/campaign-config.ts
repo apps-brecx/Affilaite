@@ -4,6 +4,43 @@
 
 export type RewardKind = "coupon" | "cash" | "credit" | "custom";
 export type ValueType = "percent" | "fixed";
+// Per-campaign control over which extra fields the /join page asks for.
+export type FieldMode = "off" | "optional" | "required";
+
+export interface SignupFields {
+  companyName: FieldMode;
+  channel: FieldMode;
+  audienceSize: FieldMode;
+  handle: FieldMode;
+  address: FieldMode;
+  phone: FieldMode;
+}
+
+export const SIGNUP_FIELD_LABELS: { key: keyof SignupFields; label: string }[] = [
+  { key: "companyName", label: "Company / brand" },
+  { key: "channel", label: "Primary channel" },
+  { key: "audienceSize", label: "Audience size" },
+  { key: "handle", label: "Handle / link" },
+  { key: "address", label: "Shipping address" },
+  { key: "phone", label: "Mobile (Venmo payouts)" },
+];
+
+export function defaultSignupFields(): SignupFields {
+  // Defaults mirror the public apply page — collect the full picture, nothing
+  // required beyond name/email/password unless the admin says so.
+  return {
+    companyName: "optional",
+    channel: "optional",
+    audienceSize: "optional",
+    handle: "optional",
+    address: "optional",
+    phone: "optional",
+  };
+}
+
+export function mergeSignupFields(stored: any): SignupFields {
+  return { ...defaultSignupFields(), ...(stored && typeof stored === "object" ? stored : {}) };
+}
 
 export interface CampaignConfig {
   reward: {
@@ -44,6 +81,8 @@ export interface CampaignConfig {
   // How commissions from this campaign clear: "auto" matures after the hold
   // window; "manual" requires an admin to approve each one.
   approval: { mode: "auto" | "manual" };
+  // Which extra fields the /join signup form asks for (and requires).
+  signup: SignupFields;
   // Per-campaign theme for the pages partners see (/join/<slug>). Overrides the
   // global brand. `enabled` off falls back to the global theme.
   brand?: CampaignBrand;
@@ -90,6 +129,7 @@ export function defaultConfig(): CampaignConfig {
     friend: { kind: "coupon", valueType: "percent", value: 10, minOrder: 0, promoDescription: "", promoUrl: "", promoExpires: false },
     payout: { mode: "manual" },
     approval: { mode: "auto" },
+    signup: defaultSignupFields(),
     brand: defaultCampaignBrand(),
   };
 }
@@ -105,6 +145,7 @@ export function mergeConfig(stored: any): CampaignConfig {
     friend: { ...d.friend, ...(stored.friend ?? {}) },
     payout: { ...d.payout, ...(stored.payout ?? {}) },
     approval: { ...d.approval, ...(stored.approval ?? {}) },
+    signup: mergeSignupFields(stored.signup),
     brand: mergeCampaignBrand(stored.brand),
   };
 }

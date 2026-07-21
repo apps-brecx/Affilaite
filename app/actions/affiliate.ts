@@ -9,10 +9,10 @@ import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCod
 import { auth } from "@/lib/auth";
 import { approvedAffiliateId } from "@/lib/session";
 import { getEarningsSeries, getAffiliate } from "@/lib/queries";
-import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
+import { isPhoneRecentlyVerified, normalizePhone } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
 import { createDiscountWithUniqueCode, uniqueDiscountCode, customerDiscountFromConfig, resolveCampaignDiscountOptions } from "@/lib/discounts";
-import { mergeConfig } from "@/lib/campaign-config";
+import { mergeConfig, mergeSignupFields } from "@/lib/campaign-config";
 import { getCustomerPrefill, type CustomerPrefill } from "@/lib/shopify-customers";
 import { shopifyReady } from "@/lib/integrations";
 import { dispatchEmail } from "@/lib/email-center";
@@ -161,6 +161,16 @@ const joinSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   phone: z.string().optional(),
+  companyName: z.string().optional(),
+  channel: z.string().optional(),
+  audienceSize: z.string().optional(),
+  handle: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  region: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
 });
 
 /** Public campaign signup. Behavior depends on the campaign's access type. */
@@ -178,11 +188,24 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
   if (campaign.access === "invite") return { ok: false, message: "This campaign is invite-only." };
   if (campaign.status !== "active") return { ok: false, message: "This campaign isn't accepting signups right now." };
 
+  // The campaign decides which extra fields are asked for / required.
+  const sf = mergeSignupFields((campaign.config as any)?.signup);
+
   const phone = data.phone ? normalizePhone(data.phone) : null;
   const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
-  if (await phoneVerificationRequired()) {
+  if (sf.phone === "required") {
     if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
     if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
+  }
+
+  // Enforce the campaign's required fields server-side.
+  const missing = (mode: string, v?: string) => mode === "required" && !(v ?? "").trim();
+  if (missing(sf.companyName, data.companyName)) return { ok: false, message: "Company / brand is required." };
+  if (missing(sf.channel, data.channel)) return { ok: false, message: "Primary channel is required." };
+  if (missing(sf.audienceSize, data.audienceSize)) return { ok: false, message: "Audience size is required." };
+  if (missing(sf.handle, data.handle)) return { ok: false, message: "Handle / link is required." };
+  if (sf.address === "required" && (!(data.addressLine1 ?? "").trim() || !(data.city ?? "").trim() || !(data.country ?? "").trim())) {
+    return { ok: false, message: "Shipping address is required." };
   }
 
   const email = data.email.toLowerCase();
@@ -197,6 +220,10 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
   const base = `${campaign.shortCode ?? ""}${slugCode(data.name)}`.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const refCode = await uniqueRefCode(base || slugCode(data.name));
 
+  const addr = normalizeAddress(data);
+  const composed = composeAddress(addr);
+  const socialLinks: Record<string, string> = data.handle ? { handle: data.handle } : {};
+
   const [aff] = await db
     .insert(affiliates)
     .values({
@@ -206,6 +233,17 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
       phone: phone ?? null,
       phoneVerifiedAt: verified ? new Date() : null,
       programId: program?.id ?? null,
+      companyName: data.companyName || null,
+      channel: data.channel || null,
+      audienceSize: data.audienceSize || null,
+      socialLinks,
+      address: composed || null,
+      addressLine1: addr.line1 || null,
+      addressLine2: addr.line2 || null,
+      city: addr.city || null,
+      region: addr.region || null,
+      postalCode: addr.postalCode || null,
+      country: addr.country || null,
     })
     .returning();
 
