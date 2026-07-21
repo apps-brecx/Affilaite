@@ -97,13 +97,11 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
     if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
     const data = parsed.data;
 
-    // Phone verification (Venmo payouts pay to this number). Admin-toggleable.
+    // Phone is optional on the application itself — the applicant can skip it and
+    // add/verify a Venmo number later (before any payout). If they DID provide
+    // one, only trust it when it's actually been verified.
     const phone = data.phone ? normalizePhone(data.phone) : null;
     const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
-    if (await phoneVerificationRequired()) {
-      if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
-      if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
-    }
 
     const existing = await db.query.users.findFirst({ where: eq(users.email, data.email.toLowerCase()) });
     if (existing) return { ok: false, message: "An account with this email already exists." };

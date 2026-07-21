@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Check, X, Ban, Loader2, Mail } from "lucide-react";
+import { Search, Check, X, Ban, Loader2, Mail, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { setAffiliateStatus, sendPortalInvite } from "@/app/actions/admin";
+import { setAffiliateStatus, sendPortalInvite, deleteAffiliate } from "@/app/actions/admin";
 import { formatCurrency } from "@/lib/utils";
 import type { Affiliate, AffiliateState } from "@/lib/types";
 
@@ -30,8 +30,20 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
   const [pending, start] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ id: string; name: string; status: AffiliateState } | null>(null);
+  const [del, setDel] = useState<{ id: string; name: string } | null>(null);
   const router = useRouter();
   const toast = useToast();
+
+  const removeAffiliate = (id: string) => {
+    setBusyId(id);
+    start(async () => {
+      const res = await deleteAffiliate(id);
+      toast(res.message, res.ok ? "success" : "error");
+      setBusyId(null);
+      setDel(null);
+      router.refresh();
+    });
+  };
 
   const act = (id: string, status: AffiliateState) => {
     setBusyId(id);
@@ -198,28 +210,36 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
                   <div className="flex justify-end gap-1">
                     {busyId === a.id ? (
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                    ) : a.status === "pending" ? (
-                      <>
-                        <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "rejected" })}>
-                          <X className="size-4" />
-                        </Button>
-                        <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
-                          <Check className="size-4" />
-                        </Button>
-                      </>
-                    ) : a.status === "approved" ? (
-                      <>
-                        <Button size="icon-sm" variant="ghost" title="Send portal invite" aria-label="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
-                          <Mail className="size-4" />
-                        </Button>
-                        <Button size="icon-sm" variant="ghost" title="Suspend" aria-label="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "suspended" })}>
-                          <Ban className="size-4" />
-                        </Button>
-                      </>
                     ) : (
-                      <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
-                        <Check className="size-4" />
-                      </Button>
+                      <>
+                        {a.status === "pending" ? (
+                          <>
+                            <Button size="icon-sm" variant="ghost" title="Reject" aria-label="Reject" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "rejected" })}>
+                              <X className="size-4" />
+                            </Button>
+                            <Button size="icon-sm" title="Approve" aria-label="Approve" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
+                              <Check className="size-4" />
+                            </Button>
+                          </>
+                        ) : a.status === "approved" ? (
+                          <>
+                            <Button size="icon-sm" variant="ghost" title="Send portal invite" aria-label="Send portal invite" className="text-muted-foreground hover:text-primary" onClick={() => inviteOne(a.id)}>
+                              <Mail className="size-4" />
+                            </Button>
+                            <Button size="icon-sm" variant="ghost" title="Suspend" aria-label="Suspend" className="text-danger hover:bg-danger-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "suspended" })}>
+                              <Ban className="size-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button size="icon-sm" variant="ghost" title="Approve" aria-label="Approve" className="text-success hover:bg-success-soft" onClick={() => setConfirm({ id: a.id, name: a.name, status: "approved" })}>
+                            <Check className="size-4" />
+                          </Button>
+                        )}
+                        {/* Remove entirely (distinct from Suspend) — available on every row. */}
+                        <Button size="icon-sm" variant="ghost" title="Delete affiliate" aria-label="Delete affiliate" className="text-muted-foreground hover:bg-danger-soft hover:text-danger" onClick={() => setDel({ id: a.id, name: a.name })}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </TableCell>
@@ -247,6 +267,19 @@ export function AffiliatesTable({ affiliates }: { affiliates: Affiliate[] }) {
           />
         );
       })()}
+
+      {del && (
+        <ConfirmDialog
+          open
+          onClose={() => !pending && setDel(null)}
+          onConfirm={() => removeAffiliate(del.id)}
+          pending={pending}
+          variant="danger"
+          title="Delete affiliate?"
+          description={`${del.name} and all their data (codes, samples, messages, commissions) will be permanently removed. This can't be undone — use Suspend instead if you only want to pause them.`}
+          confirmLabel="Delete"
+        />
+      )}
     </div>
   );
 }

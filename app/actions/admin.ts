@@ -26,6 +26,13 @@ import {
   appSettings,
   sampleRequests,
   discoveredPosts,
+  directMessages,
+  groupMessageReads,
+  pollVotes,
+  posts,
+  clicks,
+  notifications,
+  passwordResetTokens,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import {
@@ -262,6 +269,62 @@ export async function setAffiliateStatus(
   await db.update(affiliates).set({ status }).where(eq(affiliates.id, id));
   revalAdmin();
   return { ok: true, message: `Affiliate ${status}.` };
+}
+
+/**
+ * Permanently remove an affiliate and everything tied to them — distinct from
+ * "suspend" (which keeps them on the list). Their Shopify discount codes are
+ * deleted in Shopify too so no dead code lingers at checkout, then all
+ * affiliate-owned rows are removed in FK-safe order inside one transaction, and
+ * finally the login user. Financial batches (payouts) are kept; only THIS
+ * affiliate's items/commissions are removed from them.
+ */
+export async function deleteAffiliate(id: string): Promise<ActionResult> {
+  await assertAdmin("affiliates");
+  if (!db) return { ok: false, message: "Database not configured." };
+
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, id) });
+  if (!aff) return { ok: false, message: "Affiliate not found." };
+
+  // Best-effort: delete their live Shopify discounts so codes stop working.
+  if (await shopifyReady()) {
+    const codes = await db.query.discountCodes.findMany({ where: eq(discountCodes.affiliateId, id) });
+    for (const c of codes) {
+      if (c.shopifyDiscountId) {
+        try { await deleteDiscountInShopify(c.shopifyDiscountId); } catch (e) { console.error("[deleteAffiliate] shopify code", e); }
+      }
+    }
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(pollVotes).where(eq(pollVotes.affiliateId, id));
+      await tx.delete(groupMessageReads).where(eq(groupMessageReads.affiliateId, id));
+      await tx.delete(directMessages).where(eq(directMessages.affiliateId, id));
+      await tx.delete(notifications).where(eq(notifications.affiliateId, id));
+      await tx.delete(posts).where(eq(posts.affiliateId, id));
+      await tx.delete(discoveredPosts).where(eq(discoveredPosts.affiliateId, id));
+      await tx.delete(clicks).where(eq(clicks.affiliateId, id));
+      await tx.delete(sampleRequests).where(eq(sampleRequests.affiliateId, id));
+      await tx.delete(discountCodes).where(eq(discountCodes.affiliateId, id));
+      await tx.delete(affiliateCampaigns).where(eq(affiliateCampaigns.affiliateId, id));
+      await tx.delete(groupMembers).where(eq(groupMembers.affiliateId, id));
+      await tx.delete(payoutItems).where(eq(payoutItems.affiliateId, id));
+      await tx.delete(commissions).where(eq(commissions.affiliateId, id));
+      await tx.delete(affiliates).where(eq(affiliates.id, id));
+      if (aff.userId) {
+        // passwordResetTokens.user_id is NOT NULL → must go before the user.
+        await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, aff.userId));
+        await tx.delete(users).where(eq(users.id, aff.userId));
+      }
+    });
+  } catch (e) {
+    console.error("[deleteAffiliate]", e);
+    return { ok: false, message: "Couldn't remove this affiliate — see logs." };
+  }
+
+  revalAdmin();
+  return { ok: true, message: "Affiliate removed." };
 }
 
 /** Admin edit of an affiliate's contact/payout info (name, email, phone, address, PayPal). */

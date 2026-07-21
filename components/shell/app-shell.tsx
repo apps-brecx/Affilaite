@@ -101,17 +101,32 @@ function NavRow({
   if (hasChildren) {
     return (
       <div>
-        <button
-          onClick={() => setOpen((v) => !v)}
+        {/* Clicking the label ALWAYS navigates to the section AND expands it —
+            never a dead toggle that closes what you were trying to open. The
+            chevron alone collapses/expands without navigating. */}
+        <div
           className={cn(
-            "group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            "group relative flex w-full items-center gap-3 rounded-md pr-1 text-sm font-medium transition-colors",
             withinParent ? "text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
           )}
         >
-          <Icon className={cn("size-4", withinParent ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-          {item.label}
-          <ChevronDown className={cn("ml-auto size-4 transition-transform", open && "rotate-180")} />
-        </button>
+          <Link
+            href={item.href}
+            onClick={() => { setOpen(true); onNavigate?.(); }}
+            className="flex flex-1 items-center gap-3 rounded-md px-3 py-2"
+          >
+            <Icon className={cn("size-4", withinParent ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+            {item.label}
+          </Link>
+          <button
+            type="button"
+            aria-label={open ? `Collapse ${item.label}` : `Expand ${item.label}`}
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          >
+            <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+          </button>
+        </div>
         {open && (
           <div className="mt-1 flex flex-col gap-0.5 pl-4">
             {item.children!.map((child) => {
