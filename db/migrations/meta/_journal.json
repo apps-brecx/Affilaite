@@ -190,6 +190,13 @@
       "when": 1784644643507,
       "tag": "0026_high_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784652499088,
+      "tag": "0027_medium_fixes",
+      "breakpoints": true
     }
   ]
 }

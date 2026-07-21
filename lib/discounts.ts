@@ -20,6 +20,34 @@ export async function uniqueDiscountCode(base: string): Promise<string> {
   }
 }
 
+/**
+ * Create a discount, retrying with a numeric suffix if Shopify says the code is
+ * already taken — the local uniqueness check only sees our mirror table, so a
+ * code that exists in Shopify (e.g. imported) but not locally would otherwise
+ * fail at create time. Returns the id AND the code actually used.
+ */
+export async function createDiscountWithUniqueCode(
+  desiredCode: string,
+  value: number,
+  options: DiscountOptions = {},
+): Promise<{ id: string; code: string }> {
+  let code = desiredCode;
+  for (let n = 1; n <= 6; n++) {
+    try {
+      const id = await createDiscountForAffiliate(code, value, options);
+      return { id, code };
+    } catch (e: any) {
+      const msg = String(e?.message ?? "");
+      if (n < 6 && /already exist|already been taken|taken|in use/i.test(msg)) {
+        code = `${desiredCode}-${n + 1}`;
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("Could not create a unique discount code");
+}
+
 const CREATE_CODE = `
   mutation Create($basicCodeDiscount: DiscountCodeBasicInput!) {
     discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {

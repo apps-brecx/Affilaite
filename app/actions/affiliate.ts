@@ -11,7 +11,7 @@ import { approvedAffiliateId } from "@/lib/session";
 import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
-import { createDiscountForAffiliate, uniqueDiscountCode, customerDiscountFromConfig, resolveCampaignDiscountOptions } from "@/lib/discounts";
+import { createDiscountWithUniqueCode, uniqueDiscountCode, customerDiscountFromConfig, resolveCampaignDiscountOptions } from "@/lib/discounts";
 import { mergeConfig } from "@/lib/campaign-config";
 import { getCustomerPrefill, type CustomerPrefill } from "@/lib/shopify-customers";
 import { shopifyReady } from "@/lib/integrations";
@@ -220,7 +220,7 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
     // reward — and, for referral campaigns, the friend/customer coupon — instead
     // of the program default or a hardcoded 15%.
     const cust = customerDiscountFromConfig(cfg, program);
-    const code = await uniqueDiscountCode(`${refCode}${Math.round(cust.value)}`);
+    let code = await uniqueDiscountCode(`${refCode}${Math.round(cust.value)}`);
     let shopifyDiscountId: string | null = null;
     if (await shopifyReady()) {
       try {
@@ -228,7 +228,10 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
         // applies-to collections) so the "Coupon settings" panel isn't cosmetic.
         const options = await resolveCampaignDiscountOptions(cfg, campaign.endsAt);
         options.valueType = cust.valueType;
-        shopifyDiscountId = await createDiscountForAffiliate(code, cust.value, options);
+        // Retry with a suffix if the code already exists in Shopify (not just our DB).
+        const created = await createDiscountWithUniqueCode(code, cust.value, options);
+        shopifyDiscountId = created.id;
+        code = created.code;
       } catch (e) {
         console.error("[joinCampaign] Shopify code creation failed:", e);
         codeSyncFailed = true;

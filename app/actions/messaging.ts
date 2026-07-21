@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -322,6 +323,11 @@ export async function pickGiveawayWinner(messageId: string): Promise<ActionResul
   if (!db) return { ok: false, message: "Database not configured." };
   const msg = await db.query.groupMessages.findFirst({ where: eq(groupMessages.id, messageId) });
   if (!msg || msg.kind !== "giveaway") return { ok: false, message: "Giveaway not found." };
+  // Idempotent: once a winner is drawn it's locked in — re-running never re-picks
+  // or re-announces (it just reports who already won).
+  if ((msg.payload as any)?.winnerId) {
+    return { ok: true, message: `Winner already drawn: ${(msg.payload as any)?.winnerName ?? "a partner"}.` };
+  }
   const entrants = await db
     .select({ affiliateId: pollVotes.affiliateId, name: users.name, email: users.email })
     .from(pollVotes)
@@ -329,10 +335,14 @@ export async function pickGiveawayWinner(messageId: string): Promise<ActionResul
     .leftJoin(users, eq(affiliates.userId, users.id))
     .where(eq(pollVotes.messageId, messageId));
   if (!entrants.length) return { ok: false, message: "No entries yet." };
-  // Vary the pick by current time without Math.random (unavailable in some paths).
-  const seed = messageId.split("").reduce((a, c) => a + c.charCodeAt(0), 0) + new Date().getSeconds();
-  const winner = entrants[seed % entrants.length];
+  // Cryptographically-uniform pick (no Math.random / time seed — those collide).
+  const winner = entrants[crypto.randomInt(entrants.length)];
   const name = winner.name ?? winner.email ?? "a partner";
+  // Persist the winner FIRST so a concurrent/retried run finds it and stops.
+  await db
+    .update(groupMessages)
+    .set({ payload: { ...(msg.payload as any ?? {}), winnerId: winner.affiliateId, winnerName: name, drawnAt: new Date().toISOString() } })
+    .where(eq(groupMessages.id, messageId));
   await db.insert(groupMessages).values({
     groupId: msg.groupId,
     senderId: admin || null,

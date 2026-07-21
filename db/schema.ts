@@ -246,7 +246,16 @@ export const affiliates = pgTable(
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ refIdx: index("aff_ref_idx").on(t.refCode) }),
+  // refCode already has a UNIQUE index from .unique(), so no separate ref index.
+  // These back the hottest lookups: userId (session/login join, ~every request),
+  // and the columns we filter/join on constantly.
+  (t) => ({
+    affUserIdx: index("aff_user_idx").on(t.userId),
+    affStatusIdx: index("aff_status_idx").on(t.status),
+    affProgramIdx: index("aff_program_idx").on(t.programId),
+    affGroupIdx: index("aff_group_idx").on(t.groupId),
+    affShopifyCustomerIdx: index("aff_shopify_customer_idx").on(t.shopifyCustomerId),
+  }),
 );
 
 // --- Content posts affiliates submit (post tracking) ---
@@ -341,13 +350,20 @@ export const orders = pgTable("orders", {
   total: numeric("total", { precision: 12, scale: 2 }),
   currency: text("currency").default("USD"),
   discountCodesUsed: jsonb("discount_codes_used").$type<string[]>(),
+  // Cumulative refunded subtotal + the ids of refunds already applied — so a
+  // retried refunds/create webhook can't claw back the same money twice, and
+  // multiple partial refunds net correctly against the original subtotal.
+  refundedSubtotal: numeric("refunded_subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+  refundIds: jsonb("refund_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   isNewCustomer: boolean("is_new_customer"),
   financialStatus: text("financial_status"),
   // Human-readable outcome of attribution: "attributed → DAVID15" or the reason
   // it was skipped (self-referral, not approved, no code, …). Shown in admin.
   attributionStatus: text("attribution_status"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => ({
+  ordersCustomerEmailIdx: index("orders_customer_email_idx").on(t.customerEmail),
+}));
 
 // --- Payout batches (mirrors PayPal) ---
 export const payouts = pgTable("payouts", {

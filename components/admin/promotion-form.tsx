@@ -27,6 +27,7 @@ export function PromotionForm({
   const [picked, setPicked] = useState<StoreProduct | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [bonusType, setBonusType] = useState<"percent" | "flat">("percent");
 
   const filtered = useMemo(
     () => products.filter((p) => !q || p.title.toLowerCase().includes(q.toLowerCase())),
@@ -40,7 +41,7 @@ export function PromotionForm({
     start(async () => {
       const res = await createPromotion({
         name: String(fd.get("name") ?? ""),
-        bonusType: "percent",
+        bonusType,
         bonusValue: String(fd.get("bonusValue") ?? ""),
         startsAt: String(fd.get("startsAt") ?? ""),
         endsAt: String(fd.get("endsAt") ?? ""),
@@ -72,8 +73,28 @@ export function PromotionForm({
             <Input name="name" required placeholder="e.g. Black Friday Boost" />
           </div>
           <div className="space-y-1.5">
-            <Label>Bonus %</Label>
-            <Input name="bonusValue" type="number" step="0.1" required placeholder="5" />
+            <Label>Bonus</Label>
+            <div className="flex gap-2">
+              <div className="flex rounded-lg border border-hairline p-0.5">
+                {(["percent", "flat"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setBonusType(t)}
+                    className={cn(
+                      "rounded-md px-3 text-sm font-medium transition-colors",
+                      bonusType === t ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {t === "percent" ? "%" : "$"}
+                  </button>
+                ))}
+              </div>
+              <Input name="bonusValue" type="number" step="0.1" required placeholder={bonusType === "percent" ? "5" : "10"} className="flex-1" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {bonusType === "percent" ? "Extra % commission on top of the base rate." : "Extra flat amount per qualifying order."}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

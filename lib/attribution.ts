@@ -414,17 +414,27 @@ export async function processOrderCreated(order: any) {
  * paid commissions get a negative adjustment row that nets against the next
  * payout batch, since the money is already out the door.
  */
-async function applyClawback(orderId: string, fraction: number) {
-  const f = Math.max(0, Math.min(1, fraction));
-  if (f <= 0) return;
+/**
+ * Claw back the CHANGE in refunded fraction (prevF → newF) — always measured
+ * against the original commission, so multiple partial refunds sum to the right
+ * total instead of compounding as (1-f)^N.
+ */
+async function applyClawback(orderId: string, prevF: number, newF: number) {
+  const p = Math.max(0, Math.min(1, prevF));
+  const n = Math.max(0, Math.min(1, newF));
+  const deltaF = n - p;
+  if (deltaF <= 0) return;
 
   const comms = await db.query.commissions.findMany({ where: eq(commissions.orderId, orderId) });
   for (const c of comms) {
     const amt = Number(c.amount);
     if (amt < 0) continue; // skip existing adjustment rows
+    // Recover the original commission from the amount still on the row (which may
+    // already reflect earlier partial refunds) using the previous cumulative F.
+    const original = p < 1 ? amt / (1 - p) : amt;
 
     if (c.status === "pending" || c.status === "approved") {
-      const next = round2(amt * (1 - f));
+      const next = round2(amt - original * deltaF);
       if (next < 0.01) {
         await db.update(commissions).set({ status: "reversed" }).where(eq(commissions.id, c.id));
       } else {
@@ -432,7 +442,7 @@ async function applyClawback(orderId: string, fraction: number) {
       }
     } else if (c.status === "paid") {
       // Already paid — record a negative adjustment to settle next time.
-      const delta = round2(amt * f);
+      const delta = round2(original * deltaF);
       if (delta >= 0.01) {
         await db.insert(commissions).values({
           orderId: c.orderId,
@@ -457,18 +467,31 @@ export async function processRefund(refund: any) {
   });
   if (!orderRow) return;
 
+  // Idempotency: never apply the same refund twice (webhook retries).
+  const rid = refund.id != null ? String(refund.id) : null;
+  const seen: string[] = Array.isArray(orderRow.refundIds) ? orderRow.refundIds : [];
+  if (rid && seen.includes(rid)) return;
+
   // Commission is earned on subtotal, so clawback tracks refunded subtotal.
-  const refundedSubtotal = (refund.refund_line_items ?? []).reduce((s: number, li: any) => {
+  const thisRefundSubtotal = (refund.refund_line_items ?? []).reduce((s: number, li: any) => {
     const v = li.subtotal_set?.shop_money?.amount ?? li.subtotal ?? 0;
     return s + Number(v || 0);
   }, 0);
   const orderSubtotal = Number(orderRow.subtotal ?? 0);
-  const fraction = orderSubtotal > 0 ? refundedSubtotal / orderSubtotal : 0;
+  const prevRefunded = Number(orderRow.refundedSubtotal ?? 0);
+  const newRefunded = prevRefunded + thisRefundSubtotal;
 
-  // NOTE: fraction is measured against the original subtotal; across multiple
-  // partial refunds this is exact for paid commissions and a close approximation
-  // for still-unpaid ones.
-  await applyClawback(orderRow.id, fraction);
+  // Record the refund + new cumulative total FIRST, so a retry short-circuits
+  // above and can never double-book the clawback.
+  await db
+    .update(orders)
+    .set({ refundedSubtotal: newRefunded.toFixed(2), refundIds: rid ? [...seen, rid] : seen })
+    .where(eq(orders.id, orderRow.id));
+
+  if (thisRefundSubtotal <= 0 || orderSubtotal <= 0) return;
+  const prevF = prevRefunded / orderSubtotal;
+  const newF = newRefunded / orderSubtotal;
+  await applyClawback(orderRow.id, prevF, newF);
 }
 
 /** orders/cancelled → treat as a full clawback (nothing was truly sold) and mark
@@ -480,11 +503,15 @@ export async function processCancelledOrder(order: any) {
   });
   if (!orderRow) return;
   const had = await db.query.commissions.findFirst({ where: eq(commissions.orderId, orderRow.id) });
-  await applyClawback(orderRow.id, 1);
+  // Full clawback: from whatever's already been refunded up to 100%.
+  const orderSubtotal = Number(orderRow.subtotal ?? 0);
+  const prevF = orderSubtotal > 0 ? Number(orderRow.refundedSubtotal ?? 0) / orderSubtotal : 0;
+  await applyClawback(orderRow.id, prevF, 1);
   await db
     .update(orders)
     .set({
       financialStatus: "cancelled",
+      refundedSubtotal: orderSubtotal > 0 ? orderSubtotal.toFixed(2) : orderRow.refundedSubtotal,
       attributionStatus: had ? "cancelled — commission reversed" : "cancelled — no commission",
     })
     .where(eq(orders.id, orderRow.id));

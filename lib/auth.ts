@@ -16,13 +16,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(creds) {
+      async authorize(creds, req) {
         const email = String(creds?.email ?? "").toLowerCase().trim();
         const password = String(creds?.password ?? "");
         if (!email || !password) return null;
-        // Throttle brute-force: cap attempts per email. Denies (like a wrong
-        // password) rather than revealing the limit.
+        // Throttle brute-force two ways: per-email (targeted), and per-IP across
+        // ALL accounts (password-spraying). Denies like a wrong password rather
+        // than revealing the limit.
         if (!rateLimit(`login:${email}`, 8, 10 * 60_000).ok) return null;
+        const ip = ((req as any)?.headers?.get?.("x-forwarded-for") ?? "").split(",")[0]?.trim() || "unknown";
+        if (!rateLimit(`login-ip:${ip}`, 30, 10 * 60_000).ok) return null;
 
         // Bootstrap admin from env when no DB user exists yet.
         if (!db) {

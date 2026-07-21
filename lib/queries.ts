@@ -859,9 +859,14 @@ export async function getPayableBatch() {
   const affs = await loadAffiliates(eq(affiliates.status, "approved"));
   const progs = await listPrograms();
   const pmap = new Map(progs.map((p) => [p.id, p.payoutMinimum]));
+  // Mirror executePayout's recipient rule so the "payable now" preview matches
+  // who actually gets paid: PayPal needs an email; Venmo needs a VERIFIED phone.
+  // (Filtering on paypalEmail alone silently dropped every Venmo affiliate.)
+  const destinationOf = (a: (typeof affs)[number]) =>
+    a.payoutMethod === "venmo" ? (a.phoneVerified ? `Venmo · ${a.phone ?? ""}`.trim() : null) : a.paypalEmail;
   return affs
-    .filter((a) => a.paypalEmail && a.approvedEarnings >= (pmap.get(a.programId) ?? 0) && a.approvedEarnings > 0)
-    .map((a) => ({ affiliateId: a.id, name: a.name, paypalEmail: a.paypalEmail!, amount: a.approvedEarnings }));
+    .filter((a) => destinationOf(a) && a.approvedEarnings >= (pmap.get(a.programId) ?? 0) && a.approvedEarnings > 0)
+    .map((a) => ({ affiliateId: a.id, name: a.name, paypalEmail: destinationOf(a)!, amount: a.approvedEarnings }));
 }
 
 // ---------- Messages / Promotions / Assets ----------
