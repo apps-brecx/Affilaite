@@ -1,5 +1,5 @@
 import { approveMaturedCommissions } from "@/lib/commissions";
-import { reconcileProcessingPayouts, maybeAutoPayout, runScheduledPayout } from "@/app/actions/admin";
+import { reconcileProcessingPayouts, maybeAutoPayout, runScheduledPayout } from "@/lib/payouts";
 import { scanAllAffiliates } from "@/lib/social-scan";
 import { paypalReady } from "@/lib/integrations";
 

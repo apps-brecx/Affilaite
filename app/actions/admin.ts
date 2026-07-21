@@ -38,6 +38,7 @@ import {
 } from "@/lib/discounts";
 import { upsertShopifyCustomer } from "@/lib/shopify-customers";
 import { createPayoutBatch, getPayoutBatch, parsePayoutBatch, rollupBatchStatus } from "@/lib/paypal";
+import { executePayout, maybeAutoPayout, reconcilePayout as reconcilePayoutCore } from "@/lib/payouts";
 import { sendEmail } from "@/lib/email";
 import { dispatchEmail, renderBrandedEmail, sendRichBroadcast } from "@/lib/email-center";
 import { sendVerification } from "@/lib/sms";
@@ -355,87 +356,6 @@ export async function approveCommissions(ids: string[]): Promise<ActionResult> {
   const paid = await maybeAutoPayout(affIds);
   revalAdmin();
   return { ok: true, message: `${rows.length} commission(s) approved.${paid ? " " + paid : ""}` };
-}
-
-const SCHEDULE_DAYS: Record<string, number> = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
-
-/**
- * Cron: run a payout batch on the configured schedule (weekly/monthly/…). Pays
- * every affiliate who clears their minimum — the schedule never overrides the
- * minimum. No-op when the schedule is manual, PayPal is off, or it's not yet due.
- */
-export async function runScheduledPayout(): Promise<string> {
-  if (!db) return "";
-  const schedule = await getSetting("payout_schedule", "manual");
-  const intervalDays = SCHEDULE_DAYS[schedule];
-  if (!intervalDays) return ""; // manual / unknown
-  if (!(await paypalReady())) return "";
-
-  const last = await getSetting("payout_last_run", "");
-  const due = !last || Date.now() - new Date(last).getTime() >= intervalDays * 86_400_000;
-  if (!due) return "";
-
-  try {
-    const res = await executePayout(); // all payable affiliates over their minimum
-    await writeSetting("payout_last_run", new Date().toISOString());
-    return res.ok ? "Scheduled payout run." : "";
-  } catch (e) {
-    console.error("[runScheduledPayout]", e);
-    return "";
-  }
-}
-
-/**
- * The effective payout mode for an affiliate: their active campaign's setting
- * wins; otherwise the global default. Returns "automatic" | "manual".
- */
-async function effectivePayoutMode(affiliateId: string, globalDefault: string): Promise<string> {
-  if (!db) return globalDefault;
-  const [row] = await db
-    .select({ config: campaigns.config })
-    .from(affiliateCampaigns)
-    .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
-    .where(and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(campaigns.status, "active")))
-    .orderBy(desc(affiliateCampaigns.createdAt))
-    .limit(1);
-  if (row) return mergeConfig(row.config).payout.mode === "automatic" ? "automatic" : "manual";
-  return globalDefault;
-}
-
-/**
- * Pay out newly-approved commissions for affiliates whose (per-campaign, else
- * global) payout mode is "automatic". Returns a short status string.
- */
-export async function maybeAutoPayout(affiliateIds?: string[]): Promise<string> {
-  if (!db) return "";
-  if (!(await paypalReady())) return "";
-  const globalDefault = (await getSetting("default_payout_mode", "manual")) === "automatic" ? "automatic" : "manual";
-
-  // Candidates: the just-approved affiliates, or everyone with approved unpaid money.
-  let candidates = affiliateIds;
-  if (!candidates) {
-    const rows = await db
-      .selectDistinct({ id: commissions.affiliateId })
-      .from(commissions)
-      .where(and(eq(commissions.status, "approved"), isNull(commissions.payoutId)));
-    candidates = rows.map((r) => r.id).filter(Boolean) as string[];
-  }
-  if (!candidates.length) return "";
-
-  // Keep only those whose effective mode is automatic.
-  const autoIds: string[] = [];
-  for (const id of candidates) {
-    if ((await effectivePayoutMode(id, globalDefault)) === "automatic") autoIds.push(id);
-  }
-  if (!autoIds.length) return "";
-
-  try {
-    const res = await executePayout(autoIds);
-    return res.ok ? "Auto-payout sent." : "";
-  } catch (e) {
-    console.error("[maybeAutoPayout]", e);
-    return "";
-  }
 }
 
 export async function reverseCommissions(ids: string[]): Promise<ActionResult> {
@@ -942,57 +862,15 @@ export async function pushDiscountToShopify(id: string): Promise<ActionResult> {
 }
 
 // ---------- Payouts ----------
+// The payout ENGINE lives in lib/payouts.ts (a plain module, so it is NOT
+// exposed as a callable endpoint). The only things exported from here are
+// admin-gated wrappers. Cron and the payouts server page import the engine
+// directly.
 
-/** Pay a single affiliate a custom (ad-hoc) amount — a bonus or manual payout. */
-/**
- * Poll PayPal for a batch's real state and update our item + batch statuses.
- * This is what flips a batch from "processing" to "success"/"failed" once PayPal
- * finishes (payouts are asynchronous). Best-effort: returns the batch's status.
- */
+/** Admin-gated: refresh one batch's status from PayPal (used by the client refresh button). */
 export async function reconcilePayout(payoutId: string): Promise<{ ok: boolean; status?: string; message?: string }> {
-  if (!db) return { ok: false, message: "Database not configured." };
-  const batch = await db.query.payouts.findFirst({ where: eq(payouts.id, payoutId) });
-  if (!batch) return { ok: false, message: "Batch not found." };
-  // Nothing to poll without a PayPal batch id, and terminal batches are done.
-  if (!batch.paypalBatchId || batch.status === "success" || batch.status === "failed") {
-    return { ok: true, status: batch.status };
-  }
-  try {
-    const parsed = parsePayoutBatch(await getPayoutBatch(batch.paypalBatchId));
-    const localItems = await db.select().from(payoutItems).where(eq(payoutItems.payoutId, payoutId));
-    // Update each local item from PayPal (matched by our id == sender_item_id).
-    for (const pi of parsed.items) {
-      if (!pi.senderItemId) continue;
-      await db
-        .update(payoutItems)
-        .set({ transactionStatus: pi.transactionStatus, ...(pi.payoutItemId ? { paypalItemId: pi.payoutItemId } : {}) })
-        .where(eq(payoutItems.id, pi.senderItemId));
-    }
-    // Roll the (freshest) item statuses up to the batch.
-    const statuses = parsed.items.length
-      ? parsed.items.map((i) => i.transactionStatus)
-      : localItems.map((i) => i.transactionStatus ?? "PENDING");
-    const rolled = rollupBatchStatus(statuses);
-    if (rolled !== batch.status) {
-      await db.update(payouts).set({ status: rolled }).where(eq(payouts.id, payoutId));
-    }
-    return { ok: true, status: rolled };
-  } catch (e: any) {
-    console.error("[reconcilePayout]", e);
-    return { ok: false, message: e?.message ?? "Couldn't refresh from PayPal." };
-  }
-}
-
-/** Reconcile every batch still marked "processing" (page load / cron). */
-export async function reconcileProcessingPayouts(): Promise<void> {
-  if (!db) return;
-  const pending = await db
-    .select({ id: payouts.id })
-    .from(payouts)
-    .where(and(eq(payouts.status, "processing"), isNotNull(payouts.paypalBatchId)));
-  for (const p of pending) {
-    await reconcilePayout(p.id);
-  }
+  await assertAdmin("payouts");
+  return reconcilePayoutCore(payoutId);
 }
 
 export async function runCustomPayout(input: unknown): Promise<ActionResult> {
@@ -1007,7 +885,8 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
   if (!aff) return { ok: false, message: "Affiliate not found." };
   const method = aff.payoutMethod;
-  const receiver = method === "venmo" ? aff.phone : aff.paypalEmail;
+  // Venmo requires a VERIFIED phone — never send money to an unverified number.
+  const receiver = method === "venmo" ? (aff.phoneVerifiedAt ? aff.phone : null) : aff.paypalEmail;
   if (!receiver) {
     return {
       ok: false,
@@ -1042,7 +921,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   // Pull PayPal's current state so a fast-completing payout shows "Paid out"
   // right away instead of sitting on "Processing" (best-effort; webhook + the
   // page-load reconcile will catch up if PayPal is still processing).
-  await reconcilePayout(batch.id).catch(() => {});
+  await reconcilePayoutCore(batch.id).catch(() => {});
 
   await notify(
     affiliateId,
@@ -1061,7 +940,9 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
 
 export async function runPayout(): Promise<ActionResult> {
   await assertAdmin("payouts");
-  return executePayout();
+  const r = await executePayout();
+  revalAdmin();
+  return r;
 }
 
 /**
@@ -1071,177 +952,11 @@ export async function runPayout(): Promise<ActionResult> {
  */
 export async function payNowAll(): Promise<ActionResult> {
   await assertAdmin("payouts");
-  return executePayout(undefined, { ignoreMinimum: true });
-}
-
-/**
- * The payout engine, without auth — pays every approved affiliate who clears
- * their minimum and has a destination. Called by runPayout (admin button) and
- * by the automatic-payout path (on approval / cron) which have their own gating.
- */
-export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignoreMinimum?: boolean }): Promise<ActionResult> {
-  if (!db) return { ok: false, message: "Database not configured." };
-  // Never fake a payout: without PayPal, no money can move — bail before we
-  // touch any commission so nothing is ever marked paid without being sent.
-  if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
-  if (scopeAffiliateIds && scopeAffiliateIds.length === 0) return { ok: false, message: "Nothing payable right now." };
-
-  // Which approved affiliates clear their program minimum and have a usable
-  // payout destination (Venmo phone or PayPal email, per their chosen method)?
-  const rows = await db
-    .select({
-      affiliateId: affiliates.id,
-      paypalEmail: affiliates.paypalEmail,
-      phone: affiliates.phone,
-      method: affiliates.payoutMethod,
-      minimum: programs.payoutMinimum,
-      total: sql<string>`coalesce(sum(${commissions.amount}),0)`,
-    })
-    .from(commissions)
-    .innerJoin(affiliates, eq(commissions.affiliateId, affiliates.id))
-    .leftJoin(programs, eq(affiliates.programId, programs.id))
-    .where(and(
-      eq(commissions.status, "approved"),
-      isNull(commissions.payoutId),
-      eq(affiliates.status, "approved"),
-      ...(scopeAffiliateIds ? [inArray(affiliates.id, scopeAffiliateIds)] : []),
-    ))
-    .groupBy(affiliates.id, affiliates.paypalEmail, affiliates.phone, affiliates.payoutMethod, programs.payoutMinimum);
-
-  const receiverOf = (r: { method: "paypal" | "venmo"; phone: string | null; paypalEmail: string | null }) =>
-    r.method === "venmo" ? r.phone : r.paypalEmail;
-  const payable = rows.filter(
-    (r) => receiverOf(r) && (opts?.ignoreMinimum || Number(r.total) >= Number(r.minimum ?? 0)) && Number(r.total) > 0,
-  );
-  if (payable.length === 0) {
-    // Distinguish "held by the minimum" from "genuinely nothing" so the admin knows.
-    const heldByMin = rows.some((r) => receiverOf(r) && Number(r.total) > 0);
-    return { ok: false, message: heldByMin ? "Everyone approved is under their payout minimum. Use “Pay now” to pay anyway, or lower the minimum." : "Nothing payable right now." };
-  }
-
-  const methodFor = new Map(
-    payable.map((r) => [r.affiliateId, { method: r.method, receiver: receiverOf(r)! }] as const),
-  );
-  const payableIds = payable.map((r) => r.affiliateId);
-  const batchId = crypto.randomUUID();
-  const senderBatchId = `AFF-${batchId}`; // deterministic per batch (no Date.now)
-
-  // One transaction claims the exact commission rows this batch will pay by
-  // stamping payoutId. A concurrent/double-clicked run finds them already
-  // claimed (payoutId IS NULL no longer matches) and pays nothing twice.
-  type Recipient = { senderItemId: string; amount: string; receiver: string; method: "paypal" | "venmo"; currency: string; affiliateId: string };
-  let recipients: Recipient[] = [];
-  let claimedTotal = 0;
-  try {
-    recipients = await db.transaction(async (tx) => {
-      await tx.insert(payouts).values({
-        id: batchId,
-        senderBatchId,
-        status: "processing",
-        totalAmount: "0",
-        affiliateCount: payable.length,
-      });
-
-      const claimed = await tx
-        .update(commissions)
-        .set({ payoutId: batchId })
-        .where(
-          and(
-            eq(commissions.status, "approved"),
-            isNull(commissions.payoutId),
-            inArray(commissions.affiliateId, payableIds),
-          ),
-        )
-        .returning({
-          affiliateId: commissions.affiliateId,
-          amount: commissions.amount,
-          currency: commissions.currency,
-        });
-
-      if (claimed.length === 0) throw new Error("NOTHING_CLAIMED");
-
-      // Group by affiliate + currency so a €commission is paid in EUR, not USD.
-      const groups = new Map<string, { affiliateId: string; currency: string; total: number }>();
-      for (const c of claimed) {
-        if (!c.affiliateId) continue;
-        const currency = c.currency ?? "USD";
-        const key = `${c.affiliateId}:${currency}`;
-        const g = groups.get(key) ?? { affiliateId: c.affiliateId, currency, total: 0 };
-        g.total += Number(c.amount);
-        groups.set(key, g);
-      }
-
-      const recs: Recipient[] = [];
-      let grand = 0;
-      for (const g of groups.values()) {
-        if (g.total <= 0) continue; // net-negative (refund adjustments) — skip
-        const amount = g.total.toFixed(2);
-        const [item] = await tx
-          .insert(payoutItems)
-          .values({
-            payoutId: batchId,
-            affiliateId: g.affiliateId,
-            amount,
-            currency: g.currency,
-            transactionStatus: "PENDING",
-          })
-          .returning({ id: payoutItems.id });
-        const m = methodFor.get(g.affiliateId)!;
-        recs.push({ senderItemId: item.id, amount, receiver: m.receiver, method: m.method, currency: g.currency, affiliateId: g.affiliateId });
-        grand += g.total;
-      }
-
-      claimedTotal = grand;
-      await tx.update(payouts).set({ totalAmount: grand.toFixed(2), affiliateCount: recs.length }).where(eq(payouts.id, batchId));
-      return recs;
-    });
-  } catch (e: any) {
-    if (e?.message === "NOTHING_CLAIMED") return { ok: false, message: "Nothing payable right now." };
-    console.error("[runPayout] claim transaction failed:", e);
-    return { ok: false, message: "Couldn't prepare the payout — see logs." };
-  }
-
-  if (recipients.length === 0) {
-    // Everything netted to zero/negative; release the claim and stop.
-    await db.update(commissions).set({ payoutId: null }).where(eq(commissions.payoutId, batchId));
-    await db.update(payouts).set({ status: "failed" }).where(eq(payouts.id, batchId));
-    return { ok: false, message: "Nothing payable right now." };
-  }
-
-  // Money leaves the account here. On any failure, release the claimed rows so
-  // they're payable again — never mark them paid.
-  try {
-    const res = await createPayoutBatch(senderBatchId, recipients);
-    await db.update(payouts).set({ paypalBatchId: res.payoutBatchId }).where(eq(payouts.id, batchId));
-  } catch (e) {
-    console.error("[runPayout] PayPal error:", e);
-    await db.update(commissions).set({ payoutId: null }).where(eq(commissions.payoutId, batchId));
-    await db.update(payouts).set({ status: "failed" }).where(eq(payouts.id, batchId));
-    return { ok: false, message: "PayPal batch failed — nothing was charged. See logs." };
-  }
-
-  // Success: the claimed rows (and only those) become paid.
-  await db.update(commissions).set({ status: "paid" }).where(eq(commissions.payoutId, batchId));
-  // Reflect PayPal's current state immediately where possible.
-  await reconcilePayout(batchId).catch(() => {});
-  const recAffIds = [...new Set(recipients.map((r) => r.affiliateId))];
-  const recAffs = await db.query.affiliates.findMany({ where: inArray(affiliates.id, recAffIds) });
-  const recUsers = recAffs.length ? await db.query.users.findMany({ where: inArray(users.id, recAffs.map((a) => a.userId)) }) : [];
-  const emailByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.email ?? null]));
-  const nameByAff = new Map(recAffs.map((a) => [a.id, recUsers.find((u) => u.id === a.userId)?.name ?? "there"]));
-  const prefsByAff = new Map(recAffs.map((a) => [a.id, (a.notificationPrefs as Record<string, boolean>) ?? {}]));
-  for (const affiliateId of recAffIds) {
-    await notify(affiliateId, "payouts", "Payout sent 💸", "Your commission is on its way to you.", "/payouts");
-    const total = recipients.filter((r) => r.affiliateId === affiliateId).reduce((s, r) => s + Number(r.amount), 0);
-    const email = emailByAff.get(affiliateId);
-    if (email && prefsByAff.get(affiliateId)?.payoutSent !== false) {
-      await dispatchEmail("payout_sent", email, { name: nameByAff.get(affiliateId) ?? "there", amount: total.toFixed(2), currency: "USD" });
-    }
-  }
-
+  const r = await executePayout(undefined, { ignoreMinimum: true });
   revalAdmin();
-  return { ok: true, message: `PayPal batch submitted for ${recipients.length} payout(s) — ${claimedTotal.toFixed(2)} total.` };
+  return r;
 }
+
 
 // ---------- Invites ----------
 

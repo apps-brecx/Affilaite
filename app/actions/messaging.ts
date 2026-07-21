@@ -348,6 +348,37 @@ export async function joinCampaignFromInvite(campaignId: string): Promise<Action
   if (!db) return { ok: false, message: "Database not configured." };
   const camp = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) });
   if (!camp) return { ok: false, message: "Campaign not found." };
+  if (camp.status !== "active") return { ok: false, message: "This campaign isn't open right now." };
+
+  // Security: only join if this affiliate was actually invited to THIS campaign —
+  // otherwise anyone could pass a campaignId and switch to a higher-paying rate.
+  // An invite is a DM to them, or a group-chat invite in a group they're in.
+  const [dmInvite] = await db
+    .select({ id: directMessages.id })
+    .from(directMessages)
+    .where(and(
+      eq(directMessages.affiliateId, affiliateId),
+      eq(directMessages.fromAdmin, true),
+      eq(directMessages.kind, "invite"),
+      sql`${directMessages.payload} ->> 'campaignId' = ${campaignId}`,
+    ))
+    .limit(1);
+  let invited = !!dmInvite;
+  if (!invited) {
+    const [groupInvite] = await db
+      .select({ id: groupMessages.id })
+      .from(groupMessages)
+      .innerJoin(groupMembers, eq(groupMembers.groupId, groupMessages.groupId))
+      .where(and(
+        eq(groupMembers.affiliateId, affiliateId),
+        eq(groupMessages.kind, "invite"),
+        sql`${groupMessages.payload} ->> 'campaignId' = ${campaignId}`,
+      ))
+      .limit(1);
+    invited = !!groupInvite;
+  }
+  if (!invited) return { ok: false, message: "You don't have an invite to this campaign." };
+
   // No unique constraint on affiliate_campaigns — guard against a double-join.
   const existing = await db.query.affiliateCampaigns.findFirst({
     where: and(eq(affiliateCampaigns.affiliateId, affiliateId), eq(affiliateCampaigns.campaignId, campaignId)),

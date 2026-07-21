@@ -8,7 +8,7 @@ import { CustomPayout } from "@/components/admin/custom-payout";
 import { PayoutExport } from "@/components/admin/payout-export";
 import { PayableStats } from "@/components/admin/payable-stats";
 import { getPayableBatch, listPayouts, getAdminKpis, listAffiliates, paidAllTime, getPaidRecipients } from "@/lib/queries";
-import { reconcileProcessingPayouts } from "@/app/actions/admin";
+import { reconcileProcessingPayouts } from "@/lib/payouts";
 import { paypalReady } from "@/lib/integrations";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
