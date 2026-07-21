@@ -65,7 +65,10 @@ export function AffiliatesToolbar({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("single");
   const [templateId, setTemplateId] = useState(templates.find((t) => t.isDefault)?.id ?? templates[0]?.id ?? "");
-  const [campaignId, setCampaignId] = useState("");
+  // Campaign is REQUIRED — nobody joins Sipfluence without a campaign. Default to
+  // the first one so it's pre-selected.
+  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
+  const noCampaigns = campaigns.length === 0;
   const [bulkText, setBulkText] = useState("");
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -114,6 +117,10 @@ export function AffiliatesToolbar({
 
   const submitSingle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!campaignId) {
+      toast(noCampaigns ? "Create a campaign first — everyone joins through one." : "Pick a campaign to add them to.", "error");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     start(async () => {
       const res = await inviteAffiliate({
@@ -138,6 +145,10 @@ export function AffiliatesToolbar({
       toast("Add at least one valid email.", "error");
       return;
     }
+    if (!campaignId) {
+      toast(noCampaigns ? "Create a campaign first — everyone joins through one." : "Pick a campaign to add them to.", "error");
+      return;
+    }
     start(async () => {
       const res = await bulkInviteAffiliates(parsed, templateId || undefined, campaignId || undefined);
       toast(res.message, res.ok ? "success" : "error");
@@ -151,24 +162,25 @@ export function AffiliatesToolbar({
 
   const CampaignSelect = () => (
     <div className="space-y-1.5">
-      <Label>Add to campaign <span className="text-muted-foreground">(optional)</span></Label>
-      {campaigns.length === 0 ? (
-        <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          No campaigns yet — create one in <strong>Campaigns</strong> to invite partners straight into it.
+      <Label>Campaign <span className="text-danger">*</span></Label>
+      {noCampaigns ? (
+        <p className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-foreground">
+          You need a campaign first — everyone joins Sipfluence through one. Create one in{" "}
+          <a href="/admin/campaigns" className="font-medium underline">Campaigns</a>.
         </p>
       ) : (
         <>
           <select
+            required
             value={campaignId}
             onChange={(e) => setCampaignId(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-subtle"
           >
-            <option value="">No campaign — general invite</option>
             {campaigns.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <p className="text-xs text-muted-foreground">Enrolls them in this campaign and issues that campaign&apos;s discount code.</p>
+          <p className="text-xs text-muted-foreground">They&apos;re enrolled in this campaign and get its discount code — in one welcome email.</p>
         </>
       )}
     </div>
@@ -254,7 +266,7 @@ export function AffiliatesToolbar({
             </div>
             <CampaignSelect />
             <TemplateSelect />
-            <Button type="submit" className="w-full" disabled={pending}>
+            <Button type="submit" className="w-full" disabled={pending || noCampaigns}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invite
             </Button>
           </form>
@@ -274,7 +286,7 @@ export function AffiliatesToolbar({
             </div>
             <CampaignSelect />
             <TemplateSelect />
-            <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0}>
+            <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0 || noCampaigns}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Invite {parsed.length || ""} affiliate(s)
             </Button>
           </div>
@@ -312,7 +324,7 @@ export function AffiliatesToolbar({
             )}
             <CampaignSelect />
             <TemplateSelect />
-            <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0}>
+            <Button className="w-full" onClick={submitBulk} disabled={pending || parsed.length === 0 || noCampaigns}>
               {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Import &amp; invite {parsed.length || ""}
             </Button>
           </div>

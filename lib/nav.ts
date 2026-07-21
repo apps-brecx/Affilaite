@@ -82,7 +82,6 @@ export const adminNav: NavSection[] = [
   {
     title: "Money",
     items: [
-      { label: "Programs", href: "/admin/programs", icon: "programs" },
       { label: "Affiliate Orders", href: "/admin/affiliate-orders", icon: "performance" },
       { label: "Commissions", href: "/admin/commissions", icon: "commissions" },
       { label: "Payouts", href: "/admin/payouts", icon: "payouts" },

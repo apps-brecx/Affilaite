@@ -1146,7 +1146,7 @@ async function createAndInvite(
     ? await db!.query.inviteTemplates.findFirst({ where: eq(inviteTemplates.id, templateId) })
     : await defaultTemplate();
   if (tpl && (await emailReady())) {
-    const vars = { name: name || "there", code, loginUrl: `${APP_URL}/login`, link: `${APP_URL}/api/track?ref=${refCode}`, tempPassword };
+    const vars = { name: name || "there", code, campaign: campaign?.name ?? "", loginUrl: `${APP_URL}/login`, link: `${APP_URL}/api/track?ref=${refCode}`, tempPassword };
     try {
       const r = await renderBrandedEmail(tpl.subject, tpl.body, vars);
       await sendEmail(email, r.subject, r.html);
@@ -1170,10 +1170,11 @@ export async function inviteAffiliate(input: unknown): Promise<ActionResult & { 
       templateId: z.string().optional(),
       phone: z.string().optional(),
       address: z.string().optional(),
-      campaignId: z.string().optional(),
+      // Required: nobody joins Sipfluence without a campaign.
+      campaignId: z.string().min(1, "Pick a campaign to add them to."),
     })
     .safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Enter a valid email." };
+  if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Enter a valid email." };
   const res = await createAndInvite(parsed.data.name ?? "", parsed.data.email, parsed.data.templateId, parsed.data.code, parsed.data.phone, parsed.data.address, parsed.data.campaignId);
   revalAdmin();
   if (!res.ok) return { ok: false, message: `${res.email}: ${res.error}` };
@@ -1194,6 +1195,7 @@ export async function bulkInviteAffiliates(
 ): Promise<ActionResult & { created: number; emailed: number; skipped: number }> {
   await assertAdmin("affiliates");
   if (!db) return { ok: false, message: "Database not configured.", created: 0, emailed: 0, skipped: 0 };
+  if (!campaignId) return { ok: false, message: "Pick a campaign to add them to.", created: 0, emailed: 0, skipped: 0 };
   const clean = (rows ?? []).filter((r) => /.+@.+\..+/.test(r.email ?? ""));
   let created = 0,
     emailed = 0,
