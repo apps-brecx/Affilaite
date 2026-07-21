@@ -8,13 +8,20 @@ import {
   listNotifications,
   type NotificationRow,
 } from "@/lib/notifications";
-import { getAdminNavBadges } from "@/lib/queries";
+import { getAdminNavBadges, getAdminActivity, type AdminActivityItem } from "@/lib/queries";
 
 /** Admin sidebar red-dot counts (pending samples/applicants, unread DMs). */
 export async function getAdminBadges(): Promise<Record<string, number>> {
   const session = await auth();
   if ((session?.user as any)?.role !== "admin") return {};
   return getAdminNavBadges();
+}
+
+/** Named activity for the admin bell (new applications, samples, messages). */
+export async function getAdminActivityFeed(): Promise<AdminActivityItem[]> {
+  const session = await auth();
+  if ((session?.user as any)?.role !== "admin") return [];
+  return getAdminActivity();
 }
 
 async function myAffiliateId(): Promise<string | undefined> {

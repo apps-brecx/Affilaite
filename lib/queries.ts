@@ -1218,6 +1218,81 @@ export async function getAdminNavBadges(): Promise<Record<string, number>> {
   return badges;
 }
 
+export type AdminActivityItem = {
+  id: string;
+  kind: "application" | "sample" | "message";
+  title: string;
+  subtitle: string;
+  href: string;
+  at: string; // ISO
+};
+
+/**
+ * Recent things that need the admin's attention, named — powers the admin bell
+ * so new applications (and sample requests / affiliate messages) ping in-app
+ * even when transactional email isn't connected. Derived from live tables, so
+ * it never drifts and needs no extra storage.
+ */
+export async function getAdminActivity(limit = 12): Promise<AdminActivityItem[]> {
+  if (!db) return [];
+  const [apps, samples, dms] = await Promise.all([
+    db
+      .select({ id: affiliates.id, name: users.name, email: users.email, at: affiliates.createdAt })
+      .from(affiliates)
+      .innerJoin(users, eq(affiliates.userId, users.id))
+      .where(eq(affiliates.status, "pending"))
+      .orderBy(desc(affiliates.createdAt))
+      .limit(limit),
+    db
+      .select({ id: sampleRequests.id, name: users.name, product: sampleRequests.productTitle, at: sampleRequests.createdAt })
+      .from(sampleRequests)
+      .innerJoin(affiliates, eq(sampleRequests.affiliateId, affiliates.id))
+      .innerJoin(users, eq(affiliates.userId, users.id))
+      .where(eq(sampleRequests.status, "requested"))
+      .orderBy(desc(sampleRequests.createdAt))
+      .limit(limit),
+    db
+      .select({ id: directMessages.id, affiliateId: directMessages.affiliateId, name: users.name, at: directMessages.createdAt })
+      .from(directMessages)
+      .innerJoin(affiliates, eq(directMessages.affiliateId, affiliates.id))
+      .innerJoin(users, eq(affiliates.userId, users.id))
+      .where(and(eq(directMessages.fromAdmin, false), isNull(directMessages.readByAdminAt)))
+      .orderBy(desc(directMessages.createdAt))
+      .limit(limit),
+  ]);
+
+  const items: AdminActivityItem[] = [
+    ...apps.map((a) => ({
+      id: `app-${a.id}`,
+      kind: "application" as const,
+      title: "New application",
+      subtitle: a.name || a.email || "New partner",
+      href: "/admin/affiliates",
+      at: (a.at ?? new Date()).toISOString(),
+    })),
+    ...samples.map((s) => ({
+      id: `sample-${s.id}`,
+      kind: "sample" as const,
+      title: "Sample request",
+      subtitle: [s.name, s.product].filter(Boolean).join(" · ") || "Sample request",
+      href: "/admin/samples",
+      at: (s.at ?? new Date()).toISOString(),
+    })),
+    ...dms.map((m) => ({
+      id: `dm-${m.id}`,
+      kind: "message" as const,
+      title: "New message",
+      subtitle: m.name || "Affiliate",
+      href: `/admin/messages?dm=${m.affiliateId}`,
+      at: (m.at ?? new Date()).toISOString(),
+    })),
+  ];
+
+  // Newest first across all kinds.
+  items.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  return items.slice(0, limit);
+}
+
 // ---------- Group chat ----------
 
 function pollTally(poll: any, votes: { optionIndex: number }[]) {

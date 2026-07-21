@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { markNotificationsReadByPath, getMyBadges, getAdminBadges } from "@/app/actions/notifications";
+import { AdminBell } from "@/components/admin/admin-bell";
 import {
   Menu,
   X,
@@ -280,9 +281,12 @@ export function AppShell({
         <div className="flex items-center justify-between px-1">
           <Logo />
           {variant === "admin" && (
-            <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold">
-              Admin
-            </span>
+            <div className="flex items-center gap-1.5">
+              <AdminBell />
+              <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold">
+                Admin
+              </span>
+            </div>
           )}
         </div>
         <div className="mt-8 flex-1 overflow-y-auto no-scrollbar">
@@ -305,6 +309,7 @@ export function AppShell({
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-hairline bg-background/80 px-4 py-3 backdrop-blur-lg lg:hidden">
         <Logo />
         <div className="flex items-center gap-2">
+          {variant === "admin" && <AdminBell />}
           <ThemeToggle />
           <button
             onClick={() => setOpen(true)}
