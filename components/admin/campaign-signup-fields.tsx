@@ -37,7 +37,7 @@ export function CampaignSignupFields({ campaignId, initial }: { campaignId: stri
       </CardHeader>
       <CardContent>
         <p className="-mt-2 mb-5 text-sm text-muted-foreground">
-          Name, email and password are always asked. Choose what else this campaign&apos;s <code className="rounded bg-muted px-1 text-xs">/join</code> page
+          Name, email, password and a verified mobile number are always asked. Choose what else this campaign&apos;s <code className="rounded bg-muted px-1 text-xs">/join</code> page
           collects — and whether it&apos;s required — even for people you invite directly.
         </p>
         <div className="divide-y divide-hairline rounded-xl border border-hairline">

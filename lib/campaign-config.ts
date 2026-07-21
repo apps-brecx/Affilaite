@@ -22,7 +22,8 @@ export const SIGNUP_FIELD_LABELS: { key: keyof SignupFields; label: string }[] =
   { key: "audienceSize", label: "Audience size" },
   { key: "handle", label: "Handle / link" },
   { key: "address", label: "Shipping address" },
-  { key: "phone", label: "Mobile (Venmo payouts)" },
+  // Mobile number is always required at signup (Venmo payouts), so it's not
+  // listed here as a configurable field.
 ];
 
 export function defaultSignupFields(): SignupFields {

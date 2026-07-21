@@ -85,6 +85,10 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
       toast("Enter your email, name, and a password (6+ characters).", "error");
       return;
     }
+    if (!verifiedPhone) {
+      toast("Please verify your mobile number to continue.", "error");
+      return;
+    }
     const input = {
       name: fields.name,
       email,
@@ -217,9 +221,15 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             </>
           )}
 
-          {/* ---------- Step 3 · shipping + phone (skippable) ---------- */}
+          {/* ---------- Step 3 · phone (required) + shipping (optional) ---------- */}
           {step === 3 && (
             <>
+              <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+                <PhoneVerify onVerified={setVerifiedPhone} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Required — we pay commissions via Venmo to this number.
+                </p>
+              </div>
               <fieldset className="space-y-3 rounded-xl border border-hairline p-4">
                 <legend className="px-1 text-sm font-medium">Shipping address for samples (optional)</legend>
                 <p className="-mt-1 text-xs text-muted-foreground">Add this if you'd like to receive product samples. You can also fill it in later.</p>
@@ -252,12 +262,6 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
                   </div>
                 </div>
               </fieldset>
-              <div className="rounded-xl border border-hairline bg-muted/30 p-4">
-                <PhoneVerify onVerified={setVerifiedPhone} />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Optional — we pay commissions via Venmo to this number. You can add and verify it later in Settings.
-                </p>
-              </div>
             </>
           )}
 
@@ -275,8 +279,8 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
             </div>
           ) : (
             <div className="space-y-3 pt-1">
-              {/* Primary CTA — full width and prominent. */}
-              <Button type="submit" size="lg" className="w-full" disabled={pending}>
+              {/* Primary CTA — full width and prominent. Phone must be verified first. */}
+              <Button type="submit" size="lg" className="w-full" disabled={pending || !verifiedPhone}>
                 {pending ? (
                   <><Loader2 className="size-4 animate-spin" /> Submitting…</>
                 ) : (
@@ -287,11 +291,14 @@ export function ApplyForm({ requirePhone = true }: { requirePhone?: boolean }) {
                 <Button type="button" variant="outline" size="sm" onClick={back} disabled={pending}>
                   <ArrowLeft className="size-4" /> Back
                 </Button>
-                {/* Skip the optional address/phone step — clearly visible, not a faint ghost. */}
-                <Button type="button" variant="secondary" size="sm" onClick={submit} disabled={pending}>
+                {/* Address is optional — skip it but still submit (phone is required). */}
+                <Button type="button" variant="secondary" size="sm" onClick={submit} disabled={pending || !verifiedPhone}>
                   Skip address for now
                 </Button>
               </div>
+              {!verifiedPhone && (
+                <p className="text-center text-xs text-muted-foreground">Verify your mobile number above to submit.</p>
+              )}
             </div>
           )}
           <p className="text-center text-xs text-muted-foreground">

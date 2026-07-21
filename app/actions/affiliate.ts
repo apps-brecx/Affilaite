@@ -139,11 +139,12 @@ export async function applyAsAffiliate(input: unknown): Promise<ActionResult & {
     if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input" };
     const data = parsed.data;
 
-    // Phone is optional on the application itself — the applicant can skip it and
-    // add/verify a Venmo number later (before any payout). If they DID provide
-    // one, only trust it when it's actually been verified.
+    // A verified mobile number is mandatory on every signup — it's how we pay
+    // commissions (Venmo) and it blunts fake applications.
     const phone = data.phone ? normalizePhone(data.phone) : null;
     const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
+    if (!phone) return { ok: false, message: "Enter your mobile number to continue." };
+    if (!verified) return { ok: false, message: "Please verify your mobile number with the code we texted." };
 
     const existing = await db.query.users.findFirst({ where: eq(users.email, data.email.toLowerCase()) });
     if (existing) return { ok: false, message: "An account with this email already exists." };
@@ -233,12 +234,12 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
   // The campaign decides which extra fields are asked for / required.
   const sf = mergeSignupFields((campaign.config as any)?.signup);
 
+  // A verified mobile number is mandatory on every signup page, regardless of the
+  // campaign's field config — it's the Venmo payout number.
   const phone = data.phone ? normalizePhone(data.phone) : null;
   const verified = phone ? await isPhoneRecentlyVerified(phone) : false;
-  if (sf.phone === "required") {
-    if (!phone) return { ok: false, message: "Enter and verify your phone number to continue." };
-    if (!verified) return { ok: false, message: "Please verify your phone number with the code we sent." };
-  }
+  if (!phone) return { ok: false, message: "Enter your mobile number to continue." };
+  if (!verified) return { ok: false, message: "Please verify your mobile number with the code we texted." };
 
   // Enforce the campaign's required fields server-side.
   const missing = (mode: string, v?: string) => mode === "required" && !(v ?? "").trim();
