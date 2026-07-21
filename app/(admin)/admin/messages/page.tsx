@@ -10,6 +10,7 @@ import { EmailComposer } from "@/components/admin/email-composer";
 import { GroupManage } from "@/components/admin/group-manage";
 import { MessageComposer } from "@/components/admin/message-composer";
 import { AdminChatMessage } from "@/components/admin/chat-message";
+import { DmRail } from "@/components/admin/dm-rail";
 import { MarkDmRead } from "@/components/admin/mark-dm-read";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import { ScrollAnchor } from "@/components/ui/scroll-anchor";
@@ -92,32 +93,25 @@ export default async function MessagesPage({
             </Link>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === "groups"
-            ? groups.map((gr) => (
-                <Link key={gr.id} href={`/admin/messages?tab=groups&g=${gr.id}`} className={`flex items-center gap-3 border-b border-hairline/60 px-4 py-3 hover:bg-accent ${g === gr.id ? "bg-accent" : ""}`}>
-                  <GroupAvatar emoji={gr.avatarEmoji} color={gr.avatarColor} imageUrl={gr.imageUrl} size={44} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="truncate font-medium">{gr.name}</p>
-                      {gr.isMain ? null : gr.visibility === "public" ? <Globe className="size-3 text-muted-foreground" /> : <Lock className="size-3 text-muted-foreground" />}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">{gr.lastMessage?.preview ?? `${gr.memberCount} members`}</p>
+        {activeTab === "groups" ? (
+          <div className="flex-1 overflow-y-auto">
+            {groups.map((gr) => (
+              <Link key={gr.id} href={`/admin/messages?tab=groups&g=${gr.id}`} className={`flex items-center gap-3 border-b border-hairline/60 px-4 py-3 hover:bg-accent ${g === gr.id ? "bg-accent" : ""}`}>
+                <GroupAvatar emoji={gr.avatarEmoji} color={gr.avatarColor} imageUrl={gr.imageUrl} size={44} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate font-medium">{gr.name}</p>
+                    {gr.isMain ? null : gr.visibility === "public" ? <Globe className="size-3 text-muted-foreground" /> : <Lock className="size-3 text-muted-foreground" />}
                   </div>
-                  {gr.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relativeTime(gr.lastMessage.createdAt)}</span>}
-                </Link>
-              ))
-            : dmThreads.map((t) => (
-                <Link key={t.affiliateId} href={`/admin/messages?dm=${t.affiliateId}`} className={`flex items-center gap-3 border-b border-hairline/60 px-4 py-3 hover:bg-accent ${dm === t.affiliateId ? "bg-accent" : ""}`}>
-                  <Avatar name={t.name} size={44} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{t.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{t.lastMessage ? `${t.lastMessage.fromAdmin ? "You: " : ""}${t.lastMessage.preview}` : "Start a conversation"}</p>
-                  </div>
-                  {t.unread > 0 && <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">{t.unread}</span>}
-                </Link>
-              ))}
-        </div>
+                  <p className="truncate text-xs text-muted-foreground">{gr.lastMessage?.preview ?? `${gr.memberCount} members`}</p>
+                </div>
+                {gr.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relativeTime(gr.lastMessage.createdAt)}</span>}
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <DmRail threads={dmThreads} selectedId={dm} />
+        )}
       </aside>
 
       {/* Main pane */}
