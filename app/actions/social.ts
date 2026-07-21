@@ -6,6 +6,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { posts, affiliates } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { approvedAffiliateId } from "@/lib/session";
 import { notify } from "@/lib/notifications";
 
 type Result = { ok: boolean; message: string };
@@ -26,8 +27,8 @@ async function assertAdmin() {
 // ---------- Post tracking ----------
 
 export async function submitPost(input: unknown): Promise<Result> {
-  const affiliateId = await myAffiliateId();
-  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const affiliateId = await approvedAffiliateId();
+  if (!affiliateId) return { ok: false, message: "Your account isn't active." };
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({
@@ -63,8 +64,8 @@ export async function nudgeAffiliate(affiliateId: string): Promise<Result> {
 // ---------- Link-in-bio profile ----------
 
 export async function updatePublicProfile(input: unknown): Promise<Result> {
-  const affiliateId = await myAffiliateId();
-  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const affiliateId = await approvedAffiliateId();
+  if (!affiliateId) return { ok: false, message: "Your account isn't active." };
   if (!db) return { ok: false, message: "Database not configured." };
   const parsed = z
     .object({

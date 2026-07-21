@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 import { getDefaultDestination } from "@/lib/queries";
+import { shopifyConfig } from "@/lib/integrations";
 import { rateLimit } from "@/lib/rate-limit";
 
 const STORE = process.env.SHOPIFY_STORE_DOMAIN
@@ -22,6 +23,13 @@ async function safeRedirect(to: string): Promise<string> {
     if (u.protocol !== "http:" && u.protocol !== "https:") return fallback;
     const allow = new Set<string>();
     if (process.env.SHOPIFY_STORE_DOMAIN) allow.add(process.env.SHOPIFY_STORE_DOMAIN.toLowerCase());
+    // Also trust the store domain configured through the Settings UI (stored in
+    // the DB, not env) — otherwise every real product link is rejected to the
+    // fallback when Shopify was connected that way.
+    try {
+      const { domain } = await shopifyConfig();
+      if (domain) allow.add(domain.toLowerCase());
+    } catch {}
     try { allow.add(new URL(fallback).hostname.toLowerCase()); } catch {}
     const host = u.hostname.toLowerCase();
     const ok = [...allow].some((a) => a && (host === a || host.endsWith("." + a)));

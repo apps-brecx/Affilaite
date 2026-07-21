@@ -7,10 +7,12 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { users, affiliates, programs, campaigns, affiliateCampaigns, discountCodes, sampleRequests, groupMessages, groupMessageReads, pollVotes } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { approvedAffiliateId } from "@/lib/session";
 import { getEarningsSeries, getAffiliate } from "@/lib/queries";
 import { isPhoneRecentlyVerified, normalizePhone, phoneVerificationRequired } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
-import { createDiscountForAffiliate, uniqueDiscountCode } from "@/lib/discounts";
+import { createDiscountForAffiliate, uniqueDiscountCode, customerDiscountFromConfig, resolveCampaignDiscountOptions } from "@/lib/discounts";
+import { mergeConfig } from "@/lib/campaign-config";
 import { getCustomerPrefill, type CustomerPrefill } from "@/lib/shopify-customers";
 import { shopifyReady } from "@/lib/integrations";
 import { dispatchEmail } from "@/lib/email-center";
@@ -215,12 +217,20 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
   // actually works at checkout, not just locally).
   let codeSyncFailed = false;
   if (instant) {
-    const percent = program && program.commissionType === "percent" ? Number(program.commissionValue) : 15;
-    const code = await uniqueDiscountCode(`${refCode}${percent}`);
+    const cfg = mergeConfig(campaign.config);
+    // The customer discount on the code reflects the campaign's configured
+    // reward — and, for referral campaigns, the friend/customer coupon — instead
+    // of the program default or a hardcoded 15%.
+    const cust = customerDiscountFromConfig(cfg, program);
+    const code = await uniqueDiscountCode(`${refCode}${Math.round(cust.value)}`);
     let shopifyDiscountId: string | null = null;
     if (await shopifyReady()) {
       try {
-        shopifyDiscountId = await createDiscountForAffiliate(code, percent);
+        // Honor the campaign's coupon rules (expiry, combines-with, min-order,
+        // applies-to collections) so the "Coupon settings" panel isn't cosmetic.
+        const options = await resolveCampaignDiscountOptions(cfg, campaign.endsAt);
+        options.valueType = cust.valueType;
+        shopifyDiscountId = await createDiscountForAffiliate(code, cust.value, options);
       } catch (e) {
         console.error("[joinCampaign] Shopify code creation failed:", e);
         codeSyncFailed = true;
@@ -228,7 +238,9 @@ export async function joinCampaign(input: unknown): Promise<ActionResult & { ins
     }
     await db
       .insert(discountCodes)
-      .values({ affiliateId: aff.id, code, percentage: percent.toString(), shopifyDiscountId, active: true })
+      // campaignId ties the code to THIS campaign so attribution maps a used
+      // coupon straight to it (not the affiliate's most-recently-joined one).
+      .values({ affiliateId: aff.id, campaignId: campaign.id, code, percentage: cust.value.toString(), shopifyDiscountId, active: true })
       .onConflictDoNothing();
   }
 
@@ -415,9 +427,8 @@ const sampleSchema = z.object({
 /** Affiliate requests a product sample (ships to their address on file). */
 export async function requestSample(input: unknown): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
-  const session = await auth();
-  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
-  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const affiliateId = await approvedAffiliateId();
+  if (!affiliateId) return { ok: false, message: "Your account isn't active." };
   const parsed = sampleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.errors[0]?.message ?? "Invalid input." };
   const d = parsed.data;
@@ -479,9 +490,8 @@ export async function markGroupRead(): Promise<ActionResult> {
 /** Cast (or change) the affiliate's vote on a poll message. */
 export async function votePoll(messageId: string, optionIndex: number): Promise<ActionResult> {
   if (!db) return { ok: false, message: "Database not configured." };
-  const session = await auth();
-  const affiliateId = (session?.user as any)?.affiliateId as string | undefined;
-  if (!affiliateId) return { ok: false, message: "Not signed in." };
+  const affiliateId = await approvedAffiliateId();
+  if (!affiliateId) return { ok: false, message: "Your account isn't active." };
   if (!Number.isInteger(optionIndex) || optionIndex < 0) return { ok: false, message: "Invalid option." };
 
   const msg = await db.query.groupMessages.findFirst({ where: eq(groupMessages.id, messageId) });

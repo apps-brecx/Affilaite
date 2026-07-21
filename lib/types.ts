@@ -7,7 +7,7 @@ export type CommissionState =
   | "paid"
   | "rejected";
 export type AffiliateState = "pending" | "approved" | "rejected" | "suspended";
-export type PayoutState = "draft" | "processing" | "success" | "failed";
+export type PayoutState = "draft" | "processing" | "success" | "partial" | "failed";
 
 export interface Program {
   id: string;

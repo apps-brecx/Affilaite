@@ -17,6 +17,7 @@ import {
   affiliateCampaigns,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { approvedAffiliateId } from "@/lib/session";
 import { notify } from "@/lib/notifications";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -31,9 +32,11 @@ async function adminId(): Promise<string> {
   }
   return u?.id ?? "";
 }
+// Only APPROVED affiliates can act (join groups, DM, vote, enter giveaways,
+// join campaigns). A page guard already bounces suspended/pending affiliates,
+// but these actions are called directly, so they must re-check status too.
 async function myAffiliateId(): Promise<string | null> {
-  const session = await auth();
-  return ((session?.user as any)?.affiliateId as string | undefined) ?? null;
+  return approvedAffiliateId();
 }
 
 const KINDS = ["text", "deal", "invite", "giveaway", "competition", "announcement", "poll"] as const;

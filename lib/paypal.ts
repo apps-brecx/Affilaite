@@ -172,15 +172,22 @@ export function parsePayoutBatch(raw: any): { batchStatus: string; items: Parsed
 /**
  * Roll a set of item statuses up to a single batch status.
  * - any item still pending → "processing"
+ * - some succeeded AND some terminally failed → "partial" (money moved for
+ *   part of the batch; the failed items are reconciled back to unpaid)
  * - otherwise, at least one success → "success" (money moved)
  * - everything terminal-failed → "failed"
  */
-export function rollupBatchStatus(itemStatuses: string[]): "processing" | "success" | "failed" {
+export function rollupBatchStatus(itemStatuses: string[]): "processing" | "success" | "failed" | "partial" {
   if (itemStatuses.length === 0) return "processing";
   const norm = itemStatuses.map((s) => s.toUpperCase());
   if (norm.some((s) => PENDING_ITEM_STATUSES.has(s) || (!FAILED_ITEM_STATUSES.has(s) && s !== "SUCCESS"))) {
     return "processing";
   }
-  if (norm.some((s) => s === "SUCCESS")) return "success";
+  const anySuccess = norm.some((s) => s === "SUCCESS");
+  const anyFailed = norm.some((s) => FAILED_ITEM_STATUSES.has(s));
+  // A mix means some affiliates were paid and some weren't — never report that
+  // as a clean "success" (that's what hid unpaid affiliates before).
+  if (anySuccess && anyFailed) return "partial";
+  if (anySuccess) return "success";
   return "failed";
 }

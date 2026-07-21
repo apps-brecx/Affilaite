@@ -8,7 +8,7 @@
 //   - payouts page (server component, admin-gated by the layout)
 
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { affiliates, programs, commissions, payouts, payoutItems, users, campaigns, affiliateCampaigns, appSettings } from "@/db/schema";
 import { getSetting } from "@/lib/queries";
@@ -61,7 +61,7 @@ export async function reconcilePayout(payoutId: string): Promise<{ ok: boolean; 
   if (!db) return { ok: false, message: "Database not configured." };
   const batch = await db.query.payouts.findFirst({ where: eq(payouts.id, payoutId) });
   if (!batch) return { ok: false, message: "Batch not found." };
-  if (!batch.paypalBatchId || batch.status === "success" || batch.status === "failed") {
+  if (!batch.paypalBatchId || batch.status === "success" || batch.status === "failed" || batch.status === "partial") {
     return { ok: true, status: batch.status };
   }
   try {
@@ -199,6 +199,10 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
   if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
   if (scopeAffiliateIds && scopeAffiliateIds.length === 0) return { ok: false, message: "Nothing payable right now." };
 
+  // Group approved money per (affiliate, currency). The payout minimum is a
+  // per-currency threshold — summing $30 + €30 into "60" and calling it over a
+  // $50 minimum would pay out two sub-minimum amounts in different currencies.
+  const curExpr = sql<string>`coalesce(${commissions.currency}, 'USD')`;
   const rows = await db
     .select({
       affiliateId: affiliates.id,
@@ -207,6 +211,7 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
       phoneVerifiedAt: affiliates.phoneVerifiedAt,
       method: affiliates.payoutMethod,
       minimum: programs.payoutMinimum,
+      currency: curExpr,
       total: sql<string>`coalesce(sum(${commissions.amount}),0)`,
     })
     .from(commissions)
@@ -218,11 +223,12 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
       eq(affiliates.status, "approved"),
       ...(scopeAffiliateIds ? [inArray(affiliates.id, scopeAffiliateIds)] : []),
     ))
-    .groupBy(affiliates.id, affiliates.paypalEmail, affiliates.phone, affiliates.phoneVerifiedAt, affiliates.payoutMethod, programs.payoutMinimum);
+    .groupBy(affiliates.id, affiliates.paypalEmail, affiliates.phone, affiliates.phoneVerifiedAt, affiliates.payoutMethod, programs.payoutMinimum, curExpr);
 
   // Venmo requires a VERIFIED phone — never send money to an unverified number.
   const receiverOf = (r: { method: "paypal" | "venmo"; phone: string | null; phoneVerifiedAt: Date | null; paypalEmail: string | null }) =>
     r.method === "venmo" ? (r.phoneVerifiedAt ? r.phone : null) : r.paypalEmail;
+  // Each payable row is one (affiliate, currency) bucket that clears the minimum.
   const payable = rows.filter(
     (r) => receiverOf(r) && (opts?.ignoreMinimum || Number(r.total) >= Number(r.minimum ?? 0)) && Number(r.total) > 0,
   );
@@ -234,7 +240,10 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
   const methodFor = new Map(
     payable.map((r) => [r.affiliateId, { method: r.method, receiver: receiverOf(r)! }] as const),
   );
-  const payableIds = payable.map((r) => r.affiliateId);
+  // Only claim the exact (affiliate, currency) buckets that cleared the minimum —
+  // a sub-minimum currency (and any negative clawback that nets ≤0) is left
+  // unclaimed so it waits for the next batch instead of being consumed.
+  const payablePairs = payable.map((r) => ({ affiliateId: r.affiliateId, currency: r.currency }));
   const batchId = crypto.randomUUID();
   const senderBatchId = `AFF-${batchId}`;
 
@@ -254,7 +263,11 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
       const claimed = await tx
         .update(commissions)
         .set({ payoutId: batchId })
-        .where(and(eq(commissions.status, "approved"), isNull(commissions.payoutId), inArray(commissions.affiliateId, payableIds)))
+        .where(and(
+          eq(commissions.status, "approved"),
+          isNull(commissions.payoutId),
+          or(...payablePairs.map((p) => and(eq(commissions.affiliateId, p.affiliateId), eq(curExpr, p.currency)))),
+        ))
         .returning({ affiliateId: commissions.affiliateId, amount: commissions.amount, currency: commissions.currency });
 
       if (claimed.length === 0) throw new Error("NOTHING_CLAIMED");
@@ -272,7 +285,16 @@ export async function executePayout(scopeAffiliateIds?: string[], opts?: { ignor
       const recs: Recipient[] = [];
       let grand = 0;
       for (const g of groups.values()) {
-        if (g.total <= 0) continue;
+        // A currency bucket that nets ≤0 (its clawbacks outweigh its earnings)
+        // must not be paid AND must not be silently consumed — release those
+        // rows so the negative adjustment survives to net against a later batch.
+        if (g.total <= 0) {
+          await tx
+            .update(commissions)
+            .set({ payoutId: null })
+            .where(and(eq(commissions.payoutId, batchId), eq(commissions.affiliateId, g.affiliateId), eq(curExpr, g.currency)));
+          continue;
+        }
         const amount = g.total.toFixed(2);
         const [item] = await tx
           .insert(payoutItems)

@@ -171,6 +171,9 @@ export async function processOrderCreated(order: any) {
   const usedCodes: string[] = (order.discount_codes ?? []).map((d: any) => d.code?.toUpperCase()).filter(Boolean);
   let affiliate: typeof affiliates.$inferSelect | undefined;
   let attributedBy: "coupon" | "link" | null = null;
+  // The campaign the matched coupon belongs to — the authoritative signal for
+  // which campaign's reward rules apply (a code is issued by exactly one).
+  let couponCampaignId: string | null = null;
 
   if (usedCodes.length) {
     const match = await db.query.discountCodes.findFirst({
@@ -179,6 +182,7 @@ export async function processOrderCreated(order: any) {
     if (match?.affiliateId) {
       affiliate = await db.query.affiliates.findFirst({ where: eq(affiliates.id, match.affiliateId) });
       attributedBy = "coupon";
+      couponCampaignId = match.campaignId ?? null;
     }
   }
 
@@ -242,13 +246,34 @@ export async function processOrderCreated(order: any) {
   const base = Number(order.subtotal_price);
   const rate = (valueType: string, value: number) => (valueType === "percent" ? (base * value) / 100 : value);
 
-  const [campRow] = await db
-    .select({ camp: campaigns })
-    .from(affiliateCampaigns)
-    .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
-    .where(and(eq(affiliateCampaigns.affiliateId, affiliate.id), eq(campaigns.status, "active")))
-    .orderBy(desc(affiliateCampaigns.createdAt))
-    .limit(1);
+  // Prefer the campaign the USED COUPON belongs to (the sale explicitly came
+  // through that code). Only when the code isn't campaign-scoped — a program /
+  // imported code, or a link-attributed sale — fall back to the affiliate's
+  // most-recently-joined active campaign.
+  let campRow:
+    | { camp: typeof campaigns.$inferSelect }
+    | undefined;
+  if (couponCampaignId) {
+    [campRow] = await db
+      .select({ camp: campaigns })
+      .from(affiliateCampaigns)
+      .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
+      .where(and(
+        eq(affiliateCampaigns.affiliateId, affiliate.id),
+        eq(campaigns.id, couponCampaignId),
+        eq(campaigns.status, "active"),
+      ))
+      .limit(1);
+  }
+  if (!campRow) {
+    [campRow] = await db
+      .select({ camp: campaigns })
+      .from(affiliateCampaigns)
+      .innerJoin(campaigns, eq(affiliateCampaigns.campaignId, campaigns.id))
+      .where(and(eq(affiliateCampaigns.affiliateId, affiliate.id), eq(campaigns.status, "active")))
+      .orderBy(desc(affiliateCampaigns.createdAt))
+      .limit(1);
+  }
   const campaign = campRow?.camp;
 
   let amount: number;

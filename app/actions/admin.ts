@@ -335,12 +335,16 @@ export async function assignProgram(affiliateId: string, programId: string): Pro
 export async function approveCommissions(ids: string[]): Promise<ActionResult> {
   await assertAdmin("commissions");
   if (!db || ids.length === 0) return { ok: false, message: "Nothing to approve." };
-  // Only pending/reversed commissions can be approved — never touch paid ones.
+  // Only PENDING commissions can be approved. A `reversed` row is a refund
+  // clawback — re-approving it would resurrect money that was already clawed
+  // back (and, if flagged, wipe the fraud flag). Restoring a reversed
+  // commission must be an explicit, separate action, never a bulk approve.
+  // Clearing the flag is intentional here: approving a pending row is the
+  // explicit human review that clears it.
   const rows = await db
     .update(commissions)
-    // Approving clears any fraud flag — it's been reviewed and cleared.
     .set({ status: "approved", flagged: false })
-    .where(and(inArray(commissions.id, ids), inArray(commissions.status, ["pending", "reversed"])))
+    .where(and(inArray(commissions.id, ids), eq(commissions.status, "pending")))
     .returning({ id: commissions.id, affiliateId: commissions.affiliateId });
   const affIds = [...new Set(rows.map((r) => r.affiliateId).filter(Boolean))] as string[];
   for (const affiliateId of affIds) {
@@ -896,6 +900,17 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   // Never fake a payout: if PayPal isn't connected, no money can move.
   if (!(await paypalReady())) return { ok: false, message: "Connect PayPal first (Settings → Integrations)." };
 
+  // Pay in the currency this affiliate actually earns in — hardcoding USD sent a
+  // USD item (and USD receipt) to EUR affiliates. Use their latest commission's
+  // currency, falling back to USD when they have no history yet.
+  const [lastComm] = await db
+    .select({ currency: commissions.currency })
+    .from(commissions)
+    .where(eq(commissions.affiliateId, affiliateId))
+    .orderBy(desc(commissions.createdAt))
+    .limit(1);
+  const currency = lastComm?.currency ?? "USD";
+
   const batchId = crypto.randomUUID();
   const senderBatchId = `CUSTOM-${batchId}`;
   const [batch] = await db
@@ -904,12 +919,12 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
     .returning();
   const [item] = await db
     .insert(payoutItems)
-    .values({ payoutId: batch.id, affiliateId, amount: amount.toFixed(2), currency: "USD", transactionStatus: "PENDING" })
+    .values({ payoutId: batch.id, affiliateId, amount: amount.toFixed(2), currency, transactionStatus: "PENDING" })
     .returning();
 
   try {
     const res = await createPayoutBatch(senderBatchId, [
-      { senderItemId: item.id, amount: amount.toFixed(2), receiver, method, currency: "USD" },
+      { senderItemId: item.id, amount: amount.toFixed(2), receiver, method, currency },
     ]);
     await db.update(payouts).set({ paypalBatchId: res.payoutBatchId }).where(eq(payouts.id, batch.id));
   } catch (e) {
@@ -932,7 +947,7 @@ export async function runCustomPayout(input: unknown): Promise<ActionResult> {
   );
   const payoutUser = await db.query.users.findFirst({ where: eq(users.id, aff.userId) });
   if (payoutUser?.email && (aff.notificationPrefs as Record<string, boolean> | null)?.payoutSent !== false) {
-    await dispatchEmail("payout_sent", payoutUser.email, { name: payoutUser.name ?? "there", amount: amount.toFixed(2), currency: "USD" });
+    await dispatchEmail("payout_sent", payoutUser.email, { name: payoutUser.name ?? "there", amount: amount.toFixed(2), currency });
   }
   revalAdmin();
   return { ok: true, message: `Custom payout of $${amount.toFixed(2)} submitted.` };

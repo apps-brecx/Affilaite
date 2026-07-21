@@ -32,11 +32,38 @@ const PRODUCTS_QUERY = `
           totalInventory
           featuredImage { url }
           priceRangeV2 { minVariantPrice { amount currencyCode } }
-          collections(first: 25) { edges { node { id } } }
+          collections(first: 25) { pageInfo { hasNextPage endCursor } edges { node { id } } }
         }
       }
     }
   }`;
+
+// Follow-up query for the rare product that belongs to >25 collections: page
+// through the tail so a product whose ONLY allowed collection sits past the
+// first 25 isn't silently dropped from the affiliate catalog. Kept out of the
+// bulk query so normal products (a handful of collections) pay no extra cost.
+const PRODUCT_COLLECTIONS_QUERY = `
+  query ProductCollections($id: ID!, $after: String) {
+    product(id: $id) {
+      collections(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        edges { node { id } }
+      }
+    }
+  }`;
+
+async function fetchRemainingCollectionIds(productId: string, after: string): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | null = after;
+  for (let guard = 0; guard < 20 && cursor; guard++) {
+    const json: any = await shopifyGraphQL<any>(PRODUCT_COLLECTIONS_QUERY, { id: productId, after: cursor });
+    const conn = json?.data?.product?.collections;
+    for (const e of conn?.edges ?? []) if (e.node?.id) ids.push(e.node.id);
+    if (!conn?.pageInfo?.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+  return ids;
+}
 
 // Short-lived in-memory cache so pages that pull the full catalog (Samples,
 // Promotions — all request up to 1000) don't hit Shopify's cost-throttled
@@ -79,6 +106,7 @@ async function fetchStoreProducts(limit: number): Promise<ProductsResult> {
     const { domain } = await shopifyConfig();
     const products: StoreProduct[] = [];
     let after: string | null = null;
+    let partial = false; // a mid-pagination error left the catalog incomplete
     // Page through with a cursor up to `limit`. We use 100/page (not Shopify's
     // 250 max) because the nested collections push the query cost near Shopify's
     // 1000-point ceiling at 250 — smaller pages stay under it and avoid the
@@ -88,8 +116,10 @@ async function fetchStoreProducts(limit: number): Promise<ProductsResult> {
       const json: any = await shopifyGraphQL<any>(PRODUCTS_QUERY, { first: pageSize, after });
       if (json.errors?.length) {
         console.error("[getStoreProducts] GraphQL errors:", json.errors);
-        // If we already have some products, return them rather than nothing.
-        if (products.length) break;
+        // If we already have some products, return them rather than nothing —
+        // but flag the result as partial so it's served this once and NOT cached
+        // as if it were the full catalog (which would hide products for 5 min).
+        if (products.length) { partial = true; break; }
         return { connected: true, products: [], error: json.errors.map((e: any) => e.message).join(", ") };
       }
       const conn = json.data?.products;
@@ -99,6 +129,14 @@ async function fetchStoreProducts(limit: number): Promise<ProductsResult> {
         // published to the online store. Drafts/archived never reach affiliates.
         if (!n || n.status !== "ACTIVE" || !n.publishedAt) continue;
         const price = n.priceRangeV2?.minVariantPrice;
+        let collectionIds: string[] = (n.collections?.edges ?? []).map((c: any) => c.node?.id).filter(Boolean);
+        if (n.collections?.pageInfo?.hasNextPage) {
+          try {
+            collectionIds = collectionIds.concat(await fetchRemainingCollectionIds(n.id, n.collections.pageInfo.endCursor));
+          } catch (e) {
+            console.error("[getStoreProducts] collection tail fetch failed for", n.id, e);
+          }
+        }
         products.push({
           id: n.id,
           title: n.title,
@@ -108,13 +146,13 @@ async function fetchStoreProducts(limit: number): Promise<ProductsResult> {
           price: price?.amount ? Number(price.amount).toFixed(2) : null,
           currency: price?.currencyCode ?? null,
           available: (n.totalInventory ?? 0) > 0 || n.totalInventory == null,
-          collectionIds: (n.collections?.edges ?? []).map((c: any) => c.node?.id).filter(Boolean),
+          collectionIds,
         });
       }
       if (!conn?.pageInfo?.hasNextPage) break;
       after = conn.pageInfo.endCursor;
     }
-    return { connected: true, products: products.slice(0, limit) };
+    return { connected: true, products: products.slice(0, limit), ...(partial ? { error: "partial catalog" } : {}) };
   } catch (e: any) {
     console.error("[getStoreProducts]", e);
     return { connected: true, products: [], error: e?.message ?? "Could not reach Shopify" };

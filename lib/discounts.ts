@@ -189,8 +189,66 @@ export function discountOptionsFromConfig(config: any, endsAt?: string | null): 
       orderDiscounts: !!c.combineOrder,
       shippingDiscounts: !!c.combineShipping,
     },
-    // collectionIds would be resolved from c.collections handles before calling.
+    // collectionIds are resolved by resolveCampaignDiscountOptions below.
   };
+}
+
+/**
+ * The customer-facing discount a campaign's code should carry. Referral
+ * campaigns advertise a "friend" coupon (what the customer gets) — that must be
+ * the code's real value, not the affiliate's commission. Falls back to the
+ * campaign reward, then the program rate, then 15%.
+ */
+export function customerDiscountFromConfig(
+  config: any,
+  program?: { commissionType?: string | null; commissionValue?: unknown } | null,
+): { value: number; valueType: "percent" | "fixed" } {
+  const cfg = config ?? {};
+  const f = cfg.friend ?? {};
+  if (f.kind === "coupon" && Number(f.value) > 0) {
+    return { value: Number(f.value), valueType: f.valueType === "fixed" ? "fixed" : "percent" };
+  }
+  const r = cfg.reward ?? {};
+  if (Number(r.value) > 0) {
+    return { value: Number(r.value), valueType: r.valueType === "fixed" ? "fixed" : "percent" };
+  }
+  if (program?.commissionType === "percent" && Number(program.commissionValue) > 0) {
+    return { value: Number(program.commissionValue), valueType: "percent" };
+  }
+  return { value: 15, valueType: "percent" };
+}
+
+/**
+ * Full Shopify discount options for a campaign, resolving the campaign's
+ * applies-to collection handles/ids into Shopify GIDs so the "Coupon settings"
+ * panel (expiry, combines-with, min-order, applies-to-collections) actually
+ * reaches Shopify. Best-effort on collections: if resolution fails the code just
+ * applies to all products rather than failing to create.
+ */
+export async function resolveCampaignDiscountOptions(
+  config: any,
+  endsAt?: string | Date | null,
+): Promise<DiscountOptions> {
+  const iso = endsAt instanceof Date ? endsAt.toISOString() : endsAt ?? null;
+  const opts = discountOptionsFromConfig(config, iso);
+  const coupon = config?.coupon ?? {};
+  if (coupon.appliesTo === "collections" && typeof coupon.collections === "string" && coupon.collections.trim()) {
+    const wanted = coupon.collections
+      .split(",")
+      .map((s: string) => s.trim().toLowerCase())
+      .filter(Boolean);
+    try {
+      const { getStoreCollections } = await import("./products");
+      const { collections } = await getStoreCollections(250);
+      const gids = collections
+        .filter((c) => wanted.includes(c.handle.toLowerCase()) || wanted.includes(c.id.toLowerCase()))
+        .map((c) => c.id);
+      if (gids.length) opts.collectionIds = gids;
+    } catch (e) {
+      console.error("[resolveCampaignDiscountOptions] collection resolve failed", e);
+    }
+  }
+  return opts;
 }
 
 export async function bulkCreateDiscounts(params: {

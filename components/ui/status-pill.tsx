@@ -17,6 +17,7 @@ const MAP: Record<string, { label: string; variant: BadgeProps["variant"]; dot: 
   draft: { label: "Draft", variant: "muted", dot: "bg-muted-foreground" },
   processing: { label: "Processing", variant: "warning", dot: "bg-warning" },
   success: { label: "Paid out", variant: "success", dot: "bg-success" },
+  partial: { label: "Partly paid", variant: "warning", dot: "bg-warning" },
   failed: { label: "Failed", variant: "danger", dot: "bg-danger" },
   // promotions
   live: { label: "Live", variant: "success", dot: "bg-success" },

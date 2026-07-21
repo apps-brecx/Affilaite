@@ -31,6 +31,23 @@ export async function requireOwner() {
   return user;
 }
 
+/**
+ * For server actions (which return a friendly result rather than redirecting):
+ * the current affiliate's id ONLY if their account is approved, else null.
+ * Page guards bounce suspended/pending affiliates, but the actions they'd call
+ * (request a sample, post, vote, join a group, edit their profile) resolve the
+ * affiliate straight from the session — so they must re-check status here too,
+ * or a direct call sails past the page guard.
+ */
+export async function approvedAffiliateId(): Promise<string | null> {
+  const user = await currentUser();
+  const affiliateId = (user as any)?.affiliateId as string | undefined;
+  if (!affiliateId) return null;
+  const affiliate = await getAffiliate(affiliateId);
+  if (!affiliate || affiliate.status !== "approved") return null;
+  return affiliateId;
+}
+
 /** Resolve the logged-in affiliate, or redirect appropriately. */
 export async function requireAffiliate(): Promise<Affiliate> {
   const user = await currentUser();

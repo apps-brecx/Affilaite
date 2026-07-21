@@ -61,7 +61,18 @@ export async function shopifyGraphQL<T = any>(query: string, variables?: Record<
 
 /** Register the webhooks this app depends on. Run once during setup. */
 export async function registerWebhooks(callbackUrl: string) {
-  const topics = ["ORDERS_CREATE", "ORDERS_PAID", "ORDERS_CANCELLED", "REFUNDS_CREATE"];
+  // ORDERS_FULFILLED + FULFILLMENTS_* drive the sample "auto-mark shipped" flow
+  // (lib/samples.ts). Without them samples never leave "approved" and affiliates
+  // never get the shipped notice, no matter how the webhook route handles them.
+  const topics = [
+    "ORDERS_CREATE",
+    "ORDERS_PAID",
+    "ORDERS_CANCELLED",
+    "REFUNDS_CREATE",
+    "ORDERS_FULFILLED",
+    "FULFILLMENTS_CREATE",
+    "FULFILLMENTS_UPDATE",
+  ];
   const mutation = `
     mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
       webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {

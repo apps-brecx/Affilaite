@@ -32,6 +32,10 @@ export const payoutStatus = pgEnum("payout_status", [
   "draft",
   "processing",
   "success",
+  // Some items in the batch were paid and at least one terminally failed. The
+  // failed items' commissions are reverted to `approved` so they re-enter the
+  // next batch — "partial" keeps the admin from reading it as fully paid.
+  "partial",
   "failed",
 ]);
 export const commissionType = pgEnum("commission_type", ["percent", "flat"]);
@@ -291,6 +295,10 @@ export const discountCodes = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     affiliateId: uuid("affiliate_id").references(() => affiliates.id),
+    // Which campaign issued this code (null for program-level / imported codes).
+    // Lets attribution map a used coupon straight to its campaign instead of
+    // guessing the affiliate's most-recently-joined one.
+    campaignId: uuid("campaign_id").references(() => campaigns.id),
     code: text("code").notNull().unique(),
     shopifyPriceRuleId: text("shopify_price_rule_id"),
     shopifyDiscountId: text("shopify_discount_id"),
@@ -301,6 +309,7 @@ export const discountCodes = pgTable(
   (t) => ({
     codeIdx: index("code_idx").on(t.code),
     dcAffIdx: index("dc_aff_idx").on(t.affiliateId),
+    dcCampaignIdx: index("dc_campaign_idx").on(t.campaignId),
   }),
 );
 
