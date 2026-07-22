@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { FolpView } from "@/components/affiliate/folp-view";
 import { getPublicProfile } from "@/lib/social";
 import { getMergedFolp } from "@/lib/folp-server";
+import { collectionUrl } from "@/lib/favorites";
 import { getBrand } from "@/lib/queries";
 import { buildReferralLink, STORE_URL } from "@/lib/links";
 
@@ -23,8 +24,13 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   const profile = await getPublicProfile(handle);
   if (!profile) notFound();
 
-  const [theme, brand] = await Promise.all([getMergedFolp(profile.id), getBrand()]);
-  const shopLink = buildReferralLink(profile.refCode, STORE_URL);
+  const [theme, brand, favUrl] = await Promise.all([
+    getMergedFolp(profile.id),
+    getBrand(),
+    collectionUrl(profile.favoriteCollectionHandle),
+  ]);
+  // Shop button → the affiliate's own favorites collection when they've built one.
+  const shopLink = buildReferralLink(profile.refCode, favUrl ?? STORE_URL);
 
   return (
     <main className="min-h-screen">

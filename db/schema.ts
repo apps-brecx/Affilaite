@@ -254,6 +254,12 @@ export const affiliates = pgTable(
     // Sipfluence Page"). Null = they use the brand default as-is. Merged with the
     // brand default (appSettings "folp_default") at render, minus locked fields.
     folpTheme: jsonb("folp_theme").$type<Record<string, any>>(),
+    // "Shop my Favorites": one Shopify collection per affiliate. We keep the
+    // collection GID + handle (for the storefront URL) and the selected product
+    // GIDs (source for the picker + diffing on save).
+    favoriteCollectionId: text("favorite_collection_id"),
+    favoriteCollectionHandle: text("favorite_collection_handle"),
+    favoriteProductIds: jsonb("favorite_product_ids").$type<string[]>(),
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),
   },

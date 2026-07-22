@@ -111,6 +111,7 @@ export interface PublicProfile {
   code: string;
   refCode: string;
   socials: Record<string, string>;
+  favoriteCollectionHandle: string | null;
 }
 
 export async function getPublicProfile(handle: string): Promise<PublicProfile | null> {
@@ -132,5 +133,6 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     code: code?.code ?? row.aff.refCode,
     refCode: row.aff.refCode,
     socials: (row.aff.socialLinks as Record<string, string>) ?? {},
+    favoriteCollectionHandle: row.aff.favoriteCollectionHandle ?? null,
   };
 }

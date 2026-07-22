@@ -218,6 +218,13 @@
       "when": 1784749603599,
       "tag": "0030_folp_theme",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784751199228,
+      "tag": "0031_folp_favorites",
+      "breakpoints": true
     }
   ]
 }

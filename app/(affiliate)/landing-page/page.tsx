@@ -3,11 +3,15 @@ import { eq } from "drizzle-orm";
 import { ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { FolpEditor } from "@/components/affiliate/folp-editor";
+import { FavoritesPicker } from "@/components/affiliate/favorites-picker";
 import { requireAffiliate } from "@/lib/session";
 import { db } from "@/db";
 import { affiliates } from "@/db/schema";
 import { getFolpDefault } from "@/lib/folp-server";
+import { collectionUrl } from "@/lib/favorites";
 import { getBrand } from "@/lib/queries";
+import { getStoreProducts } from "@/lib/products";
+import { shopifyReady } from "@/lib/integrations";
 import { buildReferralLink, STORE_URL, APP_URL } from "@/lib/links";
 
 export const metadata = { title: "My Page" };
@@ -15,12 +19,17 @@ export const dynamic = "force-dynamic";
 
 export default async function LandingPageEditor() {
   const me = await requireAffiliate();
-  const [brand, folpBrand, row] = await Promise.all([
+  const [brand, folpBrand, row, connected] = await Promise.all([
     getBrand(),
     getFolpDefault(),
     db ? db.query.affiliates.findFirst({ where: eq(affiliates.id, me.id) }) : Promise.resolve(null),
+    shopifyReady(),
   ]);
-  const shopLink = buildReferralLink(me.refCode, STORE_URL);
+  // The favorites collection is the shop destination once it exists; else the store.
+  const favHandle = row?.favoriteCollectionHandle ?? null;
+  const favUrl = await collectionUrl(favHandle);
+  const shopLink = buildReferralLink(me.refCode, favUrl ?? STORE_URL);
+  const products = connected ? ((await getStoreProducts(100).catch(() => null))?.products ?? []) : [];
 
   return (
     <div className="space-y-6">
@@ -58,6 +67,13 @@ export default async function LandingPageEditor() {
           logoText: brand.logoText || "Sipfluence",
           shopName: brand.logoText || "Sipfluence",
         }}
+      />
+
+      <FavoritesPicker
+        products={products}
+        initialSelected={(row?.favoriteProductIds as string[]) ?? []}
+        connected={connected}
+        collectionUrl={favUrl}
       />
     </div>
   );
