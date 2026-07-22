@@ -73,6 +73,23 @@ async function affiliateStatMaps(affiliateIds?: string[]) {
     .where(scope)
     .groupBy(commissions.affiliateId, commissions.status);
 
+  // Orders = DISTINCT orders that produced a positive commission (not
+  // reversed/rejected). Counting distinct orders — not commission rows — keeps a
+  // single order from showing as "2" when it carries more than one row. A
+  // cancelled order still counts (it was placed), but its earnings are excluded
+  // above since "cancelled" isn't pending/approved/paid.
+  const orderRows = await db
+    .select({ affiliateId: commissions.affiliateId, cnt: sql<number>`count(distinct ${commissions.orderId})` })
+    .from(commissions)
+    .where(
+      scope
+        ? and(scope, sql`${commissions.amount} >= 0`, sql`${commissions.status} not in ('reversed','rejected')`)
+        : and(sql`${commissions.amount} >= 0`, sql`${commissions.status} not in ('reversed','rejected')`),
+    )
+    .groupBy(commissions.affiliateId);
+  const orderCountMap = new Map<string, number>();
+  for (const r of orderRows) if (r.affiliateId) orderCountMap.set(r.affiliateId, Number(r.cnt));
+
   const clickRows = await db
     .select({ affiliateId: clicks.affiliateId, cnt: sql<number>`count(*)` })
     .from(clicks)
@@ -83,11 +100,17 @@ async function affiliateStatMaps(affiliateIds?: string[]) {
   for (const r of earnRows) {
     if (!r.affiliateId) continue;
     const e = earn.get(r.affiliateId) ?? { pending: 0, approved: 0, paid: 0, orders: 0 };
+    // Cancelled commissions are excluded from all money totals — the affiliate's
+    // pending/approved/paid figures never go negative on a cancellation.
     if (r.status === "pending") e.pending += num(r.total);
     if (r.status === "approved") e.approved += num(r.total);
     if (r.status === "paid") e.paid += num(r.total);
-    if (r.status !== "reversed" && r.status !== "rejected") e.orders += Number(r.cnt);
     earn.set(r.affiliateId, e);
+  }
+  for (const [affId, cnt] of orderCountMap) {
+    const e = earn.get(affId) ?? { pending: 0, approved: 0, paid: 0, orders: 0 };
+    e.orders = cnt;
+    earn.set(affId, e);
   }
   const clickCount = new Map<string, number>();
   for (const r of clickRows) if (r.affiliateId) clickCount.set(r.affiliateId, Number(r.cnt));
@@ -1021,9 +1044,10 @@ export async function listAssets(): Promise<Asset[]> {
 export async function getEarningsSeries(days = 30, affiliateId?: string): Promise<TimePoint[]> {
   if (!db) return [];
   const since = new Date(Date.now() - days * DAY);
-  // Exclude reversed/rejected commissions and negative adjustment rows — a
-  // cancelled or refunded order is not affiliate-driven revenue.
-  const live = sql`${commissions.status} not in ('reversed','rejected') and ${commissions.amount} >= 0`;
+  // Exclude reversed/rejected/cancelled commissions and negative adjustment rows
+  // — a cancelled or refunded order is not affiliate-driven revenue, so its
+  // earnings drop off the chart once the order is cancelled.
+  const live = sql`${commissions.status} not in ('reversed','rejected','cancelled') and ${commissions.amount} >= 0`;
   const where = affiliateId
     ? and(gte(commissions.createdAt, since), eq(commissions.affiliateId, affiliateId), live)
     : and(gte(commissions.createdAt, since), live);
@@ -1073,7 +1097,7 @@ export async function getAdminKpis(): Promise<AdminKpis> {
   const liveCommission = sql`exists (
     select 1 from ${commissions}
     where ${commissions.orderId} = ${orders.id}
-      and ${commissions.status} not in ('reversed','rejected')
+      and ${commissions.status} not in ('reversed','rejected','cancelled')
       and ${commissions.amount} >= 0
   )`;
   const [rev] = await db

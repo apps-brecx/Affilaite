@@ -15,6 +15,34 @@ async function main() {
   console.log("Applying migrations…");
   await migrate(db, { migrationsFolder: "./db/migrations" });
   console.log("✅ Migrations applied.");
+
+  // One-time data backfill (idempotent, runs after the migration transaction has
+  // committed so the "cancelled" enum value is usable). Reclassifies fully
+  // clawed-back commissions as "cancelled" and removes the legacy negative
+  // "refund-adjustment" rows, so a cancelled order zeroes cleanly instead of
+  // showing a negative balance. Only touches orders whose rows net to ~zero.
+  try {
+    const offset = sql`
+      select "order_id" from "commissions"
+      where "order_id" is not null
+      group by "order_id"
+      having sum(case when "amount" < 0 and "attributed_by" = 'refund-adjustment' then 1 else 0 end) > 0
+         and coalesce(sum("amount"), 0) <= 0.01`;
+    await sql`
+      update "commissions" set "status" = 'cancelled'
+      where "amount" >= 0
+        and "status" in ('pending', 'approved', 'paid')
+        and "order_id" in (${offset})`;
+    await sql`
+      delete from "commissions"
+      where "amount" < 0
+        and "attributed_by" = 'refund-adjustment'
+        and "order_id" in (${offset})`;
+    console.log("✅ Cancelled-commission backfill complete.");
+  } catch (e) {
+    console.error("[backfill:cancelled]", e);
+  }
+
   await sql.end();
   process.exit(0);
 }

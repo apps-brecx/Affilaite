@@ -27,6 +27,10 @@ export const commissionStatus = pgEnum("commission_status", [
   "reversed",
   "paid",
   "rejected",
+  // Order was cancelled/fully refunded. Distinct from "reversed" (silent
+  // pre-payout drop): "cancelled" stays visible to the affiliate and, when the
+  // commission was already paid, we do NOT claw the money back.
+  "cancelled",
 ]);
 export const payoutStatus = pgEnum("payout_status", [
   "draft",

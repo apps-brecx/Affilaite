@@ -11,6 +11,7 @@ const MAP: Record<string, { label: string; variant: BadgeProps["variant"]; dot: 
   paid: { label: "Paid", variant: "default", dot: "bg-primary" },
   reversed: { label: "Reversed", variant: "danger", dot: "bg-danger" },
   rejected: { label: "Rejected", variant: "muted", dot: "bg-muted-foreground" },
+  cancelled: { label: "Cancelled", variant: "muted", dot: "bg-muted-foreground" },
   // affiliate
   suspended: { label: "Suspended", variant: "danger", dot: "bg-danger" },
   // payout

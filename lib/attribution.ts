@@ -425,45 +425,64 @@ export async function processOrderCreated(order: any) {
  * Claw back the CHANGE in refunded fraction (prevF → newF) — always measured
  * against the original commission, so multiple partial refunds sum to the right
  * total instead of compounding as (1-f)^N.
+ *
+ * Policy: we never rob an affiliate of money already sent to them. Unpaid
+ * commissions (pending/approved) shrink with the refund and, once fully
+ * refunded, become "cancelled". Already-paid commissions are only touched on a
+ * FULL cancellation, where they're marked "cancelled" so they drop out of "paid
+ * lifetime" — but no negative balance is created and nothing is deducted from
+ * future payouts. The platform absorbs the cost.
+ *
+ * Returns the affiliate ids whose commission was fully cancelled, so the caller
+ * can notify them.
  */
-async function applyClawback(orderId: string, prevF: number, newF: number) {
+async function applyClawback(orderId: string, prevF: number, newF: number): Promise<string[]> {
   const p = Math.max(0, Math.min(1, prevF));
   const n = Math.max(0, Math.min(1, newF));
   const deltaF = n - p;
-  if (deltaF <= 0) return;
+  if (deltaF <= 0) return [];
+  const fullyCancelled = n >= 0.999;
+  const cancelledAffiliates = new Set<string>();
 
   const comms = await db.query.commissions.findMany({ where: eq(commissions.orderId, orderId) });
   for (const c of comms) {
     const amt = Number(c.amount);
-    if (amt < 0) continue; // skip existing adjustment rows
+    if (amt < 0) continue; // skip any legacy negative adjustment rows
+    if (c.status === "reversed" || c.status === "rejected" || c.status === "cancelled") continue;
     // Recover the original commission from the amount still on the row (which may
     // already reflect earlier partial refunds) using the previous cumulative F.
     const original = p < 1 ? amt / (1 - p) : amt;
 
     if (c.status === "pending" || c.status === "approved") {
       const next = round2(amt - original * deltaF);
-      if (next < 0.01) {
-        await db.update(commissions).set({ status: "reversed" }).where(eq(commissions.id, c.id));
+      if (next < 0.01 || fullyCancelled) {
+        await db.update(commissions).set({ status: "cancelled" }).where(eq(commissions.id, c.id));
+        if (c.affiliateId) cancelledAffiliates.add(c.affiliateId);
       } else {
         await db.update(commissions).set({ amount: next.toFixed(2) }).where(eq(commissions.id, c.id));
       }
-    } else if (c.status === "paid") {
-      // Already paid — record a negative adjustment to settle next time.
-      const delta = round2(original * deltaF);
-      if (delta >= 0.01) {
-        await db.insert(commissions).values({
-          orderId: c.orderId,
-          affiliateId: c.affiliateId,
-          programId: c.programId,
-          amount: (-delta).toFixed(2),
-          currency: c.currency,
-          attributedBy: "refund-adjustment",
-          status: "approved",
-          approvableAt: new Date(),
-        });
-      }
+    } else if (c.status === "paid" && fullyCancelled) {
+      // Already paid out — we don't claw the money back. On a full cancellation
+      // mark it cancelled so it stops counting as "paid lifetime", but create no
+      // negative balance.
+      await db.update(commissions).set({ status: "cancelled" }).where(eq(commissions.id, c.id));
+      if (c.affiliateId) cancelledAffiliates.add(c.affiliateId);
     }
   }
+  return [...cancelledAffiliates];
+}
+
+/** Notify affiliates that an order they earned on was cancelled. */
+async function notifyCancelled(affiliateIds: string[], orderRow: any) {
+  if (!affiliateIds.length) return;
+  const label = orderRow?.orderNumber ? `#${orderRow.orderNumber}` : "your referred order";
+  await notify(
+    affiliateIds,
+    "performance",
+    `Order ${label} was cancelled`,
+    "This order was cancelled, so its commission has been removed. Any commission already paid to you is yours to keep.",
+    "/performance",
+  );
 }
 
 /** refunds/create → reverse the commission tied to this order, proportionally. */
@@ -498,7 +517,8 @@ export async function processRefund(refund: any) {
   if (thisRefundSubtotal <= 0 || orderSubtotal <= 0) return;
   const prevF = prevRefunded / orderSubtotal;
   const newF = newRefunded / orderSubtotal;
-  await applyClawback(orderRow.id, prevF, newF);
+  const cancelled = await applyClawback(orderRow.id, prevF, newF);
+  await notifyCancelled(cancelled, orderRow);
 }
 
 /** orders/cancelled → treat as a full clawback (nothing was truly sold) and mark
@@ -513,7 +533,7 @@ export async function processCancelledOrder(order: any) {
   // Full clawback: from whatever's already been refunded up to 100%.
   const orderSubtotal = Number(orderRow.subtotal ?? 0);
   const prevF = orderSubtotal > 0 ? Number(orderRow.refundedSubtotal ?? 0) / orderSubtotal : 0;
-  await applyClawback(orderRow.id, prevF, 1);
+  const cancelled = await applyClawback(orderRow.id, prevF, 1);
   await db
     .update(orders)
     .set({
@@ -522,4 +542,5 @@ export async function processCancelledOrder(order: any) {
       attributionStatus: had ? "cancelled — commission reversed" : "cancelled — no commission",
     })
     .where(eq(orders.id, orderRow.id));
+  await notifyCancelled(cancelled, orderRow);
 }

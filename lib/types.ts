@@ -5,7 +5,8 @@ export type CommissionState =
   | "approved"
   | "reversed"
   | "paid"
-  | "rejected";
+  | "rejected"
+  | "cancelled";
 export type AffiliateState = "pending" | "approved" | "rejected" | "suspended";
 export type PayoutState = "draft" | "processing" | "success" | "partial" | "failed";
 

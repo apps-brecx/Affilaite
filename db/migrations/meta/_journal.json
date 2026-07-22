@@ -204,6 +204,13 @@
       "when": 1784662083255,
       "tag": "0028_must_change_password",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784730427753,
+      "tag": "0029_commission_cancelled",
+      "breakpoints": true
     }
   ]
 }
