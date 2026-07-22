@@ -25,3 +25,16 @@ export async function qrDataUrl(text: string, dark = "#431431") {
     width: 200,
   });
 }
+
+/**
+ * QR as a PNG data URL — solid black on a solid white background so it always
+ * scans (light or dark theme) and can be downloaded as a real image file.
+ */
+export async function qrPngDataUrl(text: string) {
+  return QRCode.toDataURL(text, {
+    margin: 2,
+    width: 512,
+    errorCorrectionLevel: "M",
+    color: { dark: "#000000", light: "#ffffff" },
+  });
+}

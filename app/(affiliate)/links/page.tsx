@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { Gift, Ticket, QrCode, Share2, Link2, ExternalLink, ArrowRight } from "lucide-react";
+import { Gift, Ticket, Share2, Link2, ExternalLink, ArrowRight } from "lucide-react";
 import { ShareButtons } from "@/components/affiliate/share-buttons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
+import { QrCard } from "@/components/affiliate/qr-card";
 import { requireAffiliate } from "@/lib/session";
-import { buildReferralLink, qrDataUrl, APP_URL } from "@/lib/links";
+import { buildReferralLink, qrPngDataUrl, APP_URL } from "@/lib/links";
 import { getDefaultDestination, getEarningRate } from "@/lib/queries";
-import { Percent } from "lucide-react";
+import { Percent, Gift as GiftIcon } from "lucide-react";
 
 export const metadata = { title: "Links & Codes" };
 
@@ -17,7 +18,7 @@ export default async function LinksPage() {
   const me = await requireAffiliate();
   const [destination, earning] = await Promise.all([getDefaultDestination(), getEarningRate(me.id)]);
   const link = buildReferralLink(me.refCode, destination);
-  const qr = await qrDataUrl(link);
+  const qrPng = await qrPngDataUrl(link);
 
   return (
     <div className="space-y-8">
@@ -29,13 +30,24 @@ export default async function LinksPage() {
       {earning && (
         <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-gold/5 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-gilded">
-                <Percent className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm text-muted-foreground">You earn</p>
-                <p className="font-display text-2xl font-semibold tracking-tight">{earning.label}</p>
+            <div className="flex flex-wrap items-center gap-5">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-gilded">
+                  <Percent className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm text-muted-foreground">You earn</p>
+                  <p className="font-display text-2xl font-semibold tracking-tight">{earning.label}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 border-l border-primary/15 pl-5">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-gold/15 text-gold ring-gilded">
+                  <GiftIcon className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Friends get</p>
+                  <p className="font-display text-2xl font-semibold tracking-tight">{earning.customerLabel}</p>
+                </div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground sm:text-right">
@@ -102,17 +114,7 @@ export default async function LinksPage() {
           </div>
 
           {/* QR */}
-          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-hairline bg-card p-6">
-            <div
-              role="img"
-              aria-label="QR code for your referral link"
-              className="size-44 [&_svg]:size-full [&_svg]:text-primary"
-              dangerouslySetInnerHTML={{ __html: qr }}
-            />
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <QrCode className="size-3.5" /> Scan to shop
-            </div>
-          </div>
+          <QrCard png={qrPng} code={me.code} />
         </CardContent>
       </Card>
 

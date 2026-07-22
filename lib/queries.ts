@@ -46,6 +46,7 @@ import type {
   GroupChatMessage,
 } from "./types";
 import { mergeConfig, mergeBrand, type BrandSettings } from "./campaign-config";
+import { customerDiscountFromConfig } from "./discounts";
 import { PAID_ITEM_STATUSES } from "./paypal";
 
 export const dataSource = isDbConfigured ? "live" : "unconfigured";
@@ -361,11 +362,15 @@ export interface EarningRate {
   sourceName: string;
   /** Pretty label, e.g. "15%" or "$5 per sale". */
   label: string;
+  /** The discount the affiliate can offer their friends/customers, e.g. "10% off" or "$5 off". */
+  customerLabel: string;
   /** All active campaigns the affiliate is in (the applied one flagged). */
   campaigns: { name: string; label: string; applied: boolean }[];
 }
 
 const rateLabel = (t: "percent" | "flat", v: number) => (t === "percent" ? `${v}%` : `$${v} per sale`);
+const custLabel = (d: { value: number; valueType: "percent" | "fixed" }) =>
+  d.valueType === "percent" ? `${d.value}% off` : `$${d.value} off`;
 
 /**
  * The rate an affiliate actually earns — mirrors attribution: when they're in
@@ -388,7 +393,7 @@ export async function getEarningRate(affiliateId: string): Promise<EarningRate |
       const cfg = mergeConfig(camp.config);
       const valueType = cfg.reward.valueType === "percent" ? "percent" : "flat";
       const value = Number(cfg.reward.value) || 0;
-      return { name: camp.name, valueType: valueType as "percent" | "flat", value };
+      return { name: camp.name, valueType: valueType as "percent" | "flat", value, cfg };
     });
     const applied = list[0]; // most recently joined wins
     return {
@@ -397,6 +402,7 @@ export async function getEarningRate(affiliateId: string): Promise<EarningRate |
       source: "campaign",
       sourceName: applied.name,
       label: rateLabel(applied.valueType, applied.value),
+      customerLabel: custLabel(customerDiscountFromConfig(applied.cfg)),
       campaigns: list.map((c, i) => ({ name: c.name, label: rateLabel(c.valueType, c.value), applied: i === 0 })),
     };
   }
@@ -408,7 +414,15 @@ export async function getEarningRate(affiliateId: string): Promise<EarningRate |
   if (!program) return null;
   const valueType = program.commissionType === "percent" ? "percent" : "flat";
   const value = Number(program.commissionValue) || 0;
-  return { valueType, value, source: "program", sourceName: program.name, label: rateLabel(valueType, value), campaigns: [] };
+  return {
+    valueType,
+    value,
+    source: "program",
+    sourceName: program.name,
+    label: rateLabel(valueType, value),
+    customerLabel: custLabel(customerDiscountFromConfig({}, program)),
+    campaigns: [],
+  };
 }
 
 /** Campaign IDs an affiliate belongs to. */
