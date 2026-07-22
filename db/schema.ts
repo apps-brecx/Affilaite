@@ -250,6 +250,10 @@ export const affiliates = pgTable(
     // Public link-in-bio handle: /p/<handle>
     handle: text("handle").unique(),
     bio: text("bio"),
+    // Affiliate's own overrides for their friend-offer landing page ("My
+    // Sipfluence Page"). Null = they use the brand default as-is. Merged with the
+    // brand default (appSettings "folp_default") at render, minus locked fields.
+    folpTheme: jsonb("folp_theme").$type<Record<string, any>>(),
     totalEarned: numeric("total_earned", { precision: 12, scale: 2 }).default("0"),
     createdAt: timestamp("created_at").defaultNow(),
   },

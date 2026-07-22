@@ -1,0 +1,1 @@
+ALTER TABLE "affiliates" ADD COLUMN "folp_theme" jsonb;

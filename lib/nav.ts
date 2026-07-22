@@ -43,6 +43,7 @@ export const affiliateNav: NavSection[] = [
     title: "Earn",
     items: [
       { label: "Links & Codes", href: "/links", icon: "links" },
+      { label: "My Page", href: "/landing-page", icon: "assets" },
       { label: "Promotions", href: "/promotions", icon: "promotions" },
       { label: "Performance", href: "/performance", icon: "performance" },
       { label: "Leaderboard", href: "/leaderboard", icon: "campaigns" },
@@ -108,6 +109,7 @@ export const adminNav: NavSection[] = [
           { label: "Integrations", href: "/admin/settings/integrations", icon: "integrations" },
           { label: "Payments", href: "/admin/settings/payments", icon: "payments" },
           { label: "Brand & theme", href: "/admin/settings/brand", icon: "brand" },
+          { label: "Affiliate page", href: "/admin/settings/landing-page", icon: "assets" },
           { label: "Team invites", href: "/admin/settings/invites", icon: "invites" },
           { label: "Account", href: "/admin/settings/account", icon: "account" },
         ],

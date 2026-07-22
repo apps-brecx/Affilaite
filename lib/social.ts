@@ -104,6 +104,7 @@ export async function listDiscoveredPosts(limit = 60): Promise<DiscoveredRow[]> 
 }
 
 export interface PublicProfile {
+  id: string;
   name: string;
   handle: string;
   bio: string | null;
@@ -124,6 +125,7 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
   if (!row || row.aff.status !== "approved") return null;
   const code = await db.query.discountCodes.findFirst({ where: eq(discountCodes.affiliateId, row.aff.id) });
   return {
+    id: row.aff.id,
     name: row.name ?? "Partner",
     handle: row.aff.handle!,
     bio: row.aff.bio ?? null,

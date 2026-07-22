@@ -55,6 +55,8 @@ import { sendVerification } from "@/lib/sms";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeAddress, composeAddress } from "@/lib/address";
 import { defaultConfig, mergeConfig } from "@/lib/campaign-config";
+import { getFolpDefault, writeFolpDefault } from "@/lib/folp-server";
+import { sanitizeOverrides, FOLP_FIELDS } from "@/lib/folp";
 import { shopifyReady, paypalReady, emailReady, encryptSecret } from "@/lib/integrations";
 import { shopifyGraphQL } from "@/lib/shopify";
 import { processOrderCreated, processCancelledOrder } from "@/lib/attribution";
@@ -1817,6 +1819,28 @@ export async function changeAdminPassword(input: unknown): Promise<ActionResult>
   if (!ok) return { ok: false, message: "Current password is incorrect." };
   await db.update(users).set({ passwordHash: await bcrypt.hash(parsed.data.next, 10) }).where(eq(users.id, userId));
   return { ok: true, message: "Password changed." };
+}
+
+/** Admin: save the brand-default friend-offer landing page + which fields are locked. */
+export async function saveFolpDefault(input: unknown): Promise<ActionResult> {
+  await assertAdmin("settings");
+  if (!db) return { ok: false, message: "Database not configured." };
+  const cur = await getFolpDefault();
+  const themeInput = (input as any) ?? {};
+  // Admin edits the default itself — nothing is "locked" from them.
+  const clean = sanitizeOverrides(themeInput, { ...cur, lockedFields: [] }) as any;
+  const lockedFields: string[] = Array.isArray(themeInput.lockedFields)
+    ? themeInput.lockedFields.filter((p: string) => FOLP_FIELDS.some((f) => f.path === p))
+    : cur.lockedFields;
+  await writeFolpDefault({
+    layout: clean.layout ?? cur.layout,
+    styles: { ...cur.styles, ...(clean.styles ?? {}) },
+    content: { ...cur.content, ...(clean.content ?? {}) },
+    visibility: { ...cur.visibility, ...(clean.visibility ?? {}) },
+    lockedFields,
+  });
+  revalidatePath("/admin/settings/landing-page");
+  return { ok: true, message: "Brand landing-page default saved." };
 }
 
 /** Save brand/theme settings (stored as JSON under the "brand" key). */
