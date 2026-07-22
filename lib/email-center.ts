@@ -351,6 +351,8 @@ export function renderRichEmail(opts: {
   imageUrl?: string;
   buttonColor?: string;
   preheader?: string;
+  /** Values (codes, temp passwords) to render as a tap-to-select code block. */
+  highlight?: string[];
 }): string {
   const { body, brand, cta, imageUrl } = opts;
   const primary = hex(brand.primaryColor, "#FF5C9E");
@@ -360,9 +362,21 @@ export function renderRichEmail(opts: {
     : "";
   const btnColor = hex(opts.buttonColor, hex(brand.buttonColor, primary));
   const logoText = esc(brand.logoText || "Sipfluence");
+  // A code/temp-password chip: monospace, prominent, and select-all so one tap
+  // selects the whole value (the closest an email can get to a copy button).
+  const chip = (v: string) =>
+    `<span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:17px;font-weight:700;letter-spacing:1px;background:#ffffff;border:1px dashed ${primary};border-radius:8px;padding:3px 10px;margin:1px 2px;color:#431431;user-select:all;-webkit-user-select:all">${esc(v)}</span>`;
+  // Codes are alphanumeric (plus -/_ for temp passwords), so escaping never
+  // changes them — a literal split/join safely swaps the escaped text for a chip.
+  const codes = (opts.highlight ?? []).filter((v) => v && v.trim().length >= 4);
+  const highlightCodes = (escaped: string) => {
+    let out = escaped;
+    for (const v of codes) out = out.split(esc(v)).join(chip(v));
+    return out;
+  };
   const paras = body
     .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 16px;line-height:1.65;color:#1a1a17;font-size:15px">${esc(p).replace(/\n/g, "<br/>")}</p>`)
+    .map((p) => `<p style="margin:0 0 16px;line-height:1.65;color:#1a1a17;font-size:15px">${highlightCodes(esc(p)).replace(/\n/g, "<br/>")}</p>`)
     .join("");
   const hero =
     imageUrl && /^https?:\/\//i.test(imageUrl)
@@ -468,6 +482,7 @@ export async function renderEmailForType(
     cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
     imageUrl: r.tpl.imageUrl,
     buttonColor: r.tpl.buttonColor,
+    highlight: [vars.code, vars.tempPassword].filter(Boolean) as string[],
   });
   return { subject, html, enabled: r.tpl.enabled };
 }
@@ -488,6 +503,7 @@ export async function renderDraft(
       cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
       imageUrl: draft.imageUrl,
       buttonColor: draft.buttonColor,
+      highlight: [vars.code, vars.tempPassword].filter(Boolean) as string[],
     }),
   };
 }
@@ -513,6 +529,7 @@ export async function renderBrandedEmail(
       cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
       imageUrl: opts?.imageUrl,
       buttonColor: opts?.buttonColor,
+      highlight: [vars.code, vars.tempPassword].filter(Boolean) as string[],
     }),
   };
 }
@@ -544,6 +561,7 @@ export async function sendRichBroadcast(
           cta: ctaText && ctaUrl ? { text: ctaText, url: ctaUrl } : undefined,
           imageUrl: opts?.imageUrl,
           buttonColor: opts?.buttonColor,
+          highlight: [r.code].filter(Boolean) as string[],
         }),
       );
       sent++;
