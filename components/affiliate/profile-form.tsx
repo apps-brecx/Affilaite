@@ -6,12 +6,21 @@ import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/toast";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { updateProfile } from "@/app/actions/affiliate";
 import type { Affiliate } from "@/lib/types";
 
 export function ProfileForm({ me }: { me: Affiliate }) {
   const [pending, start] = useTransition();
   const toast = useToast();
+  const [addr, setAddr] = useState({
+    line1: me.addressLine1 ?? "",
+    line2: me.addressLine2 ?? "",
+    city: me.city ?? "",
+    region: me.region ?? "",
+    postalCode: me.postalCode ?? "",
+    country: me.country ?? "",
+  });
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,30 +84,46 @@ export function ProfileForm({ me }: { me: Affiliate }) {
           </legend>
           <div className="space-y-1.5">
             <Label>Street address</Label>
-            <Input name="addressLine1" defaultValue={me.addressLine1 ?? ""} placeholder="123 Main St" />
+            <AddressAutocomplete
+              name="addressLine1"
+              value={addr.line1}
+              onChange={(v) => setAddr((a) => ({ ...a, line1: v }))}
+              onSelect={(s) =>
+                setAddr((a) => ({
+                  ...a,
+                  line1: s.line1 || a.line1,
+                  city: s.city || a.city,
+                  region: s.region || a.region,
+                  postalCode: s.postalCode || a.postalCode,
+                  country: s.country || a.country,
+                }))
+              }
+              placeholder="Start typing — e.g. 103 Spring Valley Rd"
+            />
+            <p className="text-[11px] text-muted-foreground">Start typing and pick your address — the rest fills in automatically.</p>
           </div>
           <div className="space-y-1.5">
             <Label>Apt / suite (optional)</Label>
-            <Input name="addressLine2" defaultValue={me.addressLine2 ?? ""} placeholder="Apt 4B" />
+            <Input name="addressLine2" value={addr.line2} onChange={(e) => setAddr((a) => ({ ...a, line2: e.target.value }))} placeholder="Apt 4B" />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>City</Label>
-              <Input name="city" defaultValue={me.city ?? ""} placeholder="City" />
+              <Input name="city" value={addr.city} onChange={(e) => setAddr((a) => ({ ...a, city: e.target.value }))} placeholder="City" />
             </div>
             <div className="space-y-1.5">
               <Label>State / province</Label>
-              <Input name="region" defaultValue={me.region ?? ""} placeholder="State" />
+              <Input name="region" value={addr.region} onChange={(e) => setAddr((a) => ({ ...a, region: e.target.value }))} placeholder="State" />
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>ZIP / postal code</Label>
-              <Input name="postalCode" defaultValue={me.postalCode ?? ""} placeholder="ZIP" />
+              <Input name="postalCode" value={addr.postalCode} onChange={(e) => setAddr((a) => ({ ...a, postalCode: e.target.value }))} placeholder="ZIP" />
             </div>
             <div className="space-y-1.5">
               <Label>Country</Label>
-              <Input name="country" defaultValue={me.country ?? ""} placeholder="Country" />
+              <Input name="country" value={addr.country} onChange={(e) => setAddr((a) => ({ ...a, country: e.target.value }))} placeholder="Country" />
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">Add this if you&apos;d like to receive product samples.</p>

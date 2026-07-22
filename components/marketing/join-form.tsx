@@ -9,6 +9,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { PhoneVerify } from "@/components/marketing/phone-verify";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { joinCampaign, lookupCustomerForApply } from "@/app/actions/affiliate";
 import type { SignupFields } from "@/lib/campaign-config";
 
@@ -276,7 +277,21 @@ export function JoinForm({
                   <legend className="px-1 text-sm font-medium">Shipping address {!req(signup.address) && <span className="text-muted-foreground">(optional)</span>}</legend>
                   <div className="space-y-1.5">
                     <Label>Street address</Label>
-                    <Input placeholder="123 Main St" value={fields.addressLine1} onChange={(e) => set({ addressLine1: e.target.value })} />
+                    <AddressAutocomplete
+                      value={fields.addressLine1}
+                      onChange={(v) => set({ addressLine1: v })}
+                      onSelect={(s) =>
+                        set({
+                          addressLine1: s.line1 || fields.addressLine1,
+                          city: s.city || fields.city,
+                          region: s.region || fields.region,
+                          postalCode: s.postalCode || fields.postalCode,
+                          country: s.country || fields.country,
+                        })
+                      }
+                      placeholder="Start typing — e.g. 123 Main St"
+                    />
+                    <p className="-mt-0.5 text-xs text-muted-foreground">Pick your address and the rest fills in automatically.</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Apt / suite (optional)</Label>
