@@ -112,6 +112,7 @@ export interface PublicProfile {
   refCode: string;
   socials: Record<string, string>;
   favoriteCollectionHandle: string | null;
+  favoriteCount: number;
 }
 
 export async function getPublicProfile(handle: string): Promise<PublicProfile | null> {
@@ -134,5 +135,6 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     refCode: row.aff.refCode,
     socials: (row.aff.socialLinks as Record<string, string>) ?? {},
     favoriteCollectionHandle: row.aff.favoriteCollectionHandle ?? null,
+    favoriteCount: Array.isArray(row.aff.favoriteProductIds) ? row.aff.favoriteProductIds.length : 0,
   };
 }

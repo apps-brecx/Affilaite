@@ -9,10 +9,19 @@ const SOCIAL_ICONS: Record<string, typeof Instagram> = {
   instagram: Instagram, website: Globe, youtube: Youtube, tiktok: Music2, x: Twitter, twitter: Twitter, facebook: Facebook,
 };
 
+function isDarkHex(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
+}
+
 export function FolpView({
-  theme, logoText, name, code, shopLink, socials, vars, device = "desktop",
+  theme, logoText, logoUrl, logoDarkUrl, name, code, shopLink, shopLabelOverride, socials, vars, device = "desktop",
 }: {
-  theme: FolpTheme; logoText: string; name: string; code: string; shopLink: string;
+  theme: FolpTheme; logoText: string; logoUrl?: string | null; logoDarkUrl?: string | null;
+  name: string; code: string; shopLink: string; shopLabelOverride?: string | null;
   socials: Record<string, string>; vars: Partial<MergeVars>; device?: "desktop" | "mobile";
 }) {
   const s = theme.styles;
@@ -25,9 +34,30 @@ export function FolpView({
   const socialEntries = Object.entries(socials).filter(([, x]) => x && x.trim());
   const mv = (t: string) => ({ __html: renderMerge(t, vars) });
 
-  const Logo = () => v.showLogo ? (
-    <p className="mb-5 text-center text-lg font-extrabold tracking-tight" style={{ color: s.primaryColor }}>{logoText || "Sipfluence"}</p>
-  ) : null;
+  const bgDark = isDarkHex(s.backgroundColor);
+  const Logo = ({ onImage = false }: { onImage?: boolean }) => {
+    if (!v.showLogo) return null;
+    // On a dark page (or over an image) prefer a dark-bg logo; if we only have a
+    // light-background logo, sit it on a white pill so it stays legible.
+    const dark = onImage || bgDark;
+    const src = dark ? logoDarkUrl || logoUrl : logoUrl;
+    if (src) {
+      const needsPill = dark && !logoDarkUrl;
+      return (
+        <div className="mb-5 flex justify-center">
+          <span className={needsPill || onImage ? "rounded-lg bg-white/95 px-3 py-1.5 shadow-sm" : ""}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={logoText || "logo"} style={{ height: 32, width: "auto", objectFit: "contain" }} />
+          </span>
+        </div>
+      );
+    }
+    return (
+      <p className="mb-5 text-center text-lg font-extrabold tracking-tight" style={{ color: onImage ? "#fff" : s.primaryColor }}>
+        {logoText || "Syruvia"}
+      </p>
+    );
+  };
 
   const Badge = ({ center = true }: { center?: boolean }) => v.showBadge && c.badge ? (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${center ? "" : ""}`}
@@ -44,7 +74,7 @@ export function FolpView({
   const ShopBtn = () => (
     <a href={shopLink} className="mt-6 flex w-full items-center justify-center gap-2 px-6 py-4 font-semibold shadow-sm transition-transform hover:scale-[1.02]"
       style={{ background: s.primaryColor, color: "#fff", borderRadius: radius }}>
-      {c.shopLabel || "Shop my favorites"} <ArrowRight className="size-4" />
+      {shopLabelOverride ?? (c.shopLabel || "Shop my favorites")} <ArrowRight className="size-4" />
     </a>
   );
 
@@ -95,7 +125,7 @@ export function FolpView({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={c.bannerImageUrl} alt="" className="size-full object-cover" />
               <div className="absolute inset-0" style={{ background: s.headingColor, opacity: s.overlayOpacity / 100 }} />
-              <div className="absolute inset-0 flex items-center justify-center"><Logo /></div>
+              <div className="absolute inset-0 flex items-center justify-center"><Logo onImage /></div>
             </div>
           )}
           <div className={`mx-auto ${width} px-5 py-8 text-center`}>
@@ -189,7 +219,7 @@ export function FolpView({
             : <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${s.primaryColor}, ${s.headingColor})` }} />}
           <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, ${s.headingColor}00, ${s.headingColor})`, opacity: 0.4 + s.overlayOpacity / 200 }} />
           <div className="relative flex min-h-[560px] flex-col items-center justify-end px-6 py-8 text-center">
-            <div className="absolute left-0 right-0 top-6"><p className="text-center text-sm font-extrabold tracking-widest" style={{ color: "#fff" }}>{v.showLogo ? (logoText || "Sipfluence").toUpperCase() : ""}</p></div>
+            <div className="absolute left-0 right-0 top-6 flex justify-center"><Logo onImage /></div>
             <Badge />
             <h1 className="mt-3 text-3xl font-bold leading-tight text-white" style={{ fontFamily: fontStack(s.headingFont) }} dangerouslySetInnerHTML={mv(c.headline)} />
             {c.description && <p className="mt-2 text-sm text-white/90" dangerouslySetInnerHTML={mv(c.description)} />}
@@ -200,7 +230,7 @@ export function FolpView({
               </div>
             )}
             <a href={shopLink} className="mt-5 flex w-full items-center justify-center gap-2 px-6 py-4 font-semibold" style={{ background: s.primaryColor, color: "#fff", borderRadius: radius }}>
-              {c.shopLabel || "Shop my favorites"} <ArrowRight className="size-4" />
+              {shopLabelOverride ?? (c.shopLabel || "Shop my favorites")} <ArrowRight className="size-4" />
             </a>
           </div>
         </div>

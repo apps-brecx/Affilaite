@@ -2,21 +2,21 @@ import { PageHeader } from "@/components/ui/page-header";
 import { FolpAdminEditor } from "@/components/admin/folp-admin-editor";
 import { requireArea } from "@/lib/session";
 import { getFolpDefault } from "@/lib/folp-server";
-import { getBrand } from "@/lib/queries";
+import { getShopBrand } from "@/lib/shop-brand";
 
 export const metadata = { title: "Landing page default" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminFolpDefaultPage() {
   await requireArea("settings");
-  const [folp, brand] = await Promise.all([getFolpDefault(), getBrand()]);
+  const [folp, shop] = await Promise.all([getFolpDefault(), getShopBrand()]);
   return (
     <div className="space-y-6">
       <PageHeader
         title="Affiliate landing page — brand default"
-        description="The friend-offer page every affiliate starts from. Lock any field so affiliates can't change it (e.g. the logo)."
+        description="The friend-offer page every affiliate starts from. Lock any field so affiliates can't change it (e.g. the logo). The store logo is pulled from Shopify."
       />
-      <FolpAdminEditor initial={folp} brandName={brand.logoText || "Sipfluence"} />
+      <FolpAdminEditor initial={folp} brandName={shop.name || "Syruvia"} logoUrl={shop.logo} logoDarkUrl={shop.logoDark} />
     </div>
   );
 }

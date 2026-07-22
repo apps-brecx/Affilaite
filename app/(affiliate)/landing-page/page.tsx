@@ -9,7 +9,7 @@ import { db } from "@/db";
 import { affiliates } from "@/db/schema";
 import { getFolpDefault } from "@/lib/folp-server";
 import { collectionUrl } from "@/lib/favorites";
-import { getBrand } from "@/lib/queries";
+import { getShopBrand } from "@/lib/shop-brand";
 import { getStoreProducts } from "@/lib/products";
 import { shopifyReady } from "@/lib/integrations";
 import { buildReferralLink, STORE_URL, APP_URL } from "@/lib/links";
@@ -19,16 +19,20 @@ export const dynamic = "force-dynamic";
 
 export default async function LandingPageEditor() {
   const me = await requireAffiliate();
-  const [brand, folpBrand, row, connected] = await Promise.all([
-    getBrand(),
+  const [shop, folpBrand, row, connected] = await Promise.all([
+    getShopBrand(),
     getFolpDefault(),
     db ? db.query.affiliates.findFirst({ where: eq(affiliates.id, me.id) }) : Promise.resolve(null),
     shopifyReady(),
   ]);
-  // The favorites collection is the shop destination once it exists; else the store.
+  // Shop button points at the favorites collection only when it has products;
+  // otherwise it becomes "Shop <store>" → the store home.
   const favHandle = row?.favoriteCollectionHandle ?? null;
+  const favCount = Array.isArray(row?.favoriteProductIds) ? row!.favoriteProductIds!.length : 0;
   const favUrl = await collectionUrl(favHandle);
-  const shopLink = buildReferralLink(me.refCode, favUrl ?? STORE_URL);
+  const hasFavorites = !!favHandle && favCount > 0 && !!favUrl;
+  const shopName = shop.name || "Syruvia";
+  const shopLink = buildReferralLink(me.refCode, hasFavorites ? favUrl! : STORE_URL);
   const products = connected ? ((await getStoreProducts(100).catch(() => null))?.products ?? []) : [];
 
   return (
@@ -63,9 +67,12 @@ export default async function LandingPageEditor() {
           name: me.name,
           code: me.code,
           shopLink,
+          shopLabelOverride: hasFavorites ? null : `Shop ${shopName}`,
           socials: me.socialLinks ?? {},
-          logoText: brand.logoText || "Sipfluence",
-          shopName: brand.logoText || "Sipfluence",
+          logoText: shopName,
+          logoUrl: shop.logo,
+          logoDarkUrl: shop.logoDark,
+          shopName,
         }}
       />
 

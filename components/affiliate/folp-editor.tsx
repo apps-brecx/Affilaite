@@ -26,7 +26,10 @@ export function FolpEditor({
 }: {
   brand: FolpDefault;
   initialOverrides: Record<string, any> | null;
-  data: { name: string; code: string; shopLink: string; socials: Record<string, string>; logoText: string; shopName: string };
+  data: {
+    name: string; code: string; shopLink: string; shopLabelOverride: string | null;
+    socials: Record<string, string>; logoText: string; logoUrl: string | null; logoDarkUrl: string | null; shopName: string;
+  };
 }) {
   const [ov, setOv] = useState<Record<string, any>>(initialOverrides ?? {});
   const [dirty, setDirty] = useState(false);
@@ -73,7 +76,9 @@ export function FolpEditor({
           <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className={`mx-auto ${device === "mobile" ? "max-w-[390px]" : "w-full"}`}>
-                <FolpView theme={merged} logoText={data.logoText} name={data.name} code={data.code} shopLink={data.shopLink} socials={data.socials} vars={vars} device={device} />
+                <FolpView theme={merged} logoText={data.logoText} logoUrl={data.logoUrl} logoDarkUrl={data.logoDarkUrl}
+                  name={data.name} code={data.code} shopLink={data.shopLink} shopLabelOverride={data.shopLabelOverride}
+                  socials={data.socials} vars={vars} device={device} />
               </div>
             </CardContent>
           </Card>

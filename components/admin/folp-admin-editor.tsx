@@ -20,7 +20,7 @@ function withPath(o: any, p: string, v: any) {
   return next;
 }
 
-export function FolpAdminEditor({ initial, brandName }: { initial: FolpDefault; brandName: string }) {
+export function FolpAdminEditor({ initial, brandName, logoUrl, logoDarkUrl }: { initial: FolpDefault; brandName: string; logoUrl?: string | null; logoDarkUrl?: string | null }) {
   const [theme, setTheme] = useState<FolpDefault>(initial);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [pending, start] = useTransition();
@@ -61,7 +61,7 @@ export function FolpAdminEditor({ initial, brandName }: { initial: FolpDefault; 
           <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className={`mx-auto ${device === "mobile" ? "max-w-[390px]" : "w-full"}`}>
-                <FolpView theme={theme} logoText={brandName} name="Jordan Rivera" code="JORDAN10" shopLink="#"
+                <FolpView theme={theme} logoText={brandName} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} name="Jordan Rivera" code="JORDAN10" shopLink="#"
                   socials={{ instagram: "@jordan", youtube: "jordan" }}
                   vars={{ first_name: "Jordan", shop_name: brandName, code: "JORDAN10", offer: "10% off" }} device={device} />
               </div>

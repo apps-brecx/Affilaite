@@ -20,18 +20,32 @@ export interface FavAffiliate {
 
 const uerrs = (arr: any): string => (Array.isArray(arr) && arr.length ? arr.map((e: any) => e.message).join("; ") : "");
 
-// The Online Store publication id — cached per process (stable per store).
-let onlineStorePubId: string | null | undefined;
-async function onlineStorePublication(): Promise<string | null> {
-  if (onlineStorePubId !== undefined) return onlineStorePubId;
+// All of the store's publication (sales channel) ids — cached per process.
+// Online Store, Shop, Point of Sale, Google & YouTube, Facebook & Instagram, etc.
+let allPubIds: string[] | undefined;
+async function allPublications(): Promise<string[]> {
+  if (allPubIds !== undefined) return allPubIds;
   try {
-    const j: any = await shopifyGraphQL(`{ publications(first: 25) { edges { node { id name } } } }`);
-    const edges = j?.data?.publications?.edges ?? [];
-    onlineStorePubId = edges.find((e: any) => /online store/i.test(e.node?.name ?? ""))?.node?.id ?? null;
+    const j: any = await shopifyGraphQL(`{ publications(first: 50) { edges { node { id } } } }`);
+    allPubIds = (j?.data?.publications?.edges ?? []).map((e: any) => e.node?.id).filter(Boolean);
   } catch {
-    onlineStorePubId = null;
+    allPubIds = [];
   }
-  return onlineStorePubId ?? null;
+  return allPubIds ?? [];
+}
+
+/** Publish a collection to EVERY sales channel so it's live everywhere. Idempotent. */
+async function publishEverywhere(collectionId: string) {
+  const pubs = await allPublications();
+  if (!pubs.length) return;
+  try {
+    await shopifyGraphQL(
+      `mutation Pub($id: ID!, $input: [PublicationInput!]!) { publishablePublish(id: $id, input: $input) { userErrors { message } } }`,
+      { id: collectionId, input: pubs.map((publicationId) => ({ publicationId })) },
+    );
+  } catch (e) {
+    console.error("[favorites] publish to channels failed (collection exists, may need manual publish):", e);
+  }
 }
 
 const handleFor = (refCode: string) => `favorites-${refCode.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.slice(0, 60);
@@ -52,21 +66,7 @@ async function ensureCollection(aff: FavAffiliate): Promise<{ id: string; handle
   const res = j?.data?.collectionCreate;
   const err = uerrs(res?.userErrors);
   if (!res?.collection?.id) throw new Error(err || "Shopify wouldn't create the collection.");
-  const created = { id: res.collection.id as string, handle: res.collection.handle as string };
-
-  // Publish to the Online Store so /collections/<handle> actually resolves.
-  const pub = await onlineStorePublication();
-  if (pub) {
-    try {
-      await shopifyGraphQL(
-        `mutation Pub($id: ID!, $input: [PublicationInput!]!) { publishablePublish(id: $id, input: $input) { userErrors { message } } }`,
-        { id: created.id, input: [{ publicationId: pub }] },
-      );
-    } catch (e) {
-      console.error("[favorites] publish failed (collection created, may need manual publish):", e);
-    }
-  }
-  return created;
+  return { id: res.collection.id as string, handle: res.collection.handle as string };
 }
 
 async function addProducts(collectionId: string, productIds: string[]) {
@@ -104,6 +104,10 @@ export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Pr
   const toRemove = [...prev].filter((p) => !next.has(p));
   await addProducts(id, toAdd);
   await removeProducts(id, toRemove);
+
+  // Publish to every sales channel each save — idempotent, and it backfills
+  // collections created before the store had all its channels connected.
+  await publishEverywhere(id);
 
   if (db) {
     await db
