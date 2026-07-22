@@ -307,13 +307,19 @@ export async function deleteAffiliate(id: string): Promise<ActionResult> {
   if (!aff) return { ok: false, message: "Affiliate not found." };
 
   // Best-effort: delete their live Shopify discounts so codes stop working.
-  if (await shopifyReady()) {
-    const codes = await db.query.discountCodes.findMany({ where: eq(discountCodes.affiliateId, id) });
-    for (const c of codes) {
-      if (c.shopifyDiscountId) {
-        try { await deleteDiscountInShopify(c.shopifyDiscountId); } catch (e) { console.error("[deleteAffiliate] shopify code", e); }
+  // Fully guarded — a Shopify hiccup must NEVER block the account purge below,
+  // otherwise the affiliate would survive and could still sign in.
+  try {
+    if (await shopifyReady()) {
+      const codes = await db.query.discountCodes.findMany({ where: eq(discountCodes.affiliateId, id) });
+      for (const c of codes) {
+        if (c.shopifyDiscountId) {
+          try { await deleteDiscountInShopify(c.shopifyDiscountId); } catch (e) { console.error("[deleteAffiliate] shopify code", e); }
+        }
       }
     }
+  } catch (e) {
+    console.error("[deleteAffiliate] shopify cleanup skipped", e);
   }
 
   try {
