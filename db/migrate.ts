@@ -38,6 +38,13 @@ async function main() {
       where "amount" < 0
         and "attributed_by" = 'refund-adjustment'
         and "order_id" in (${offset})`;
+    // Any commission still tied to a cancelled order must read as cancelled — never
+    // Pending/Approved (e.g. a stale replay that re-attributed a cancelled order).
+    await sql`
+      update "commissions" set "status" = 'cancelled'
+      where "amount" >= 0
+        and "status" in ('pending', 'approved', 'paid')
+        and "order_id" in (select "id" from "orders" where "financial_status" = 'cancelled')`;
     console.log("✅ Cancelled-commission backfill complete.");
   } catch (e) {
     console.error("[backfill:cancelled]", e);

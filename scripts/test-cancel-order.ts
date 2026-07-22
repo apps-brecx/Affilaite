@@ -91,6 +91,22 @@ async function main() {
     ok("legacy after: positive row reclassified as cancelled", can.n === 1);
   }
 
+  // ---- Scenario 4: a PENDING commission on a cancelled order (stale re-attribution) ----
+  await seedBase("pending");
+  await sql`update orders set financial_status = 'cancelled' where id = ${O}`;
+  {
+    const before = await getAffiliate(A);
+    ok("stale re-attribution before: shows as pending", (before?.pendingEarnings ?? 0) > 0);
+    // The migrate.ts backfill: any commission on a cancelled order reads cancelled.
+    await sql`update "commissions" set "status"='cancelled'
+              where "amount" >= 0 and "status" in ('pending','approved','paid')
+                and "order_id" in (select "id" from "orders" where "financial_status" = 'cancelled')`;
+    const after = await getAffiliate(A);
+    ok("stale re-attribution after: no longer pending", after?.pendingEarnings === 0);
+    const [st] = await sql`select status from commissions where id = ${C1}`;
+    ok("stale re-attribution after: commission reads 'cancelled'", st.status === "cancelled");
+  }
+
   await cleanup();
   console.log(`\n${pass} passed, ${fail} failed`);
   await sql.end();

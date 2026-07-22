@@ -149,8 +149,16 @@ export async function processOrderCreated(order: any) {
     (await db.query.orders.findFirst({ where: eq(orders.shopifyOrderId, String(order.id)) }));
   if (!orderRow) return;
 
+  // A cancelled / voided / fully-refunded order is a terminal state — never
+  // let a replayed "paid" webhook downgrade it back to paid.
+  const TERMINAL = new Set(["cancelled", "voided", "refunded"]);
   // Keep the mirrored financial status current as the order progresses.
-  if (!insertedOrder && order.financial_status && order.financial_status !== orderRow.financialStatus) {
+  if (
+    !insertedOrder &&
+    order.financial_status &&
+    order.financial_status !== orderRow.financialStatus &&
+    !TERMINAL.has(orderRow.financialStatus ?? "")
+  ) {
     await db.update(orders).set({ financialStatus: order.financial_status }).where(eq(orders.id, orderRow.id));
   }
 
@@ -159,6 +167,14 @@ export async function processOrderCreated(order: any) {
   // silent blank. Never throws — attribution outcome must not fail the webhook.
   const note = (status: string) =>
     db!.update(orders).set({ attributionStatus: status }).where(eq(orders.id, orderRow.id)).catch(() => {});
+
+  // A cancelled/refunded order never earns — and must never be resurrected into a
+  // fresh commission if a stale "paid" webhook is replayed (e.g. after the
+  // original affiliate was deleted, which freed the once-per-order guard).
+  if (TERMINAL.has(orderRow.financialStatus ?? "")) {
+    await note("skipped — order cancelled/refunded");
+    return;
+  }
 
   // 2. Only real money earns commission — the order must actually be paid.
   //    Unpaid orders are mirrored above but wait for the orders/paid webhook.

@@ -56,7 +56,13 @@ async function main() {
     await tx`delete from affiliate_campaigns where affiliate_id=${aid}`;
     await tx`delete from group_members where affiliate_id=${aid}`;
     await tx`delete from payout_items where affiliate_id=${aid}`;
+    // Capture the affiliate's order ids before removing their commissions.
+    const ordIds = (await tx`select distinct order_id from commissions where affiliate_id=${aid} and order_id is not null`).map((r: any) => r.order_id);
     await tx`delete from commissions where affiliate_id=${aid}`;
+    // Remove orders that were solely this affiliate's (no commission remains).
+    if (ordIds.length) {
+      await tx`delete from orders where id = any(${ordIds}) and not exists (select 1 from commissions c where c.order_id = orders.id)`;
+    }
     await tx`delete from affiliates where id=${aid}`;
     await tx`delete from password_reset_tokens where user_id=${uid}`;
     await tx`delete from users where id=${uid}`;
@@ -64,10 +70,12 @@ async function main() {
     const affGone = await tx`select count(*)::int as n from affiliates where id=${aid}`;
     const userGone = await tx`select count(*)::int as n from users where id=${uid}`;
     const commGone = await tx`select count(*)::int as n from commissions where affiliate_id=${aid}`;
+    const orderGone = await tx`select count(*)::int as n from orders where id=${oid}`;
     const batchKept = await tx`select count(*)::int as n from payouts where id=${bid}`;
     ok("affiliate row deleted", affGone[0].n === 0);
     ok("login user deleted", userGone[0].n === 0);
     ok("affiliate commissions deleted", commGone[0].n === 0);
+    ok("affiliate's order deleted (nothing lingers to re-attribute)", orderGone[0].n === 0);
     ok("payout batch itself preserved", batchKept[0].n === 1);
 
     throw new Error("ROLLBACK");

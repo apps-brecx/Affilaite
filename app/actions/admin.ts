@@ -324,6 +324,15 @@ export async function deleteAffiliate(id: string): Promise<ActionResult> {
 
   try {
     await db.transaction(async (tx) => {
+      // Capture the orders this affiliate was attributed to BEFORE deleting their
+      // commissions, so we can remove orders that were solely theirs — otherwise a
+      // stale/re-sent webhook could re-attribute them to a re-created affiliate.
+      const ordRows = await tx
+        .select({ id: commissions.orderId })
+        .from(commissions)
+        .where(eq(commissions.affiliateId, id));
+      const affOrderIds = [...new Set(ordRows.map((r) => r.id).filter(Boolean))] as string[];
+
       await tx.delete(pollVotes).where(eq(pollVotes.affiliateId, id));
       await tx.delete(groupMessageReads).where(eq(groupMessageReads.affiliateId, id));
       await tx.delete(directMessages).where(eq(directMessages.affiliateId, id));
@@ -337,6 +346,18 @@ export async function deleteAffiliate(id: string): Promise<ActionResult> {
       await tx.delete(groupMembers).where(eq(groupMembers.affiliateId, id));
       await tx.delete(payoutItems).where(eq(payoutItems.affiliateId, id));
       await tx.delete(commissions).where(eq(commissions.affiliateId, id));
+      // Remove the orders that were solely this affiliate's (no commission left on
+      // them now) so nothing from before the deletion lingers or re-attributes.
+      if (affOrderIds.length) {
+        await tx
+          .delete(orders)
+          .where(
+            and(
+              inArray(orders.id, affOrderIds),
+              sql`not exists (select 1 from ${commissions} where ${commissions.orderId} = ${orders.id})`,
+            ),
+          );
+      }
       await tx.delete(affiliates).where(eq(affiliates.id, id));
       if (aff.userId) {
         // passwordResetTokens.user_id is NOT NULL → must go before the user.
