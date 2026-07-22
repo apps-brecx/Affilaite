@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { clicks, affiliates } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { clicks, affiliates, discountCodes } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 import { getDefaultDestination } from "@/lib/queries";
@@ -49,6 +49,11 @@ export async function GET(req: Request) {
   const jar = await cookies();
   const vid = jar.get("_aff_vid")?.value ?? randomUUID();
 
+  // The affiliate's discount code, auto-applied at the store so the customer
+  // never has to type it (and coupon attribution — the most reliable path —
+  // credits the affiliate even if the ref params are dropped downstream).
+  let autoCode: string | null = null;
+
   if (ref && db) {
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "unknown";
     // Throttle click logging so a pixel/bot can't stuff the clicks table (and
@@ -66,6 +71,10 @@ export async function GET(req: Request) {
         ip,
         userAgent: req.headers.get("user-agent") ?? "",
       });
+      const dc = await db.query.discountCodes.findFirst({
+        where: and(eq(discountCodes.affiliateId, aff.id), eq(discountCodes.active, true)),
+      });
+      autoCode = dc?.code ?? null;
     }
   }
 
@@ -83,5 +92,37 @@ export async function GET(req: Request) {
     dest.searchParams.set("utm_campaign", ref);
   }
 
+  // Auto-apply the affiliate's code: Shopify's /discount/{CODE}?redirect=<path>
+  // link drops the code into the customer's cart and then forwards them to the
+  // page they were headed to — so the discount is already in before they type a
+  // thing. Only when the destination is the Shopify storefront itself.
+  if (autoCode && (await isShopifyStore(dest.hostname))) {
+    const discountUrl = new URL(`/discount/${encodeURIComponent(autoCode)}`, dest.origin);
+    // Shopify redirects here after applying the code; keep the ref/utm query so
+    // link attribution and analytics still see the affiliate.
+    discountUrl.searchParams.set("redirect", `${dest.pathname}${dest.search}`);
+    return Response.redirect(discountUrl.toString(), 302);
+  }
+
   return Response.redirect(dest.toString(), 302);
+}
+
+/**
+ * True when the host is the Shopify storefront — the connected myshopify domain,
+ * or the store's primary/custom domain (the default destination). /discount links
+ * work on either. Both are already the trusted hosts safeRedirect() allows.
+ */
+async function isShopifyStore(host: string): Promise<boolean> {
+  const h = host.toLowerCase();
+  const domains = new Set<string>();
+  if (process.env.SHOPIFY_STORE_DOMAIN) domains.add(process.env.SHOPIFY_STORE_DOMAIN.toLowerCase());
+  try {
+    const { domain } = await shopifyConfig();
+    if (domain) domains.add(domain.toLowerCase());
+  } catch {}
+  try {
+    const def = await getDefaultDestination();
+    if (def) domains.add(new URL(def).hostname.toLowerCase());
+  } catch {}
+  return [...domains].some((d) => d && (h === d || h.endsWith("." + d)));
 }
