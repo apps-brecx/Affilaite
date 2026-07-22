@@ -1505,11 +1505,29 @@ export async function updateCampaignConfig(id: string, config: unknown): Promise
       friendRewardValue: String(cfg.friend.kind === "none" ? 0 : cfg.friend.value ?? 0),
     })
     .where(eq(campaigns.id, id));
+
+  // Turning approval to Automatic clears the backlog too: approve every pending
+  // commission on this campaign right away (fraud-flagged ones stay in review).
+  let approved = 0;
+  if (cfg.approval.mode === "auto") {
+    const rows = await db
+      .update(commissions)
+      .set({ status: "approved", approvableAt: new Date() })
+      .where(and(eq(commissions.campaignId, id), eq(commissions.status, "pending"), eq(commissions.flagged, false)))
+      .returning({ id: commissions.id });
+    approved = rows.length;
+  }
+
   revalidatePath(`/admin/campaigns/${id}`);
   revalidatePath("/admin/campaigns");
+  revalidatePath("/admin/commissions");
+  revalidatePath("/admin");
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
   if (c?.slug) revalidatePath(`/join/${c.slug}`);
-  return { ok: true, message: "Rewards & rules saved." };
+  return {
+    ok: true,
+    message: approved > 0 ? `Rewards & rules saved. Approved ${approved} pending commission${approved === 1 ? "" : "s"}.` : "Rewards & rules saved.",
+  };
 }
 
 /** Save the per-campaign theme (merged into the campaign's config JSON). */
