@@ -88,6 +88,9 @@ export function FavoritesPicker({
                 <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="pl-9" />
               </div>
               <span className="shrink-0 text-sm text-muted-foreground">{selected.size} selected</span>
+              <Button variant="outline" size="sm" onClick={() => setSelected(new Set())} disabled={selected.size === 0}>
+                Deselect all
+              </Button>
             </div>
 
             {products.length === 0 ? (

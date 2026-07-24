@@ -158,22 +158,23 @@ const num = (v: any, min: number, max: number, fb: number) => {
   const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fb;
 };
 
+const IMG = 1_400_000; // allow inline data: URLs
 function cleanProducts(arr: any): FolpProduct[] {
   if (!Array.isArray(arr)) return [];
   return arr.slice(0, REPEATER_MAX.products).map((p) => ({
-    image: cap(p?.image, 500), name: cap(p?.name, 120), price: cap(p?.price, 20), salePrice: cap(p?.salePrice, 20),
+    image: cap(p?.image, IMG), name: cap(p?.name, 120), price: cap(p?.price, 20), salePrice: cap(p?.salePrice, 20),
   }));
 }
 function cleanTestimonials(arr: any): FolpTestimonial[] {
   if (!Array.isArray(arr)) return [];
   return arr.slice(0, REPEATER_MAX.testimonials).map((t) => ({
-    quote: cap(t?.quote, 300), name: cap(t?.name, 80), avatar: cap(t?.avatar, 500),
+    quote: cap(t?.quote, 300), name: cap(t?.name, 80), avatar: cap(t?.avatar, IMG),
   }));
 }
 function cleanQuiz(arr: any): FolpQuizAnswer[] {
   if (!Array.isArray(arr)) return [];
   return arr.slice(0, REPEATER_MAX.quizAnswers).map((a) => ({
-    label: cap(a?.label, 80), resultTitle: cap(a?.resultTitle, 120), resultDesc: cap(a?.resultDesc, 240), image: cap(a?.image, 500),
+    label: cap(a?.label, 80), resultTitle: cap(a?.resultTitle, 120), resultDesc: cap(a?.resultDesc, 240), image: cap(a?.image, IMG),
   }));
 }
 
@@ -193,7 +194,9 @@ export function sanitizeOverrides(input: any, brand: FolpDefault): Partial<FolpT
       case "font": if (FOLP_FONTS.some((x) => x.value === v)) setPath(out, f.path, v); break;
       case "number": setPath(out, f.path, num(v, 0, f.path.endsWith("overlayOpacity") ? 90 : 28, 0)); break;
       case "textarea": setPath(out, f.path, cap(v, 600)); break;
-      case "url": case "image": setPath(out, f.path, cap(v, 500)); break;
+      case "url": setPath(out, f.path, cap(v, 500)); break;
+      // Images may be inline data: URLs (browser-compressed), so allow long values.
+      case "image": setPath(out, f.path, cap(v, 1_400_000)); break;
       case "text": setPath(out, f.path, cap(v, 200)); break;
       case "products": setPath(out, f.path, cleanProducts(v)); break;
       case "testimonials": setPath(out, f.path, cleanTestimonials(v)); break;
