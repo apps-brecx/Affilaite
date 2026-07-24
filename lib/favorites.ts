@@ -48,25 +48,49 @@ async function publishEverywhere(collectionId: string) {
   }
 }
 
+const gqlErr = (r: any) => (Array.isArray(r?.errors) && r.errors.length ? r.errors.map((e: any) => e.message).join("; ") : "");
 const handleFor = (refCode: string) => `favorites-${refCode.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.slice(0, 60);
 
-/** Create the affiliate's collection if they don't have one yet. Returns {id, handle}. */
-async function ensureCollection(aff: FavAffiliate): Promise<{ id: string; handle: string }> {
-  if (aff.favoriteCollectionId && aff.favoriteCollectionHandle) {
-    return { id: aff.favoriteCollectionId, handle: aff.favoriteCollectionHandle };
+/** True if the collection GID still resolves to a real collection in Shopify. */
+async function collectionExists(id: string): Promise<boolean> {
+  try {
+    const j: any = await shopifyGraphQL(`query($id: ID!) { node(id: $id) { ... on Collection { id } } }`, { id });
+    return !!j?.data?.node?.id;
+  } catch {
+    return false;
   }
-  const title = `${aff.name}'s Favorites`;
-  const wanted = handleFor(aff.refCode);
+}
+
+async function createCollection(title: string, handle: string): Promise<{ id: string; handle: string }> {
   const q = `mutation Create($input: CollectionInput!) {
     collectionCreate(input: $input) { collection { id handle } userErrors { field message } }
   }`;
-  const j: any = await shopifyGraphQL(q, {
-    input: { title, handle: wanted, descriptionHtml: `A few of my favorite picks. Shop them all in one place.` },
-  });
+  const j: any = await shopifyGraphQL(q, { input: { title, handle, descriptionHtml: "A few of my favorite picks. Shop them all in one place." } });
+  if (gqlErr(j)) throw new Error(gqlErr(j));
   const res = j?.data?.collectionCreate;
   const err = uerrs(res?.userErrors);
+  // Handle already taken (e.g. an orphaned collection) → let Shopify pick one.
+  if (!res?.collection?.id && /handle/i.test(err)) {
+    const j2: any = await shopifyGraphQL(q, { input: { title, descriptionHtml: "A few of my favorite picks. Shop them all in one place." } });
+    const res2 = j2?.data?.collectionCreate;
+    if (!res2?.collection?.id) throw new Error(uerrs(res2?.userErrors) || gqlErr(j2) || "Shopify wouldn't create the collection.");
+    return { id: res2.collection.id, handle: res2.collection.handle };
+  }
   if (!res?.collection?.id) throw new Error(err || "Shopify wouldn't create the collection.");
-  return { id: res.collection.id as string, handle: res.collection.handle as string };
+  return { id: res.collection.id, handle: res.collection.handle };
+}
+
+/**
+ * Return the affiliate's collection, creating a fresh one if they have none OR if
+ * the stored one was deleted in Shopify. `created` = true means it's brand new
+ * (empty), so the caller should add all picks rather than diff against old ids.
+ */
+async function ensureCollection(aff: FavAffiliate): Promise<{ id: string; handle: string; created: boolean }> {
+  if (aff.favoriteCollectionId && (await collectionExists(aff.favoriteCollectionId))) {
+    return { id: aff.favoriteCollectionId, handle: aff.favoriteCollectionHandle ?? handleFor(aff.refCode), created: false };
+  }
+  const c = await createCollection(`${aff.name}'s Favorites`, handleFor(aff.refCode));
+  return { ...c, created: true };
 }
 
 async function addProducts(collectionId: string, productIds: string[]) {
@@ -96,9 +120,11 @@ async function removeProducts(collectionId: string, productIds: string[]) {
  */
 export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Promise<{ handle: string }> {
   const clean = [...new Set(productIds.filter((p) => typeof p === "string" && p.startsWith("gid://shopify/Product/")))].slice(0, 250);
-  const { id, handle } = await ensureCollection(aff);
+  const { id, handle, created } = await ensureCollection(aff);
 
-  const prev = new Set(aff.favoriteProductIds ?? []);
+  // A freshly (re)created collection starts empty, so add everything; otherwise
+  // diff against what we last stored.
+  const prev = new Set(created ? [] : aff.favoriteProductIds ?? []);
   const next = new Set(clean);
   const toAdd = clean.filter((p) => !prev.has(p));
   const toRemove = [...prev].filter((p) => !next.has(p));
