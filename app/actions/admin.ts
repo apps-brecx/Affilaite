@@ -1843,6 +1843,18 @@ export async function saveFolpDefault(input: unknown): Promise<ActionResult> {
   return { ok: true, message: "Brand landing-page default saved." };
 }
 
+/** Admin: revert one affiliate's landing page back to the brand default. */
+export async function resetAffiliateFolp(affiliateId: string): Promise<ActionResult> {
+  await assertAdmin("settings");
+  if (!db) return { ok: false, message: "Database not configured." };
+  const aff = await db.query.affiliates.findFirst({ where: eq(affiliates.id, affiliateId) });
+  if (!aff) return { ok: false, message: "Affiliate not found." };
+  await db.update(affiliates).set({ folpTheme: null }).where(eq(affiliates.id, affiliateId));
+  if (aff.handle) revalidatePath(`/p/${aff.handle}`);
+  revalidatePath("/admin/settings/landing-page");
+  return { ok: true, message: "Reverted to the brand default." };
+}
+
 /** Save brand/theme settings (stored as JSON under the "brand" key). */
 export async function saveBrand(brand: unknown): Promise<ActionResult> {
   await assertAdmin("settings");
