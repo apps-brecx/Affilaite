@@ -62,7 +62,7 @@ export interface FolpTheme {
 }
 export interface FolpDefault extends FolpTheme { lockedFields: string[] }
 
-type Kind = "color" | "text" | "textarea" | "url" | "bool" | "font" | "layout" | "number" | "products" | "testimonials" | "quiz";
+type Kind = "color" | "text" | "textarea" | "url" | "image" | "bool" | "font" | "layout" | "number" | "products" | "testimonials" | "quiz";
 interface FieldDef { path: string; label: string; group: string; kind: Kind; layouts?: FolpLayout[] }
 
 /** Every editable field: its kind (drives sanitize + editor control) and, when
@@ -89,8 +89,8 @@ export const FOLP_FIELDS: FieldDef[] = [
   { path: "content.shopLabel", label: "Shop button label", group: "Content", kind: "text" },
   { path: "content.couponLabel", label: "Coupon label", group: "Content", kind: "text" },
   { path: "content.footerText", label: "Footer text", group: "Content", kind: "text" },
-  { path: "content.heroImageUrl", label: "Hero image URL", group: "Media", kind: "url", layouts: ["single", "split", "story"] },
-  { path: "content.bannerImageUrl", label: "Banner image URL", group: "Media", kind: "url", layouts: ["banner"] },
+  { path: "content.heroImageUrl", label: "Hero image", group: "Media", kind: "image", layouts: ["single", "split", "story"] },
+  { path: "content.bannerImageUrl", label: "Banner image", group: "Media", kind: "image", layouts: ["banner"] },
   { path: "content.videoUrl", label: "YouTube / Vimeo URL", group: "Media", kind: "url", layouts: ["video"] },
   { path: "content.products", label: "Products", group: "Products", kind: "products", layouts: ["grid"] },
   { path: "content.testimonials", label: "Testimonials", group: "Testimonials", kind: "testimonials", layouts: ["testimonials"] },
@@ -193,7 +193,8 @@ export function sanitizeOverrides(input: any, brand: FolpDefault): Partial<FolpT
       case "font": if (FOLP_FONTS.some((x) => x.value === v)) setPath(out, f.path, v); break;
       case "number": setPath(out, f.path, num(v, 0, f.path.endsWith("overlayOpacity") ? 90 : 28, 0)); break;
       case "textarea": setPath(out, f.path, cap(v, 600)); break;
-      case "url": case "text": setPath(out, f.path, cap(v, f.kind === "url" ? 500 : 200)); break;
+      case "url": case "image": setPath(out, f.path, cap(v, 500)); break;
+      case "text": setPath(out, f.path, cap(v, 200)); break;
       case "products": setPath(out, f.path, cleanProducts(v)); break;
       case "testimonials": setPath(out, f.path, cleanTestimonials(v)); break;
       case "quiz": setPath(out, f.path, cleanQuiz(v)); break;

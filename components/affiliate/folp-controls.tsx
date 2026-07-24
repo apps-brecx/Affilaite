@@ -2,15 +2,16 @@
 
 import { Lock, LockOpen, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { fontStack, FOLP_LAYOUTS, FOLP_FONTS, FOLP_FIELDS, MERGE_TOKENS, REPEATER_MAX, type FolpLayout } from "@/lib/folp";
 
 const get = (o: any, p: string) => p.split(".").reduce((x, k) => (x == null ? undefined : x[k]), o);
 
 // Item sub-fields for each repeater kind.
-const REPEATER_ITEMS: Record<string, { key: string; label: string; ta?: boolean; url?: boolean }[]> = {
-  products: [{ key: "image", label: "Image URL", url: true }, { key: "name", label: "Name" }, { key: "price", label: "Price" }, { key: "salePrice", label: "Sale price" }],
-  testimonials: [{ key: "quote", label: "Quote", ta: true }, { key: "name", label: "Name" }, { key: "avatar", label: "Avatar URL", url: true }],
-  quiz: [{ key: "label", label: "Answer" }, { key: "resultTitle", label: "Result title" }, { key: "resultDesc", label: "Result description", ta: true }, { key: "image", label: "Product image URL", url: true }],
+const REPEATER_ITEMS: Record<string, { key: string; label: string; ta?: boolean; img?: boolean }[]> = {
+  products: [{ key: "image", label: "Image", img: true }, { key: "name", label: "Name" }, { key: "price", label: "Price" }, { key: "salePrice", label: "Sale price" }],
+  testimonials: [{ key: "quote", label: "Quote", ta: true }, { key: "name", label: "Name" }, { key: "avatar", label: "Avatar", img: true }],
+  quiz: [{ key: "label", label: "Answer" }, { key: "resultTitle", label: "Result title" }, { key: "resultDesc", label: "Result description", ta: true }, { key: "image", label: "Product image", img: true }],
 };
 const REPEATER_KEY: Record<string, keyof typeof REPEATER_MAX> = { products: "products", testimonials: "testimonials", quiz: "quizAnswers" };
 
@@ -77,6 +78,8 @@ export function FolpControls({
         return <input type="checkbox" checked={!!val} disabled={disabled} onChange={(e) => set(f.path, e.target.checked)} className="size-4 accent-[#FF5C9E] disabled:opacity-50" />;
       case "textarea":
         return <Textarea value={val ?? ""} disabled={disabled} onChange={(e) => set(f.path, e.target.value)} rows={2} />;
+      case "image":
+        return <ImageUpload value={val ?? ""} disabled={disabled} onChange={(url) => set(f.path, url)} />;
       case "products": case "testimonials": case "quiz":
         return <Repeater kind={f.kind} items={Array.isArray(val) ? val : []} disabled={disabled} onChange={(next) => set(f.path, next)} />;
       default:
@@ -145,9 +148,11 @@ function Repeater({ kind, items, disabled, onChange }: { kind: "products" | "tes
             {sub.map((sf) => (
               <div key={sf.key} className="space-y-1">
                 <Label className="text-[11px]">{sf.label}</Label>
-                {sf.ta
+                {sf.img
+                  ? <ImageUpload value={it[sf.key] ?? ""} disabled={disabled} compact onChange={(url) => upd(i, sf.key, url)} />
+                  : sf.ta
                   ? <Textarea value={it[sf.key] ?? ""} disabled={disabled} onChange={(e) => upd(i, sf.key, e.target.value)} rows={2} />
-                  : <Input value={it[sf.key] ?? ""} disabled={disabled} onChange={(e) => upd(i, sf.key, e.target.value)} className="h-8" placeholder={sf.url ? "https://…" : undefined} />}
+                  : <Input value={it[sf.key] ?? ""} disabled={disabled} onChange={(e) => upd(i, sf.key, e.target.value)} className="h-8" />}
               </div>
             ))}
           </div>
