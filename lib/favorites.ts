@@ -34,17 +34,43 @@ async function allPublications(): Promise<string[]> {
   return allPubIds ?? [];
 }
 
-/** Publish a collection to EVERY sales channel so it's live everywhere. Idempotent. */
-async function publishEverywhere(collectionId: string) {
+/** Publish to EVERY sales channel (needs write_publications). Returns true on success. */
+async function publishEverywhere(collectionId: string): Promise<boolean> {
   const pubs = await allPublications();
-  if (!pubs.length) return;
+  if (!pubs.length) return false;
   try {
-    await shopifyGraphQL(
+    const j: any = await shopifyGraphQL(
       `mutation Pub($id: ID!, $input: [PublicationInput!]!) { publishablePublish(id: $id, input: $input) { userErrors { message } } }`,
       { id: collectionId, input: pubs.map((publicationId) => ({ publicationId })) },
     );
+    if (Array.isArray(j?.errors) && j.errors.length) return false;
+    return true;
   } catch (e) {
-    console.error("[favorites] publish to channels failed (collection exists, may need manual publish):", e);
+    console.error("[favorites] publishablePublish failed (needs write_publications):", e);
+    return false;
+  }
+}
+
+/**
+ * Publish the collection to the Online Store via the REST API's `published` flag.
+ * This only needs write_products (which the store already has, since the
+ * collection was created), so it works even without write_publications.
+ */
+async function publishOnlineStoreRest(collectionId: string): Promise<boolean> {
+  const numeric = collectionId.split("/").pop();
+  if (!numeric) return false;
+  try {
+    const { domain, token, version } = await shopifyConfig();
+    if (!domain || !token) return false;
+    const res = await fetch(`https://${domain}/admin/api/${version}/custom_collections/${numeric}.json`, {
+      method: "PUT",
+      headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_collection: { id: Number(numeric), published: true } }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("[favorites] REST publish failed:", e);
+    return false;
   }
 }
 
@@ -118,7 +144,7 @@ async function removeProducts(collectionId: string, productIds: string[]) {
  * publishing it if needed, then persist the collection + picks on the affiliate.
  * Returns the collection handle so callers can build the storefront URL.
  */
-export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Promise<{ handle: string }> {
+export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Promise<{ handle: string; live: boolean }> {
   const clean = [...new Set(productIds.filter((p) => typeof p === "string" && p.startsWith("gid://shopify/Product/")))].slice(0, 250);
   const { id, handle, created } = await ensureCollection(aff);
 
@@ -131,9 +157,12 @@ export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Pr
   await addProducts(id, toAdd);
   await removeProducts(id, toRemove);
 
-  // Publish to every sales channel each save — idempotent, and it backfills
-  // collections created before the store had all its channels connected.
-  await publishEverywhere(id);
+  // Make it live: REST `published` (needs only write_products, which we have) gets
+  // it on the Online Store; publishablePublish adds every other channel when
+  // write_publications is present. "live" = at least the storefront works.
+  const restLive = await publishOnlineStoreRest(id);
+  const channelsLive = await publishEverywhere(id);
+  const live = restLive || channelsLive;
 
   if (db) {
     await db
@@ -141,7 +170,7 @@ export async function syncFavorites(aff: FavAffiliate, productIds: string[]): Pr
       .set({ favoriteCollectionId: id, favoriteCollectionHandle: handle, favoriteProductIds: clean })
       .where(eq(affiliates.id, aff.id));
   }
-  return { handle };
+  return { handle, live };
 }
 
 /** Storefront URL for a collection handle (public, on the store domain). */

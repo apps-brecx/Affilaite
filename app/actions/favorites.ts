@@ -32,7 +32,7 @@ export async function saveMyFavorites(productIds: unknown): Promise<FavResult> {
   if (!a) return { ok: false, message: "Affiliate not found." };
 
   try {
-    const { handle } = await syncFavorites(
+    const { handle, live } = await syncFavorites(
       {
         id: a.aff.id,
         name: a.name ?? "My",
@@ -45,7 +45,10 @@ export async function saveMyFavorites(productIds: unknown): Promise<FavResult> {
     );
     if (a.aff.handle) revalidatePath(`/p/${a.aff.handle}`);
     revalidatePath("/landing-page");
-    return { ok: true, message: `Saved ${ids.length} favorite${ids.length === 1 ? "" : "s"}.`, collectionUrl: await collectionUrl(handle) };
+    const message = live
+      ? `Saved ${ids.length} favorite${ids.length === 1 ? "" : "s"} — your collection is live.`
+      : `Saved ${ids.length} favorite${ids.length === 1 ? "" : "s"}, but the collection couldn't be published to your storefront (Shopify needs the "publish collections" permission). It'll go live once that's granted.`;
+    return { ok: true, message, collectionUrl: await collectionUrl(handle) };
   } catch (e: any) {
     console.error("[saveMyFavorites]", e);
     return { ok: false, message: e?.message ? `Couldn't sync to Shopify: ${e.message}` : "Couldn't sync your favorites to Shopify." };
