@@ -38,6 +38,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   return (
     <main className="min-h-screen">
       <FolpView
+        fill
         theme={theme}
         logoText={shopName}
         logoUrl={shop.logo}

@@ -18,11 +18,11 @@ function isDarkHex(hex: string): boolean {
 }
 
 export function FolpView({
-  theme, logoText, logoUrl, logoDarkUrl, name, code, shopLink, shopLabelOverride, socials, vars, device = "desktop",
+  theme, logoText, logoUrl, logoDarkUrl, name, code, shopLink, shopLabelOverride, socials, vars, device = "desktop", fill = false,
 }: {
   theme: FolpTheme; logoText: string; logoUrl?: string | null; logoDarkUrl?: string | null;
   name: string; code: string; shopLink: string; shopLabelOverride?: string | null;
-  socials: Record<string, string>; vars: Partial<MergeVars>; device?: "desktop" | "mobile";
+  socials: Record<string, string>; vars: Partial<MergeVars>; device?: "desktop" | "mobile"; fill?: boolean;
 }) {
   const s = theme.styles;
   const c = theme.content;
@@ -116,7 +116,12 @@ export function FolpView({
   const width = mobile ? "max-w-[360px]" : "max-w-md";
 
   return (
-    <div style={{ background: s.backgroundColor, fontFamily: fontStack(s.bodyFont) }} className="min-h-full w-full">
+    <div
+      style={{ background: s.backgroundColor, fontFamily: fontStack(s.bodyFont) }}
+      // Fill the viewport (public page) or a tall preview box (editor), and center
+      // the content vertically so the page is never half-empty.
+      className={`flex w-full flex-col justify-center ${fill ? "min-h-screen" : "min-h-[600px]"}`}
+    >
       {/* ---------------- BANNER HERO ---------------- */}
       {theme.layout === "banner" && (
         <div>
