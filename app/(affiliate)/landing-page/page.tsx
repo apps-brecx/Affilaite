@@ -67,7 +67,7 @@ export default async function LandingPageEditor() {
           name: me.name,
           code: me.code,
           shopLink,
-          shopLabelOverride: hasFavorites ? null : `Shop ${shopName}`,
+          shopLabelOverride: hasFavorites ? null : `Shop with ${shopName}`,
           socials: me.socialLinks ?? {},
           logoText: shopName,
           logoUrl: shop.logo,

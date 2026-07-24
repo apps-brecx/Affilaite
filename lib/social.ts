@@ -1,7 +1,27 @@
 // lib/social.ts — post tracking + public link-in-bio profile data.
 import { db } from "@/db";
 import { posts, affiliates, users, discountCodes, discoveredPosts } from "@/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, ne, sql } from "drizzle-orm";
+
+/**
+ * Every affiliate's public page (/p/<handle>) IS their main referral link, so
+ * they must always have a handle. Backfills one from their ref code (or name)
+ * the first time it's needed, guaranteeing uniqueness.
+ */
+export async function ensureAffiliateHandle(id: string, refCode: string, name: string, current?: string | null): Promise<string> {
+  if (current) return current;
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  let base = slug(refCode) || slug(name) || "partner";
+  if (base.length < 3) base = `${base}-shop`;
+  if (!db) return base;
+  let handle = base;
+  let n = 1;
+  while (await db.query.affiliates.findFirst({ where: and(eq(affiliates.handle, handle), ne(affiliates.id, id)) })) {
+    handle = `${base}-${n++}`;
+  }
+  await db.update(affiliates).set({ handle }).where(eq(affiliates.id, id));
+  return handle;
+}
 
 export interface PostRow {
   id: string;

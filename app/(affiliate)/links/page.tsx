@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Gift, Ticket, Share2, Link2, ExternalLink, ArrowRight } from "lucide-react";
+import { Gift, Ticket, Share2, Link2, ExternalLink } from "lucide-react";
 import { ShareButtons } from "@/components/affiliate/share-buttons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { DeepLinkBuilder } from "@/components/affiliate/deep-link-builder";
 import { QrCard } from "@/components/affiliate/qr-card";
 import { requireAffiliate } from "@/lib/session";
-import { buildReferralLink, qrPngDataUrl, APP_URL } from "@/lib/links";
+import { ensureAffiliateHandle } from "@/lib/social";
+import { qrPngDataUrl, APP_URL } from "@/lib/links";
 import { getDefaultDestination, getEarningRate } from "@/lib/queries";
 import { Percent, Gift as GiftIcon } from "lucide-react";
 
@@ -16,8 +17,14 @@ export const metadata = { title: "Links & Codes" };
 
 export default async function LinksPage() {
   const me = await requireAffiliate();
-  const [destination, earning] = await Promise.all([getDefaultDestination(), getEarningRate(me.id)]);
-  const link = buildReferralLink(me.refCode, destination);
+  const [destination, earning, handle] = await Promise.all([
+    getDefaultDestination(),
+    getEarningRate(me.id),
+    ensureAffiliateHandle(me.id, me.refCode, me.name, me.handle),
+  ]);
+  // The affiliate's main referral link IS their page (/p/<handle>) — friends land
+  // there, then tap through to shop with the code auto-applied.
+  const link = `${APP_URL}/p/${handle}`;
   const qrPng = await qrPngDataUrl(link);
 
   return (
@@ -93,7 +100,7 @@ export default async function LinksPage() {
               </p>
             </div>
 
-            {/* Referral link */}
+            {/* Referral link — this is their landing page (link-in-bio). */}
             <div>
               <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Gift className="size-4 text-primary" /> Your referral link
@@ -102,6 +109,9 @@ export default async function LinksPage() {
                 <code className="flex-1 truncate font-mono text-sm text-foreground">{link}</code>
                 <CopyButton value={link} variant="full" label="Copy link" />
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Share this anywhere — it opens your page, where friends shop your favorites with your code applied.
+              </p>
             </div>
 
             {/* Share */}
@@ -126,42 +136,24 @@ export default async function LinksPage() {
               <Link2 className="size-5" />
             </span>
             <div>
-              <p className="font-medium">Your link-in-bio page</p>
+              <p className="font-medium">Your page (this is your link)</p>
               <p className="text-sm text-muted-foreground">
-                {me.handle ? (
-                  <>One tidy page with your code &amp; links — perfect for your social bio.</>
-                ) : (
-                  <>Create a shareable page for your social bio in{" "}
-                    <Link href="/settings" className="font-medium text-primary hover:underline">Settings</Link>.</>
-                )}
+                Customize it — layout, colors and your Shop-my-Favorites — on the <Link href="/landing-page" className="font-medium text-primary hover:underline">My Page</Link> tab.
               </p>
-              {me.handle && (
-                <code className="mt-1 inline-block truncate font-mono text-xs text-muted-foreground">
-                  {APP_URL.replace(/^https?:\/\//, "")}/p/{me.handle}
-                </code>
-              )}
+              <code className="mt-1 inline-block truncate font-mono text-xs text-muted-foreground">
+                {APP_URL.replace(/^https?:\/\//, "")}/p/{handle}
+              </code>
             </div>
           </div>
-          {me.handle ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <CopyButton value={`${APP_URL}/p/${me.handle}`} variant="outline" label="Copy link" />
-              <a
-                href={`/p/${me.handle}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary"
-              >
-                View <ExternalLink className="size-4" />
-              </a>
-            </div>
-          ) : (
-            <Link
-              href="/settings"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02]"
-            >
-              Set it up <ArrowRight className="size-4" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/landing-page" className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary">
+              Customize
             </Link>
-          )}
+            <a href={`/p/${handle}`} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary">
+              View <ExternalLink className="size-4" />
+            </a>
+          </div>
         </CardContent>
       </Card>
 

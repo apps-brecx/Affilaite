@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Save, Search, Check, Heart, ExternalLink, ShoppingBag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export function FavoritesPicker({
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [pending, start] = useTransition();
   const toast = useToast();
+  const router = useRouter();
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -42,7 +44,12 @@ export function FavoritesPicker({
     start(async () => {
       const res = await saveMyFavorites([...selected]);
       toast(res.message, res.ok ? "success" : "error");
-      if (res.ok && res.collectionUrl) setUrl(res.collectionUrl);
+      if (res.ok) {
+        if (res.collectionUrl) setUrl(res.collectionUrl);
+        // Refresh so the page's Shop button (label + destination) reflects the
+        // new selection right away — "Shop my favorites" ⇄ "Shop with Syruvia".
+        router.refresh();
+      }
     });
 
   return (

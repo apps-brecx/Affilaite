@@ -45,7 +45,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         name={profile.name}
         code={profile.code}
         shopLink={shopLink}
-        shopLabelOverride={hasFavorites ? null : `Shop ${shopName}`}
+        shopLabelOverride={hasFavorites ? null : `Shop with ${shopName}`}
         socials={profile.socials}
         vars={{ first_name: profile.name.split(" ")[0], shop_name: shopName, code: profile.code, offer: "" }}
       />
